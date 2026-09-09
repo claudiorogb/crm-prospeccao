@@ -1452,7 +1452,7 @@ function Leads({ organization, settings, userEmail }) {
     async function refreshLeadStatuses() {
       const { data, error } = await supabase
         .from('leads')
-        .select('id,status,last_contact_date,commercial_notes')
+        .select('id,status,last_contact_date')
         .eq('organization_id', organization.id)
 
       if (error || !active) return
@@ -1467,8 +1467,7 @@ function Leads({ organization, settings, userEmail }) {
           return {
             ...lead,
             status: next.status ?? lead.status,
-            last_contact_date: next.last_contact_date ?? lead.last_contact_date,
-            commercial_notes: next.commercial_notes ?? lead.commercial_notes
+            last_contact_date: next.last_contact_date ?? lead.last_contact_date
           }
         })
       )

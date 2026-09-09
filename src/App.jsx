@@ -1452,7 +1452,7 @@ function Leads({ organization, settings, userEmail }) {
     async function refreshLeadStatuses() {
       const { data, error } = await supabase
         .from('leads')
-        .select('id,status,last_contact_date')
+        .select('id,status,last_contact_date,commercial_notes')
         .eq('organization_id', organization.id)
 
       if (error || !active) return
@@ -1467,7 +1467,8 @@ function Leads({ organization, settings, userEmail }) {
           return {
             ...lead,
             status: next.status ?? lead.status,
-            last_contact_date: next.last_contact_date ?? lead.last_contact_date
+            last_contact_date: next.last_contact_date ?? lead.last_contact_date,
+            commercial_notes: next.commercial_notes ?? lead.commercial_notes
           }
         })
       )
@@ -1545,7 +1546,7 @@ function Leads({ organization, settings, userEmail }) {
 
 
   async function updateLeadContactField(id, field, value) {
-    const allowed = ['contact_name', 'last_contact_date', 'next_contact_date']
+    const allowed = ['contact_name', 'last_contact_date', 'next_contact_date', 'commercial_notes']
     if (!allowed.includes(field)) return
 
     const dbValue = value === '' ? null : value
@@ -1918,6 +1919,24 @@ function Leads({ organization, settings, userEmail }) {
                   />
                 </label>
               </div>
+
+              {(l.status === 'interested' || (l.commercial_notes || '').trim()) && (
+                <div className="lead-commercial-notes">
+                  <label>
+                    <span>Anotações comerciais</span>
+                    <textarea
+                      className="lead-notes-textarea"
+                      value={l.commercial_notes || ''}
+                      onChange={e => setLeads(old => old.map(item =>
+                        item.id === l.id ? { ...item, commercial_notes: e.target.value } : item
+                      ))}
+                      onBlur={e => updateLeadContactField(l.id, 'commercial_notes', e.target.value.trim())}
+                      placeholder="Registre necessidades, objeções, decisores, orçamento, próximos passos ou outras informações relevantes."
+                    />
+                  </label>
+                  <p className="field-help">Esta anotação permanece mesmo se o status mudar e continuará disponível quando o lead se tornar cliente.</p>
+                </div>
+              )}
             </div>
 
             <div className="lead-status-box">
@@ -2038,7 +2057,8 @@ function Clients({ organization, userEmail, userId }) {
       phone: selectedClient.phone || '',
       whatsapp_phone: selectedClient.whatsapp_phone || selectedClient.phone || '',
       email: selectedClient.email || '',
-      next_contact_date: selectedClient.next_contact_date || ''
+      next_contact_date: selectedClient.next_contact_date || '',
+      commercial_notes: selectedClient.commercial_notes || ''
     })
   }, [selectedClient?.id])
 
@@ -2107,6 +2127,7 @@ function Clients({ organization, userEmail, userId }) {
       whatsapp_phone: clientForm.whatsapp_phone.trim() || null,
       email: clientForm.email.trim() || null,
       next_contact_date: clientForm.next_contact_date || null,
+      commercial_notes: clientForm.commercial_notes?.trim() || null,
       updated_at: new Date().toISOString()
     }
 
@@ -2341,6 +2362,16 @@ function Clients({ organization, userEmail, userId }) {
               <label>E-mail<input type="email" value={clientForm.email || ''} onChange={e => setClientForm({...clientForm, email:e.target.value})} /></label>
             </div>
             <label>Próxima ação / contato<input type="date" value={clientForm.next_contact_date || ''} onChange={e => setClientForm({...clientForm, next_contact_date:e.target.value})} /></label>
+            <label>
+              Anotações comerciais da prospecção
+              <textarea
+                className="client-textarea"
+                value={clientForm.commercial_notes || ''}
+                onChange={e => setClientForm({...clientForm, commercial_notes:e.target.value})}
+                placeholder="Informações registradas enquanto este cliente ainda era um lead interessado."
+              />
+            </label>
+            <p className="field-help">Estas anotações acompanham o mesmo registro do lead e não são perdidas na conversão para cliente.</p>
             <div className="form-actions"><button className="primary inline-btn" disabled={loading}><Save size={16}/> Salvar dados</button></div>
           </form>
         </section>

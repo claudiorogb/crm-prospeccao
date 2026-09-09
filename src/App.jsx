@@ -4,7 +4,7 @@ import {
   ChevronRight, Plus, Target, Trash2, ClipboardCopy, Tags, Send,
   Phone, ListChecks, Shield, Database, SlidersHorizontal, History,
   Pause, Play, RefreshCw, XCircle, CheckCircle2, Activity, UserPlus,
-  Save, ChevronDown
+  Save, ChevronDown, Menu, X
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -1647,6 +1647,11 @@ function Leads({ organization, settings, userEmail }) {
   const missingTemplate = selectedWithPhone.length - selectedWithTemplate.length
 
   async function sendSelectedMessages() {
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      setMessage('O envio de mensagens está disponível somente na versão para computador.')
+      return
+    }
+
     if (!selected.size) {
       setMessage('Selecione pelo menos um lead.')
       return
@@ -4263,6 +4268,7 @@ export default function App() {
   const [isSystemAdmin, setIsSystemAdmin] = useState(false)
   const [adminOrganizations, setAdminOrganizations] = useState([])
   const [page, setPage] = useState('dashboard')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -4393,8 +4399,34 @@ export default function App() {
 
   if (isSystemAdmin && !organization) {
     return (
-      <div className="app-shell">
-        <aside className="sidebar">
+      <div className={`app-shell ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>
+        <button
+          className="mobile-menu-button"
+          type="button"
+          aria-label="Abrir menu"
+          onClick={() => setMobileMenuOpen(true)}
+        >
+          <Menu size={22} />
+        </button>
+
+        {mobileMenuOpen && (
+          <button
+            className="mobile-menu-backdrop"
+            type="button"
+            aria-label="Fechar menu"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
+
+        <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+          <button
+            className="mobile-menu-close"
+            type="button"
+            aria-label="Fechar menu"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <X size={22} />
+          </button>
           <div className="sidebar-brand">
             <div className="brand-mark small">CP</div>
             <div>
@@ -4409,7 +4441,7 @@ export default function App() {
             </button>
           </nav>
 
-          <button className="nav-item logout" onClick={logout}>
+          <button className="nav-item logout" onClick={() => { setMobileMenuOpen(false); logout() }}>
             <LogOut size={18}/> Sair
           </button>
         </aside>
@@ -4435,9 +4467,35 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>
 
-      <aside className="sidebar">
+      <button
+        className="mobile-menu-button"
+        type="button"
+        aria-label="Abrir menu"
+        onClick={() => setMobileMenuOpen(true)}
+      >
+        <Menu size={22} />
+      </button>
+
+      {mobileMenuOpen && (
+        <button
+          className="mobile-menu-backdrop"
+          type="button"
+          aria-label="Fechar menu"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+        <button
+          className="mobile-menu-close"
+          type="button"
+          aria-label="Fechar menu"
+          onClick={() => setMobileMenuOpen(false)}
+        >
+          <X size={22} />
+        </button>
         <div className="sidebar-brand">
           <div className="brand-mark small">CP</div>
           <div>
@@ -4447,49 +4505,49 @@ export default function App() {
         </div>
 
         <nav>
-          <button className={`nav-item ${page === 'dashboard' ? 'active' : ''}`} onClick={() => setPage('dashboard')}>
+          <button className={`nav-item ${page === 'dashboard' ? 'active' : ''}`} onClick={() => { setPage('dashboard'); setMobileMenuOpen(false) }}>
             <Building2 size={18}/> Dashboard
           </button>
-          <button className={`nav-item ${page === 'targets' ? 'active' : ''}`} onClick={() => setPage('targets')}>
+          <button className={`nav-item ${page === 'targets' ? 'active' : ''}`} onClick={() => { setPage('targets'); setMobileMenuOpen(false) }}>
             <Tags size={18}/> Públicos-alvo
           </button>
           {(settings?.feature_flags?.campaigns !== false) && (
-            <button className={`nav-item ${page === 'campaigns' ? 'active' : ''}`} onClick={() => setPage('campaigns')}>
+            <button className={`nav-item ${page === 'campaigns' ? 'active' : ''}`} onClick={() => { setPage('campaigns'); setMobileMenuOpen(false) }}>
               <Target size={18}/> Campanhas
             </button>
           )}
           {(settings?.feature_flags?.capture !== false) && (
-            <button className={`nav-item ${page === 'capture' ? 'active' : ''}`} onClick={() => setPage('capture')}>
+            <button className={`nav-item ${page === 'capture' ? 'active' : ''}`} onClick={() => { setPage('capture'); setMobileMenuOpen(false) }}>
               <Search size={18}/> Captação
             </button>
           )}
           {(settings?.feature_flags?.leads !== false) && (
-            <button className={`nav-item ${page === 'leads' ? 'active' : ''}`} onClick={() => setPage('leads')}>
+            <button className={`nav-item ${page === 'leads' ? 'active' : ''}`} onClick={() => { setPage('leads'); setMobileMenuOpen(false) }}>
               <Users size={18}/> Leads
             </button>
           )}
           {(settings?.feature_flags?.leads !== false) && (
-            <button className={`nav-item ${page === 'clients' ? 'active' : ''}`} onClick={() => setPage('clients')}>
+            <button className={`nav-item ${page === 'clients' ? 'active' : ''}`} onClick={() => { setPage('clients'); setMobileMenuOpen(false) }}>
               <CheckCircle2 size={18}/> Clientes
             </button>
           )}
           {(settings?.feature_flags?.messages !== false) && (
-            <button className={`nav-item ${page === 'messages' ? 'active' : ''}`} onClick={() => setPage('messages')}>
+            <button className={`nav-item ${page === 'messages' ? 'active' : ''}`} onClick={() => { setPage('messages'); setMobileMenuOpen(false) }}>
               <MessageSquareText size={18}/> Mensagens
             </button>
           )}
-          <button className={`nav-item ${page === 'whatsapp' ? 'active' : ''}`} onClick={() => setPage('whatsapp')}>
+          <button className={`nav-item ${page === 'whatsapp' ? 'active' : ''}`} onClick={() => { setPage('whatsapp'); setMobileMenuOpen(false) }}>
             <Phone size={18}/> WhatsApp
           </button>
 
           {isSystemAdmin && (
-            <button className={`nav-item ${page === 'administration' ? 'active' : ''}`} onClick={() => setPage('administration')}>
+            <button className={`nav-item ${page === 'administration' ? 'active' : ''}`} onClick={() => { setPage('administration'); setMobileMenuOpen(false) }}>
               <Shield size={18}/> Administração
             </button>
           )}
         </nav>
 
-        <button className="nav-item logout" onClick={logout}>
+        <button className="nav-item logout" onClick={() => { setMobileMenuOpen(false); logout() }}>
           <LogOut size={18}/> Sair
         </button>
       </aside>

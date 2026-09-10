@@ -394,6 +394,7 @@ function CatalogAdmin({ userEmail }) {
   const [editing, setEditing] = useState(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [catalogSearch, setCatalogSearch] = useState('')
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -562,6 +563,11 @@ function CatalogAdmin({ userEmail }) {
     else await loadCatalog()
   }
 
+  const filteredCatalogSegments = segments.filter(segment => {
+    const q = catalogSearch.trim().toLowerCase()
+    return !q || (segment.name || '').toLowerCase().includes(q)
+  })
+
   return (
     <>
       <header className="topbar">
@@ -641,42 +647,46 @@ function CatalogAdmin({ userEmail }) {
 
       {message && <div className="notice">{message}</div>}
 
-      <section className="campaign-list">
-        {segments.map(segment => {
+      <section className="panel admin-search-panel compact-search-panel">
+        <div className="search-box">
+          <Search size={17}/>
+          <input
+            value={catalogSearch}
+            onChange={e => setCatalogSearch(e.target.value)}
+            placeholder="Buscar segmento por nome"
+          />
+        </div>
+        <span className="admin-result-count">{filteredCatalogSegments.length} de {segments.length} segmentos</span>
+      </section>
+
+      <section className="compact-admin-list catalog-compact-list">
+        {filteredCatalogSegments.length === 0 ? (
+          <article className="panel empty-state compact-empty"><Search size={26}/><h2>Nenhum segmento encontrado</h2></article>
+        ) : filteredCatalogSegments.map(segment => {
           const terms = (segment.catalog_segment_terms || [])
             .filter(t => t.is_active)
             .sort((a,b) => a.sort_order - b.sort_order)
+          const recommended = terms.filter(t => t.is_recommended)
+          const additional = terms.filter(t => !t.is_recommended)
 
           return (
-            <article className="panel catalog-card" key={segment.id}>
-              <div>
-                <span className="eyebrow">{segment.is_active ? 'ATIVO' : 'INATIVO'}</span>
-                <h2>{segment.name}</h2>
+            <article className="panel compact-admin-row catalog-compact-row" key={segment.id}>
+              <div className="compact-admin-main">
+                <div className="compact-admin-title-line">
+                  <span className={`compact-status ${segment.is_active ? 'active' : 'inactive'}`}>{segment.is_active ? 'Ativo' : 'Inativo'}</span>
+                  <strong>{segment.name}</strong>
+                </div>
                 <p>{segment.description || 'Sem descrição'}</p>
-
-                <div className="catalog-term-groups">
-                  <div>
-                    <strong>Recomendados</strong>
-                    <div className="tag-row">
-                      {terms.filter(t => t.is_recommended).map(t => (
-                        <span key={t.id}>{t.term}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <strong>Outros</strong>
-                    <div className="tag-row">
-                      {terms.filter(t => !t.is_recommended).map(t => (
-                        <span key={t.id}>{t.term}</span>
-                      ))}
-                    </div>
-                  </div>
+                <div className="compact-term-line">
+                  <span><b>{recommended.length}</b> recomendados</span>
+                  <span><b>{additional.length}</b> outros termos</span>
+                  {terms.slice(0, 4).map(t => <em key={t.id}>{t.term}</em>)}
+                  {terms.length > 4 && <em>+{terms.length - 4}</em>}
                 </div>
               </div>
-
-              <div className="message-card-actions">
-                <button className="secondary" onClick={() => startEdit(segment)}>Editar</button>
-                <button className="secondary" onClick={() => toggleCatalogSegment(segment)}>
+              <div className="row-actions compact-row-actions">
+                <button className="secondary mini" onClick={() => startEdit(segment)}>Editar</button>
+                <button className="secondary mini" onClick={() => toggleCatalogSegment(segment)}>
                   {segment.is_active ? 'Desativar' : 'Ativar'}
                 </button>
               </div>
@@ -1620,21 +1630,37 @@ function Leads({ organization, settings, userEmail }) {
     })
   }
 
+  const bulkVisibleLimit = Math.min(batchLimit, eligibleVisibleLeads.length)
+  const selectedEligibleVisibleCount = eligibleVisibleLeads.filter(l => selected.has(l.id)).length
+  const bulkVisibleSelected = bulkVisibleLimit > 0 && (
+    selectedEligibleVisibleCount >= bulkVisibleLimit ||
+    (selectedEligibleVisibleCount > 0 && selected.size >= batchLimit)
+  )
+
   function toggleAllVisible() {
-    const allSelected = eligibleVisibleLeads.length > 0 && eligibleVisibleLeads.every(l => selected.has(l.id))
     setSelected(old => {
       const next = new Set(old)
-      if (allSelected) {
+      const selectedVisible = eligibleVisibleLeads.filter(l => next.has(l.id))
+      const shouldClear = bulkVisibleLimit > 0 && (
+        selectedVisible.length >= bulkVisibleLimit ||
+        (selectedVisible.length > 0 && next.size >= batchLimit)
+      )
+
+      if (shouldClear) {
         eligibleVisibleLeads.forEach(l => next.delete(l.id))
+        setMessage('')
+        return next
+      }
+
+      const selectedOutsideVisible = [...next].filter(id => !eligibleVisibleLeads.some(l => l.id === id)).length
+      const available = Math.max(batchLimit - selectedOutsideVisible, 0)
+      eligibleVisibleLeads.forEach(l => next.delete(l.id))
+      eligibleVisibleLeads.slice(0, available).forEach(l => next.add(l.id))
+
+      if (eligibleVisibleLeads.length > available) {
+        setMessage(`Foram selecionados até ${batchLimit} leads, conforme o limite atual do lote.`)
       } else {
-        const available = Math.max(batchLimit - next.size, 0)
-        eligibleVisibleLeads
-          .filter(l => !next.has(l.id))
-          .slice(0, available)
-          .forEach(l => next.add(l.id))
-        if (eligibleVisibleLeads.length > available) {
-          setMessage(`Foram selecionados até ${batchLimit} leads, conforme o limite atual do lote.`)
-        }
+        setMessage('')
       }
       return next
     })
@@ -1824,7 +1850,7 @@ function Leads({ organization, settings, userEmail }) {
         <label className="select-all">
           <input
             type="checkbox"
-            checked={eligibleVisibleLeads.length > 0 && eligibleVisibleLeads.every(l => selected.has(l.id))}
+            checked={bulkVisibleSelected}
             onChange={toggleAllVisible}
           />
           Selecionar todos os filtrados
@@ -3625,6 +3651,7 @@ function AdminClients({ organizations, reloadOrganizations }) {
   const [createForm, setCreateForm] = useState({ name: '', city: '', state: 'SP', radius: 30 })
   const [memberForm, setMemberForm] = useState({ email: '', role: 'member' })
   const [counts, setCounts] = useState({})
+  const [organizationSearch, setOrganizationSearch] = useState('')
 
   useEffect(() => {
     if (!selectedOrgId && organizations[0]?.id) setSelectedOrgId(organizations[0].id)
@@ -3751,6 +3778,11 @@ function AdminClients({ organizations, reloadOrganizations }) {
     if (!data?.error && !error) await loadMembers()
   }
 
+  const filteredOrganizations = organizations.filter(org => {
+    const q = organizationSearch.trim().toLowerCase()
+    return !q || (org.name || '').toLowerCase().includes(q)
+  })
+
   return (
     <>
       <AdminSectionHeader
@@ -3796,9 +3828,23 @@ function AdminClients({ organizations, reloadOrganizations }) {
         </section>
       )}
 
-      <section className="campaign-list">
-        {organizations.map(org => (
-          <article className="panel campaign-card" key={org.id}>
+      <section className="panel admin-search-panel compact-search-panel">
+        <div className="search-box">
+          <Search size={17}/>
+          <input
+            value={organizationSearch}
+            onChange={e => setOrganizationSearch(e.target.value)}
+            placeholder="Buscar organização por nome"
+          />
+        </div>
+        <span className="admin-result-count">{filteredOrganizations.length} de {organizations.length} organizações</span>
+      </section>
+
+      <section className="campaign-list organization-compact-list">
+        {filteredOrganizations.length === 0 ? (
+          <article className="panel empty-state compact-empty"><Search size={26}/><h2>Nenhuma organização encontrada</h2></article>
+        ) : filteredOrganizations.map(org => (
+          <article className="panel campaign-card organization-compact-card" key={org.id}>
             <div>
               <span className="eyebrow">{org.is_active ? 'ATIVO' : 'INATIVO'}</span>
               <h2>{org.name}</h2>

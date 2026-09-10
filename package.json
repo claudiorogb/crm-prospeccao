@@ -1,11 +1,11 @@
 {
-  "name": "crm-prospeccao-v32",
+  "name": "crm-prospeccao-v33",
   "private": true,
-  "version": "0.32.2",
+  "version": "0.33.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "python3 scripts/apply_v32_improvements.py && python3 scripts/apply_v32_1_structure_fix.py && vite build",
+    "build": "python3 scripts/apply_v32_improvements.py && python3 scripts/apply_v32_1_structure_fix.py && python3 scripts/apply_v33_funnel_repository_dashboard.py && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

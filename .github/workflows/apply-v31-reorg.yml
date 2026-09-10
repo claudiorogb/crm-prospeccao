@@ -1,0 +1,39 @@
+name: Apply CRM V31 reorganization
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v31_reorg.py'
+      - '.github/workflows/apply-v31-reorg.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply V31 patch
+        run: python scripts/apply_v31_reorg.py
+
+      - name: Validate build
+        run: |
+          npm install
+          npm run build
+
+      - name: Commit generated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx src/styles.css
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Implement V31 dashboard campaigns and sales funnel"
+            git push
+          fi

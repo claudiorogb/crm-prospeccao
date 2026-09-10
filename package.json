@@ -1,11 +1,11 @@
 {
-  "name": "crm-prospeccao-v37",
+  "name": "crm-prospeccao-v38",
   "private": true,
-  "version": "0.37.0",
+  "version": "0.38.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "python3 scripts/apply_v32_improvements.py && python3 scripts/apply_v32_1_structure_fix.py && python3 scripts/apply_v33_funnel_repository_dashboard.py && python3 scripts/apply_v34_wordwrap_target_delete_confirmation.py && python3 scripts/apply_v35_fixed_funnel_scrollbar.py && python3 scripts/apply_v36_remove_lead_delete.py && python3 scripts/apply_v37_equal_kanban_column_height.py && vite build",
+    "build": "python3 scripts/apply_v32_improvements.py && python3 scripts/apply_v32_1_structure_fix.py && python3 scripts/apply_v33_funnel_repository_dashboard.py && python3 scripts/apply_v34_wordwrap_target_delete_confirmation.py && python3 scripts/apply_v35_fixed_funnel_scrollbar.py && python3 scripts/apply_v37_equal_kanban_column_height.py && python3 scripts/apply_v38_recover_funnel_remove_delete_safely.py && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

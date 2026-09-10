@@ -3,6 +3,8 @@ name: Validate CRM V41 build
 on:
   push:
     paths:
+      - 'scripts/apply_v41_usability_export_sidebar.py'
+      - 'package.json'
       - '.github/workflows/validate-v41.yml'
 
 permissions:
@@ -18,7 +20,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install dependencies
         run: npm install

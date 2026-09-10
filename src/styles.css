@@ -2152,3 +2152,92 @@ select:focus {
     flex-wrap: wrap;
   }
 }
+
+
+/* V31 - reorganização CRM */
+.workspace-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 20px;
+  padding: 8px;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+}
+.workspace-tabs button {
+  border: 0;
+  background: transparent;
+  padding: 10px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.workspace-tabs button.active {
+  background: #111827;
+  color: #fff;
+}
+.dashboard-commercial-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.dashboard-shortcut { margin-top: 18px; }
+.sales-kanban-wrap { overflow-x: auto; padding-bottom: 14px; }
+.sales-kanban {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(285px, 1fr));
+  gap: 14px;
+  min-width: max-content;
+  align-items: start;
+}
+.kanban-column {
+  width: 285px;
+  background: #f5f6f8;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  min-height: 280px;
+  overflow: hidden;
+}
+.kanban-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+.kanban-column-head span {
+  min-width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef0f3;
+  font-size: 12px;
+  font-weight: 700;
+}
+.kanban-column-cards { display: grid; gap: 10px; padding: 10px; }
+.kanban-empty { padding: 24px 10px; text-align: center; color: #6b7280; font-size: 13px; }
+.kanban-lead-card { padding: 12px; display: grid; gap: 11px; }
+.kanban-card-top { display: grid; grid-template-columns: 20px 1fr; gap: 8px; align-items: start; }
+.kanban-card-top h3 { margin: 2px 0 0; font-size: 15px; line-height: 1.25; }
+.kanban-card-meta { display: grid; gap: 3px; font-size: 12px; color: #667085; }
+.kanban-lead-card label { display: grid; gap: 5px; font-size: 11px; font-weight: 600; }
+.kanban-lead-card input, .kanban-lead-card select, .kanban-lead-card textarea { width: 100%; }
+.kanban-two-fields { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.kanban-card-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sending-toolbar { display: flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.sending-list { display: grid; gap: 10px; margin-top: 14px; }
+.sending-row { display: grid; grid-template-columns: 28px minmax(180px, 1fr) minmax(140px, .7fr) auto; gap: 12px; align-items: center; }
+.sending-row > div { display: grid; gap: 3px; }
+.sending-row > div span { color: #667085; font-size: 12px; }
+
+@media (max-width: 1180px) {
+  .dashboard-commercial-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .workspace-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .workspace-tabs button { white-space: nowrap; }
+  .dashboard-commercial-grid { grid-template-columns: 1fr; }
+  .sales-kanban { grid-template-columns: repeat(9, minmax(260px, 1fr)); }
+  .kanban-column { width: 260px; }
+  .sending-row { grid-template-columns: 28px 1fr; }
+  .sending-row > span { grid-column: 2; }
+}

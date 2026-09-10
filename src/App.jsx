@@ -308,34 +308,57 @@ function StatCard({ label, value, detail }) {
   )
 }
 
-function Dashboard({ organization, settings, userEmail, onGoCampaigns }) {
-  const [stats, setStats] = useState({ total: 0, qualified: 0, queue: 0, replied: 0 })
+function Dashboard({ organization, userEmail, onGoCampaigns }) {
+  const [stats, setStats] = useState({
+    leadsFound: 0,
+    contacted: 0,
+    ongoing: 0,
+    won: 0,
+    wonValue: 0,
+    ongoingValue: 0
+  })
 
   useEffect(() => {
+    let active = true
+
     async function loadStats() {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('status')
-        .eq('organization_id', organization.id)
+      const [{ data: leadsData, error: leadsError }, { data: salesData, error: salesError }] = await Promise.all([
+        supabase
+          .from('leads')
+          .select('id,status,last_contact_date,last_contacted_at,proposal_value,proposal_sent_at')
+          .eq('organization_id', organization.id),
+        supabase
+          .from('sales')
+          .select('amount,lead_id')
+          .eq('organization_id', organization.id)
+      ])
 
-      if (error) return
+      if (!active || leadsError || salesError) return
 
-      const rows = data || []
+      const leads = leadsData || []
+      const sales = salesData || []
+      const contactedStatuses = new Set(['contacted','replied','interested','not_interested','won','lost'])
+      const wonIds = new Set(leads.filter(l => l.status === 'won').map(l => l.id))
+
       setStats({
-        total: rows.length,
-        qualified: rows.filter(x => !['discarded','lost'].includes(x.status)).length,
-        queue: rows.filter(x => ['qualified', 'queued'].includes(x.status)).length,
-        replied: rows.filter(x => ['replied', 'interested'].includes(x.status)).length
+        leadsFound: leads.length,
+        contacted: leads.filter(l => l.last_contact_date || l.last_contacted_at || contactedStatuses.has(l.status)).length,
+        ongoing: leads.filter(l => l.status === 'interested').length,
+        won: wonIds.size,
+        wonValue: sales.filter(s => wonIds.has(s.lead_id)).reduce((sum, s) => sum + Number(s.amount || 0), 0),
+        ongoingValue: leads
+          .filter(l => l.status === 'interested' && l.proposal_sent_at)
+          .reduce((sum, l) => sum + Number(l.proposal_value || 0), 0)
       })
     }
-    loadStats()
-  }, [organization.id])
 
-  const cadence = useMemo(() => {
-    if (!settings?.default_cadence_days) return 'Seg • Qua • Sex'
-    const names = { 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb', 7: 'Dom' }
-    return settings.default_cadence_days.map(d => names[d] ?? d).join(' • ')
-  }, [settings])
+    loadStats()
+    const timer = setInterval(loadStats, 15000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [organization.id])
 
   return (
     <>
@@ -343,49 +366,32 @@ function Dashboard({ organization, settings, userEmail, onGoCampaigns }) {
         <div>
           <span className="eyebrow">PAINEL</span>
           <h1>Dashboard</h1>
-          <p className="muted">Visão geral da operação de prospecção.</p>
+          <p className="muted">Resumo da prospecção e do funil comercial.</p>
         </div>
-        <div className="topbar-actions">
-          <div className="user-badge">{userEmail}</div>
-        </div>
+        <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
 
-      <section className="stats-grid">
-        <StatCard label="Leads encontrados" value={stats.total} detail="Total na base" />
-        <StatCard label="Leads válidos" value={stats.qualified} detail="Dentro dos critérios objetivos" />
-        <StatCard label="Na fila" value={stats.queue} detail="Prontos para prospecção" />
-        <StatCard label="Responderam" value={stats.replied} detail="Leads com retorno" />
+      <section className="stats-grid dashboard-commercial-grid">
+        <StatCard label="Leads encontrados" value={stats.leadsFound} detail="Total captado ou cadastrado" />
+        <StatCard label="Leads contatados" value={stats.contacted} detail="Leads que já receberam contato" />
+        <StatCard label="Negócios em andamento" value={stats.ongoing} detail="Leads atualmente interessados" />
+        <StatCard label="Negócios fechados" value={stats.won} detail={`Valor total: ${formatCurrency(stats.wonValue)}`} />
+        <StatCard label="Propostas em andamento" value={formatCurrency(stats.ongoingValue)} detail="Somente propostas enviadas de negócios interessados" />
       </section>
 
-      <section className="panel-grid">
-        <article className="panel clickable" onClick={onGoCampaigns}>
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">PROSPECÇÃO</span>
-              <h2>Campanhas</h2>
-            </div>
-            <ChevronRight />
+      <section className="panel dashboard-shortcut clickable" onClick={onGoCampaigns}>
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">PROSPECÇÃO</span>
+            <h2>Campanhas</h2>
           </div>
-          <p>Defina o público-alvo e a região de cada operação de busca.</p>
-          <div className="tag-row"><span>Públicos personalizados</span><span>Raio geográfico</span><span>Busca automática</span></div>
-        </article>
-
-        <article className="panel">
-          <span className="eyebrow">CONFIGURAÇÃO ATUAL</span>
-          <h2>Operação</h2>
-          <dl className="summary-list">
-            <div><dt>Região</dt><dd>{settings?.default_city || '—'} / {settings?.default_state || '—'}</dd></div>
-            <div><dt>Raio</dt><dd>{settings?.default_radius_km ?? '—'} km</dd></div>
-            <div><dt>Cadência</dt><dd>{cadence}</dd></div>
-            <div><dt>Limite diário</dt><dd>{settings?.default_daily_contact_limit ?? 20}</dd></div>
-            <div><dt>Cota Places</dt><dd>{settings?.google_places_monthly_quota ?? 900}/mês</dd></div>
-          </dl>
-        </article>
+          <ChevronRight />
+        </div>
+        <p>Cadastre públicos, campanhas, captação, mensagens, envios e números de WhatsApp em um único lugar.</p>
       </section>
     </>
   )
 }
-
 
 
 function CatalogAdmin({ userEmail }) {
@@ -1252,6 +1258,28 @@ function Campaigns({ organization, settings, userEmail }) {
               <div><strong>Cadência:</strong> segunda, quarta e sexta</div>
               <div><strong>Busca:</strong> termos do público alternados automaticamente</div>
             </div>
+            <div className="field-grid">
+              <label>
+                Valor da proposta (R$)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.proposal_value}
+                  onChange={e=>setForm({...form,proposal_value:e.target.value})}
+                  placeholder="0,00"
+                />
+              </label>
+              <label>
+                Data de envio da proposta
+                <input
+                  type="date"
+                  value={form.proposal_sent_at}
+                  onChange={e=>setForm({...form,proposal_sent_at:e.target.value})}
+                />
+              </label>
+            </div>
+
             <div className="form-actions">
               <button type="button" className="secondary" onClick={()=>setShowForm(false)}>Cancelar</button>
               <button className="primary" disabled={loading}>{loading?'Salvando...':'Salvar campanha'}</button>
@@ -1429,6 +1457,8 @@ function Leads({ organization, settings, userEmail }) {
     contact_name: '',
     last_contact_date: '',
     next_contact_date: '',
+    proposal_value: '',
+    proposal_sent_at: '',
     status: 'new'
   })
 
@@ -1520,6 +1550,8 @@ function Leads({ organization, settings, userEmail }) {
       contact_name: form.contact_name.trim() || null,
       last_contact_date: form.last_contact_date || null,
       next_contact_date: form.next_contact_date || null,
+      proposal_value: form.proposal_value === '' ? null : Number(String(form.proposal_value).replace(',', '.')),
+      proposal_sent_at: form.proposal_sent_at || null,
       status: form.status,
       source: 'manual'
     })
@@ -1537,7 +1569,9 @@ function Leads({ organization, settings, userEmail }) {
         address:'',
         contact_name:'',
         last_contact_date:'',
-        next_contact_date:''
+        next_contact_date:'',
+        proposal_value:'',
+        proposal_sent_at:''
       }))
       await loadData()
     }
@@ -1555,7 +1589,7 @@ function Leads({ organization, settings, userEmail }) {
 
 
   async function updateLeadContactField(id, field, value) {
-    const allowed = ['contact_name', 'last_contact_date', 'next_contact_date', 'commercial_notes']
+    const allowed = ['contact_name', 'last_contact_date', 'next_contact_date', 'commercial_notes', 'proposal_value', 'proposal_sent_at']
     if (!allowed.includes(field)) return
 
     const dbValue = value === '' ? null : value
@@ -1863,121 +1897,126 @@ function Leads({ organization, settings, userEmail }) {
         </div>
       </section>
 
-      <section className="lead-list">
-        {visibleLeads.length===0 ? (
-          <article className="panel empty-state"><Users size={34}/><h2>Nenhum lead encontrado</h2><p>Use a captação automática ou cadastre um lead manualmente.</p></article>
-        ) : visibleLeads.map(l=>(
-          <article className="panel lead-card selectable-lead" key={l.id}>
-            <div className="lead-select-box">
-              <input
-                type="checkbox"
-                checked={selected.has(l.id)}
-                onChange={()=>toggleSelected(l.id)}
-                disabled={l.status === 'discarded'}
-                aria-label={`Selecionar ${l.business_name}`}
-              />
-            </div>
+      <section className="sales-kanban-wrap">
+        <div className="sales-kanban">
+          {Object.entries(statusLabel)
+            .filter(([status]) => status !== 'discarded')
+            .map(([status, label]) => {
+              const columnLeads = visibleLeads.filter(l => l.status === status)
+              return (
+                <div className="kanban-column" key={status}>
+                  <div className="kanban-column-head">
+                    <strong>{label}</strong>
+                    <span>{columnLeads.length}</span>
+                  </div>
 
-            <div className="lead-main">
-              <div className="lead-title-row">
-                <div>
-                  <span className="eyebrow">{l.target_segments?.name || l.segment}</span>
-                  <h2>{l.business_name}</h2>
-                </div>
-              </div>
+                  <div className="kanban-column-cards">
+                    {columnLeads.length === 0 ? (
+                      <div className="kanban-empty">Nenhum negócio</div>
+                    ) : columnLeads.map(l => (
+                      <article className="panel kanban-lead-card" key={l.id}>
+                        <div className="kanban-card-top">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(l.id)}
+                            onChange={()=>toggleSelected(l.id)}
+                            aria-label={`Selecionar ${l.business_name}`}
+                          />
+                          <div>
+                            <span className="eyebrow">{l.target_segments?.name || l.segment}</span>
+                            <h3>{l.business_name}</h3>
+                          </div>
+                        </div>
 
-              <div className="lead-info-grid">
-                <div><span>Cidade</span><strong>{l.city || '—'}{l.state ? ` / ${l.state}` : ''}</strong></div>
-                <div><span>Telefone</span><strong>{l.phone || '—'}</strong></div>
-                <div><span>Campanha</span><strong>{l.campaigns?.name || 'Sem campanha'}</strong></div>
-                <div>
-                  <span>Site</span>
-                  {l.website ? <a className="lead-site-link" href={l.website} target="_blank" rel="noreferrer">Abrir site</a> : <strong>—</strong>}
-                </div>
-              </div>
+                        <div className="kanban-card-meta">
+                          <span>{l.city || '—'}{l.state ? ` / ${l.state}` : ''}</span>
+                          <span>{l.phone || 'Sem telefone'}</span>
+                          {l.campaigns?.name && <span>{l.campaigns.name}</span>}
+                        </div>
 
-              <div className="lead-contact-fields">
-                <label>
-                  <span>Nome do contato</span>
-                  <input
-                    value={l.contact_name || ''}
-                    onChange={e => setLeads(old => old.map(item =>
-                      item.id === l.id ? { ...item, contact_name: e.target.value } : item
+                        <label>
+                          <span>Nome do contato</span>
+                          <input
+                            value={l.contact_name || ''}
+                            onChange={e => setLeads(old => old.map(item => item.id === l.id ? { ...item, contact_name: e.target.value } : item))}
+                            onBlur={e => updateLeadContactField(l.id, 'contact_name', e.target.value.trim())}
+                            placeholder="Nome do responsável"
+                          />
+                        </label>
+
+                        <div className="kanban-two-fields">
+                          <label>
+                            <span>Valor da proposta</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={l.proposal_value ?? ''}
+                              onChange={e => setLeads(old => old.map(item => item.id === l.id ? { ...item, proposal_value: e.target.value } : item))}
+                              onBlur={e => updateLeadContactField(l.id, 'proposal_value', e.target.value)}
+                              placeholder="R$ 0,00"
+                            />
+                          </label>
+                          <label>
+                            <span>Proposta enviada</span>
+                            <input
+                              type="date"
+                              value={l.proposal_sent_at || ''}
+                              onChange={e => {
+                                const value = e.target.value
+                                setLeads(old => old.map(item => item.id === l.id ? { ...item, proposal_sent_at: value } : item))
+                                updateLeadContactField(l.id, 'proposal_sent_at', value)
+                              }}
+                            />
+                          </label>
+                        </div>
+
+                        <label className={l.next_contact_date && l.next_contact_date < currentBrazilDate() ? 'next-contact-overdue' : ''}>
+                          <span>Próximo contato {l.next_contact_date && l.next_contact_date < currentBrazilDate() && <strong className="overdue-badge">Atrasado</strong>}</span>
+                          <input
+                            type="date"
+                            value={l.next_contact_date || ''}
+                            onChange={e => {
+                              const value = e.target.value
+                              setLeads(old => old.map(item => item.id === l.id ? { ...item, next_contact_date: value } : item))
+                              updateLeadContactField(l.id, 'next_contact_date', value)
+                            }}
+                          />
+                        </label>
+
+                        {(l.status === 'interested' || (l.commercial_notes || '').trim()) && (
+                          <label>
+                            <span>Anotações comerciais</span>
+                            <textarea
+                              className="lead-notes-textarea"
+                              value={l.commercial_notes || ''}
+                              onChange={e => setLeads(old => old.map(item => item.id === l.id ? { ...item, commercial_notes: e.target.value } : item))}
+                              onBlur={e => updateLeadContactField(l.id, 'commercial_notes', e.target.value.trim())}
+                              placeholder="Necessidades, objeções e próximos passos."
+                            />
+                          </label>
+                        )}
+
+                        <label>
+                          <span>Status</span>
+                          <select value={l.status} onChange={e=>updateStatus(l.id,e.target.value)}>
+                            {Object.entries(statusLabel).map(([value,statusName])=><option key={value} value={value}>{statusName}</option>)}
+                          </select>
+                        </label>
+
+                        <div className="kanban-card-footer">
+                          {l.website ? <a className="lead-site-link" href={l.website} target="_blank" rel="noreferrer">Abrir site</a> : <span />}
+                          <button type="button" className="text-danger" onClick={()=>deleteLead(l.id,l.business_name)} title="Remove o registro definitivamente">
+                            <Trash2 size={14}/> Excluir
+                          </button>
+                        </div>
+                      </article>
                     ))}
-                    onBlur={e => updateLeadContactField(l.id, 'contact_name', e.target.value.trim())}
-                    placeholder="Nome do responsável"
-                  />
-                </label>
-
-                <label>
-                  <span>Último contato</span>
-                  <input
-                    type="date"
-                    value={l.last_contact_date || ''}
-                    onChange={e => {
-                      const value = e.target.value
-                      setLeads(old => old.map(item =>
-                        item.id === l.id ? { ...item, last_contact_date: value } : item
-                      ))
-                      updateLeadContactField(l.id, 'last_contact_date', value)
-                    }}
-                  />
-                </label>
-
-                <label className={l.next_contact_date && l.next_contact_date < currentBrazilDate() ? 'next-contact-overdue' : ''}>
-                  <span>
-                    Próximo contato previsto
-                    {l.next_contact_date && l.next_contact_date < currentBrazilDate() && (
-                      <strong className="overdue-badge">Atrasado</strong>
-                    )}
-                  </span>
-                  <input
-                    type="date"
-                    value={l.next_contact_date || ''}
-                    onChange={e => {
-                      const value = e.target.value
-                      setLeads(old => old.map(item =>
-                        item.id === l.id ? { ...item, next_contact_date: value } : item
-                      ))
-                      updateLeadContactField(l.id, 'next_contact_date', value)
-                    }}
-                  />
-                </label>
-              </div>
-
-              {(l.status === 'interested' || (l.commercial_notes || '').trim()) && (
-                <div className="lead-commercial-notes">
-                  <label>
-                    <span>Anotações comerciais</span>
-                    <textarea
-                      className="lead-notes-textarea"
-                      value={l.commercial_notes || ''}
-                      onChange={e => setLeads(old => old.map(item =>
-                        item.id === l.id ? { ...item, commercial_notes: e.target.value } : item
-                      ))}
-                      onBlur={e => updateLeadContactField(l.id, 'commercial_notes', e.target.value.trim())}
-                      placeholder="Registre necessidades, objeções, decisores, orçamento, próximos passos ou outras informações relevantes."
-                    />
-                  </label>
-                  <p className="field-help">Esta anotação permanece mesmo se o status mudar e continuará disponível quando o lead se tornar cliente.</p>
+                  </div>
                 </div>
-              )}
-            </div>
-
-            <div className="lead-status-box">
-              <label>Status
-                <select value={l.status} onChange={e=>updateStatus(l.id,e.target.value)}>
-                  {Object.entries(statusLabel).map(([value,label])=><option key={value} value={value}>{label}</option>)}
-                </select>
-              </label>
-              <div className="lead-actions-secondary">
-                <button type="button" className="text-danger" onClick={()=>deleteLead(l.id,l.business_name)} title="Remove o registro definitivamente">
-                  <Trash2 size={14}/> Excluir definitivamente
-                </button>
-              </div>
-            </div>
-          </article>
-        ))}
+              )
+            })}
+        </div>
       </section>
     </>
   )
@@ -2696,6 +2735,144 @@ function Messages({ organization, userEmail }) {
 
 
 
+
+
+function MessageSending({ organization, settings, userEmail }) {
+  const [leads, setLeads] = useState([])
+  const [templates, setTemplates] = useState([])
+  const [selected, setSelected] = useState(new Set())
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+
+  async function loadData() {
+    const [{ data: leadData }, { data: templateData }] = await Promise.all([
+      supabase
+        .from('leads')
+        .select('id,business_name,phone,status,target_segment_id,target_segments(name)')
+        .eq('organization_id', organization.id)
+        .not('status', 'in', '(discarded,won,lost)')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('message_templates')
+        .select('id,target_segment_id,name,is_default_for_target')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true)
+    ])
+    setLeads(leadData || [])
+    setTemplates(templateData || [])
+  }
+
+  useEffect(() => { loadData() }, [organization.id])
+
+  const batchLimit = Math.max(1, Number(settings?.whatsapp_batch_limit || 20))
+  const eligible = leads.filter(l => normalizeWhatsAppNumber(l.phone) && templates.some(t => t.target_segment_id === l.target_segment_id))
+
+  function toggle(id) {
+    setSelected(old => {
+      const next = new Set(old)
+      if (next.has(id)) next.delete(id)
+      else if (next.size < batchLimit) next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelected(old => old.size ? new Set() : new Set(eligible.slice(0, batchLimit).map(l => l.id)))
+  }
+
+  async function send() {
+    if (!selected.size) return
+    setLoading(true)
+    setMessage('')
+    const { data, error } = await supabase.functions.invoke('enqueue_whatsapp_messages', {
+      body: { organization_id: organization.id, lead_ids: [...selected] }
+    })
+    if (error || data?.error) setMessage(data?.error || error?.message || 'Não foi possível criar a fila de mensagens.')
+    else {
+      setMessage(`${data?.queued || 0} mensagem(ns) adicionada(s) à fila.`)
+      setSelected(new Set())
+      await loadData()
+    }
+    setLoading(false)
+  }
+
+  return (
+    <>
+      <header className="topbar compact-subpage-header">
+        <div>
+          <span className="eyebrow">CAMPANHAS</span>
+          <h1>Envio</h1>
+          <p className="muted">Selecione leads aptos e envie as mensagens cadastradas para a fila do WhatsApp.</p>
+        </div>
+        <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
+      </header>
+
+      {message && <div className="notice">{message}</div>}
+
+      <section className="panel sending-toolbar">
+        <label className="select-all"><input type="checkbox" checked={selected.size > 0 && selected.size === Math.min(eligible.length, batchLimit)} onChange={toggleAll} /> Selecionar aptos</label>
+        <span>{selected.size} de {batchLimit} selecionados</span>
+        <button className="primary inline-btn" onClick={send} disabled={!selected.size || loading}><Send size={16}/>{loading ? 'Enviando...' : 'Enviar mensagens'}</button>
+      </section>
+
+      <section className="sending-list">
+        {leads.map(l => {
+          const hasPhone = Boolean(normalizeWhatsAppNumber(l.phone))
+          const hasTemplate = templates.some(t => t.target_segment_id === l.target_segment_id)
+          const canSend = hasPhone && hasTemplate
+          return (
+            <article className="panel sending-row" key={l.id}>
+              <input type="checkbox" checked={selected.has(l.id)} onChange={() => toggle(l.id)} disabled={!canSend} />
+              <div><strong>{l.business_name}</strong><span>{l.target_segments?.name || 'Sem público definido'}</span></div>
+              <span>{l.phone || 'Sem telefone'}</span>
+              <span className={canSend ? 'template-status active' : 'template-status inactive'}>{canSend ? 'Apto' : !hasPhone ? 'Sem telefone' : 'Sem mensagem ativa'}</span>
+            </article>
+          )
+        })}
+      </section>
+    </>
+  )
+}
+
+function CampaignWorkspace({ organization, settings, userEmail }) {
+  const [section, setSection] = useState('targets')
+  const items = [
+    ['targets','Público-alvo'],
+    ['campaigns','Campanha'],
+    ['capture','Captação'],
+    ['messages','Mensagens'],
+    ['sending','Envio'],
+    ['whatsapp','WhatsApp']
+  ]
+
+  return (
+    <>
+      <div className="workspace-tabs">
+        {items.map(([key,label]) => <button key={key} className={section === key ? 'active' : ''} onClick={() => setSection(key)}>{label}</button>)}
+      </div>
+      {section === 'targets' && <TargetSegments organization={organization} userEmail={userEmail} />}
+      {section === 'campaigns' && settings?.feature_flags?.campaigns !== false && <Campaigns organization={organization} settings={settings} userEmail={userEmail} />}
+      {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
+      {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
+      {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
+      {section === 'whatsapp' && <AdminWhatsApp organizations={[organization]} userEmail={userEmail} userMode={true} />}
+    </>
+  )
+}
+
+function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {
+  const [section, setSection] = useState('leads')
+  return (
+    <>
+      <div className="workspace-tabs">
+        <button className={section === 'leads' ? 'active' : ''} onClick={() => setSection('leads')}>Leads</button>
+        <button className={section === 'clients' ? 'active' : ''} onClick={() => setSection('clients')}>Clientes</button>
+      </div>
+      {section === 'leads' && <Leads organization={organization} settings={settings} userEmail={userEmail} />}
+      {section === 'clients' && <Clients organization={organization} userEmail={userEmail} userId={userId} />}
+    </>
+  )
+}
 
 function AdminOverview({ organizations }) {
   const [stats, setStats] = useState({
@@ -4584,36 +4761,11 @@ export default function App() {
           <button className={`nav-item ${page === 'dashboard' ? 'active' : ''}`} onClick={() => { setPage('dashboard'); setMobileMenuOpen(false) }}>
             <Building2 size={18}/> Dashboard
           </button>
-          <button className={`nav-item ${page === 'targets' ? 'active' : ''}`} onClick={() => { setPage('targets'); setMobileMenuOpen(false) }}>
-            <Tags size={18}/> Públicos-alvo
+          <button className={`nav-item ${page === 'campaign-workspace' ? 'active' : ''}`} onClick={() => { setPage('campaign-workspace'); setMobileMenuOpen(false) }}>
+            <Target size={18}/> Campanhas
           </button>
-          {(settings?.feature_flags?.campaigns !== false) && (
-            <button className={`nav-item ${page === 'campaigns' ? 'active' : ''}`} onClick={() => { setPage('campaigns'); setMobileMenuOpen(false) }}>
-              <Target size={18}/> Campanhas
-            </button>
-          )}
-          {(settings?.feature_flags?.capture !== false) && (
-            <button className={`nav-item ${page === 'capture' ? 'active' : ''}`} onClick={() => { setPage('capture'); setMobileMenuOpen(false) }}>
-              <Search size={18}/> Captação
-            </button>
-          )}
-          {(settings?.feature_flags?.leads !== false) && (
-            <button className={`nav-item ${page === 'leads' ? 'active' : ''}`} onClick={() => { setPage('leads'); setMobileMenuOpen(false) }}>
-              <Users size={18}/> Leads
-            </button>
-          )}
-          {(settings?.feature_flags?.leads !== false) && (
-            <button className={`nav-item ${page === 'clients' ? 'active' : ''}`} onClick={() => { setPage('clients'); setMobileMenuOpen(false) }}>
-              <CheckCircle2 size={18}/> Clientes
-            </button>
-          )}
-          {(settings?.feature_flags?.messages !== false) && (
-            <button className={`nav-item ${page === 'messages' ? 'active' : ''}`} onClick={() => { setPage('messages'); setMobileMenuOpen(false) }}>
-              <MessageSquareText size={18}/> Mensagens
-            </button>
-          )}
-          <button className={`nav-item ${page === 'whatsapp' ? 'active' : ''}`} onClick={() => { setPage('whatsapp'); setMobileMenuOpen(false) }}>
-            <Phone size={18}/> WhatsApp
+          <button className={`nav-item ${page === 'sales-funnel' ? 'active' : ''}`} onClick={() => { setPage('sales-funnel'); setMobileMenuOpen(false) }}>
+            <Users size={18}/> Funil de vendas
           </button>
 
           {isSystemAdmin && (
@@ -4634,32 +4786,18 @@ export default function App() {
             organization={organization}
             settings={settings}
             userEmail={userEmail}
-            onGoCampaigns={() => setPage('campaigns')}
+            onGoCampaigns={() => setPage('campaign-workspace')}
           />
         )}
-        {page === 'targets' && (
-          <TargetSegments organization={organization} userEmail={userEmail} />
+        {page === 'campaign-workspace' && (
+          <CampaignWorkspace organization={organization} settings={settings} userEmail={userEmail} />
         )}
-        {page === 'campaigns' && settings?.feature_flags?.campaigns !== false && (
-          <Campaigns organization={organization} settings={settings} userEmail={userEmail} />
-        )}
-        {page === 'capture' && settings?.feature_flags?.capture !== false && (
-          <Capture organization={organization} settings={settings} userEmail={userEmail} />
-        )}
-        {page === 'leads' && settings?.feature_flags?.leads !== false && (
-          <Leads organization={organization} settings={settings} userEmail={userEmail} />
-        )}
-        {page === 'clients' && settings?.feature_flags?.leads !== false && (
-          <Clients organization={organization} userEmail={userEmail} userId={session.user.id} />
-        )}
-        {page === 'messages' && settings?.feature_flags?.messages !== false && (
-          <Messages organization={organization} userEmail={userEmail} />
-        )}
-        {page === 'whatsapp' && (
-          <AdminWhatsApp
-            organizations={[organization]}
+        {page === 'sales-funnel' && settings?.feature_flags?.leads !== false && (
+          <SalesFunnelWorkspace
+            organization={organization}
+            settings={settings}
             userEmail={userEmail}
-            userMode={true}
+            userId={session.user.id}
           />
         )}
         {page === 'administration' && isSystemAdmin && (

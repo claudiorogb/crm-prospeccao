@@ -6,47 +6,50 @@ text = APP.read_text(encoding='utf-8')
 css = CSS.read_text(encoding='utf-8')
 
 
-def replace_once(old, new, label):
-    global text
-    if old not in text:
-        raise SystemExit(f'Marcador não encontrado: {label}')
-    text = text.replace(old, new, 1)
-
-
-def replace_in_component(start_marker, end_marker, old, new, label):
-    global text
+def component_bounds(start_marker, end_marker, label):
     start = text.find(start_marker)
     end = text.find(end_marker, start)
     if start < 0 or end < 0:
         raise SystemExit(f'Componente não encontrado: {label}')
-    component = text[start:end]
-    if old not in component:
+    return start, end
+
+
+def replace_in_component(start_marker, end_marker, old, new, label):
+    global text
+    start, end = component_bounds(start_marker, end_marker, label)
+    part = text[start:end]
+    if old not in part:
         raise SystemExit(f'Marcador não encontrado em {label}')
-    component = component.replace(old, new, 1)
-    text = text[:start] + component + text[end:]
+    part = part.replace(old, new, 1)
+    text = text[:start] + part + text[end:]
 
 
-# 1) Envio: flags sempre selecionam/deselecionam leads com telefone.
-# A existência de mensagem ativa é validada somente no momento do envio.
-old_selection = """  const batchLimit = Math.max(1, Number(settings?.whatsapp_batch_limit || 20))
-  const eligible = leads.filter(l => normalizeWhatsAppNumber(l.phone) && templates.some(t => t.target_segment_id === l.target_segment_id))
+def replace_range_in_component(start_marker, end_marker, range_start, range_end, new, label):
+    global text
+    start, end = component_bounds(start_marker, end_marker, label)
+    part = text[start:end]
+    a = part.find(range_start)
+    b = part.find(range_end, a)
+    if a < 0 or b < 0:
+        raise SystemExit(f'Faixa não encontrada em {label}')
+    part = part[:a] + new + part[b:]
+    text = text[:start] + part + text[end:]
 
-  function toggle(id) {
-    setSelected(old => {
-      const next = new Set(old)
-      if (next.has(id)) next.delete(id)
-      else if (next.size < batchLimit) next.add(id)
-      return next
-    })
-  }
 
-  function toggleAll() {
-    setSelected(old => old.size ? new Set() : new Set(eligible.slice(0, batchLimit).map(l => l.id)))
-  }
+# -----------------------------------------------------------------------------
+# 1) ENVIAR MENSAGEM: seleção e desseleção previsíveis.
+#    A falta de modelo de mensagem não bloqueia o checkbox; é validada no envio.
+#    Leads já na fila continuam indisponíveis para uma nova seleção.
+# -----------------------------------------------------------------------------
+SENDING_START = 'function MessageSending({ organization, settings, userEmail }) {'
+SENDING_END = 'function CampaignWorkspace({ organization, settings, userEmail }) {'
 
-"""
-new_selection = """  const batchLimit = Math.max(1, Number(settings?.whatsapp_batch_limit || 20))
-  const selectable = leads.filter(l => normalizeWhatsAppNumber(l.phone))
+selection_block = """  const batchLimit = Math.max(1, Number(settings?.whatsapp_batch_limit || 20))
+  const selectable = leads.filter(l =>
+    l.status !== 'queued' &&
+    !queuedLeadIds.has(l.id) &&
+    Boolean(normalizeWhatsAppNumber(l.phone))
+  )
   const eligible = selectable.filter(l => templates.some(t => t.target_segment_id === l.target_segment_id))
   const selectableBatch = selectable.slice(0, batchLimit)
   const allSelectableSelected = selectableBatch.length > 0 && selectableBatch.every(l => selected.has(l.id))
@@ -57,6 +60,7 @@ new_selection = """  const batchLimit = Math.max(1, Number(settings?.whatsapp_ba
 
       if (!checked) {
         next.delete(id)
+        setMessage('')
         return next
       }
 
@@ -80,31 +84,37 @@ new_selection = """  const batchLimit = Math.max(1, Number(settings?.whatsapp_ba
 
     setSelected(new Set(selectableBatch.map(l => l.id)))
     if (selectable.length > batchLimit) {
-      setMessage(`Foram selecionados os primeiros ${batchLimit} leads com telefone, conforme o limite do lote.`)
+      setMessage(`Foram selecionados os primeiros ${batchLimit} leads disponíveis, conforme o limite do lote.`)
     } else {
       setMessage('')
     }
   }
 
 """
-replace_in_component(
-    'function MessageSending({ organization, settings, userEmail }) {',
-    'function CampaignWorkspace({ organization, settings, userEmail }) {',
-    old_selection,
-    new_selection,
-    'MessageSending - seleção'
+replace_range_in_component(
+    SENDING_START,
+    SENDING_END,
+    '  const batchLimit = Math.max(1, Number(settings?.whatsapp_batch_limit || 20))',
+    '  async function send() {',
+    selection_block,
+    'Envio - seleção'
 )
 
-old_send_start = """  async function send() {
+replace_in_component(
+    SENDING_START,
+    SENDING_END,
+    """  async function send() {
     if (!selected.size) return
     setLoading(true)
     setMessage('')
-"""
-new_send_start = """  async function send() {
+""",
+    """  async function send() {
     if (!selected.size) return
 
     const selectedEligibleIds = [...selected].filter(id => eligible.some(l => l.id === id))
-    const withoutActiveTemplate = selected.size - selectedEligibleIds.length
+    const withoutActiveTemplate = [...selected].filter(id =>
+      selectable.some(l => l.id === id) && !eligible.some(l => l.id === id)
+    ).length
 
     if (!selectedEligibleIds.length) {
       setMessage('Os leads selecionados ainda não possuem uma mensagem ativa para o respectivo público-alvo. Cadastre ou ative a mensagem antes do envio.')
@@ -113,65 +123,74 @@ new_send_start = """  async function send() {
 
     setLoading(true)
     setMessage('')
-"""
-replace_in_component(
-    'function MessageSending({ organization, settings, userEmail }) {',
-    'function CampaignWorkspace({ organization, settings, userEmail }) {',
-    old_send_start,
-    new_send_start,
-    'MessageSending - validação antes do envio'
+""",
+    'Envio - validação antes do disparo'
 )
 
 replace_in_component(
-    'function MessageSending({ organization, settings, userEmail }) {',
-    'function CampaignWorkspace({ organization, settings, userEmail }) {',
-    "      body: { organization_id: organization.id, lead_ids: [...selected] }\n",
-    "      body: { organization_id: organization.id, lead_ids: selectedEligibleIds }\n",
-    'MessageSending - IDs enviados'
+    SENDING_START,
+    SENDING_END,
+    "body: { organization_id: organization.id, lead_ids: [...selected] }",
+    "body: { organization_id: organization.id, lead_ids: selectedEligibleIds }",
+    'Envio - IDs enviados'
 )
 
 replace_in_component(
-    'function MessageSending({ organization, settings, userEmail }) {',
-    'function CampaignWorkspace({ organization, settings, userEmail }) {',
-    "      setMessage(`${data?.queued || 0} mensagem(ns) adicionada(s) à fila.`)\n",
+    SENDING_START,
+    SENDING_END,
+    """      setMessage(`${data?.queued || 0} mensagem(ns) adicionada(s) à fila.`)
+      setSelected(new Set())
+""",
     """      const ignored = withoutActiveTemplate > 0
-        ? ` ${withoutActiveTemplate} lead(s) selecionado(s) não foram enviados por não possuir mensagem ativa.`
+        ? ` ${withoutActiveTemplate} lead(s) não foram enviados porque ainda não possuem mensagem cadastrada/ativa.`
         : ''
       setMessage(`${data?.queued || 0} mensagem(ns) adicionada(s) à fila.${ignored}`)
+      setSelected(new Set())
 """,
-    'MessageSending - retorno do envio'
+    'Envio - retorno'
 )
 
 replace_in_component(
-    'function MessageSending({ organization, settings, userEmail }) {',
-    'function CampaignWorkspace({ organization, settings, userEmail }) {',
+    SENDING_START,
+    SENDING_END,
     """        <label className="select-all"><input type="checkbox" checked={selected.size > 0 && selected.size === Math.min(eligible.length, batchLimit)} onChange={toggleAll} /> Selecionar aptos</label>""",
     """        <label className="select-all"><input type="checkbox" checked={allSelectableSelected} onChange={e => toggleAll(e.target.checked)} /> Selecionar leads</label>""",
-    'MessageSending - flag geral'
+    'Envio - flag geral'
 )
 
 replace_in_component(
-    'function MessageSending({ organization, settings, userEmail }) {',
-    'function CampaignWorkspace({ organization, settings, userEmail }) {',
+    SENDING_START,
+    SENDING_END,
     """              <input type="checkbox" checked={selected.has(l.id)} onChange={() => toggle(l.id)} disabled={!canSend} />""",
-    """              <input type="checkbox" checked={selected.has(l.id)} onChange={e => toggle(l.id, e.target.checked)} disabled={!hasPhone} aria-label={`Selecionar ${l.business_name}`} />""",
-    'MessageSending - flags individuais'
+    """              <input
+                type="checkbox"
+                checked={selected.has(l.id)}
+                onChange={e => toggle(l.id, e.target.checked)}
+                disabled={isQueued || !hasPhone}
+                aria-label={`Selecionar ${l.business_name}`}
+              />""",
+    'Envio - flags individuais'
 )
 
 replace_in_component(
-    'function MessageSending({ organization, settings, userEmail }) {',
-    'function CampaignWorkspace({ organization, settings, userEmail }) {',
-    """              <span className={canSend ? 'template-status active' : 'template-status inactive'}>{canSend ? 'Apto' : !hasPhone ? 'Sem telefone' : 'Sem mensagem ativa'}</span>""",
-    """              {(canSend || !hasPhone) && (
-                <span className={canSend ? 'template-status active' : 'template-status inactive'}>{canSend ? 'Apto' : 'Sem telefone'}</span>
-              )}""",
-    'MessageSending - retirar Sem mensagem ativa'
+    SENDING_START,
+    SENDING_END,
+    """              <span className={isQueued ? 'template-status queued' : canSend ? 'template-status active' : 'template-status inactive'}>
+                {isQueued ? 'Na fila' : canSend ? 'Apto' : !hasPhone ? 'Sem telefone' : 'Sem mensagem ativa'}
+              </span>""",
+    """              <span className={isQueued ? 'template-status queued' : canSend ? 'template-status active' : 'template-status inactive'}>
+                {isQueued ? 'Na fila' : canSend ? 'Apto' : !hasPhone ? 'Sem telefone' : ''}
+              </span>""",
+    'Envio - retirar texto Sem mensagem ativa'
 )
 
 
-# 2) Exportação de leads por mês, intervalo personalizado ou todo o período.
+# -----------------------------------------------------------------------------
+# 2) EXPORTAÇÃO: por mês, intervalo personalizado ou todo o período.
+#    CSV com UTF-8/BOM e separador ; abre diretamente no Excel em pt-BR.
+# -----------------------------------------------------------------------------
 if 'function LeadExportPanel({ leads, onClose, onMessage }) {' not in text:
-    export_component = r"""
+    export_component = r'''
 function LeadExportPanel({ leads, onClose, onMessage }) {
   const today = currentBrazilDate()
   const [mode, setMode] = useState('month')
@@ -193,7 +212,7 @@ function LeadExportPanel({ leads, onClose, onMessage }) {
     discarded: 'Descartado'
   }
 
-  function leadDateKey(value) {
+  function dateKey(value) {
     if (!value) return ''
     try {
       const parts = new Intl.DateTimeFormat('en', {
@@ -214,6 +233,10 @@ function LeadExportPanel({ leads, onClose, onMessage }) {
   }
 
   function exportToExcel() {
+    if (mode === 'month' && !month) {
+      onMessage('Selecione o mês para exportação.')
+      return
+    }
     if (mode === 'range' && (!startDate || !endDate || startDate > endDate)) {
       onMessage('Informe um período válido para exportação.')
       return
@@ -221,7 +244,7 @@ function LeadExportPanel({ leads, onClose, onMessage }) {
 
     const rows = leads.filter(lead => {
       if (mode === 'all') return true
-      const date = leadDateKey(lead.created_at)
+      const date = dateKey(lead.created_at)
       if (!date) return false
       if (mode === 'month') return date.startsWith(month)
       return date >= startDate && date <= endDate
@@ -278,7 +301,7 @@ function LeadExportPanel({ leads, onClose, onMessage }) {
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
-    onMessage(`${rows.length} lead(s) exportado(s). O arquivo CSV abre diretamente no Excel.`)
+    onMessage(`${rows.length} lead(s) exportado(s). O arquivo abre diretamente no Excel.`)
   }
 
   return (
@@ -331,38 +354,39 @@ function LeadExportPanel({ leads, onClose, onMessage }) {
 }
 
 
-"""
+'''
     marker = 'function Leads({ organization, settings, userEmail }) {'
     if marker not in text:
-        raise SystemExit('Componente Leads não encontrado para inserir exportação.')
+        raise SystemExit('Leads não encontrado para inserir exportação.')
     text = text.replace(marker, export_component + marker, 1)
 
-lead_state_old = "  const [loading, setLoading] = useState(false)\n  const [form, setForm] = useState({\n"
-lead_state_new = "  const [loading, setLoading] = useState(false)\n  const [showExport, setShowExport] = useState(false)\n  const [form, setForm] = useState({\n"
+LEADS_START = 'function Leads({ organization, settings, userEmail }) {'
+LEADS_END = 'function Clients({ organization, userEmail, userId }) {'
+
 replace_in_component(
-    'function Leads({ organization, settings, userEmail }) {',
-    'function Clients({ organization, userEmail, userId }) {',
-    lead_state_old,
-    lead_state_new,
-    'Leads - estado da exportação'
+    LEADS_START,
+    LEADS_END,
+    "  const [loading, setLoading] = useState(false)\n",
+    "  const [loading, setLoading] = useState(false)\n  const [showExport, setShowExport] = useState(false)\n",
+    'Leads - estado exportação'
 )
 
 replace_in_component(
-    'function Leads({ organization, settings, userEmail }) {',
-    'function Clients({ organization, userEmail, userId }) {',
-    '          <div className="user-badge">{userEmail}</div>\n',
-    '          <div className="user-badge">{userEmail}</div>\n          <button type="button" className="secondary inline-btn" onClick={() => setShowExport(old => !old)}><Save size={17}/> Exportar Excel</button>\n',
-    'Leads - botão exportar'
+    LEADS_START,
+    LEADS_END,
+    """          <div className="user-badge">{userEmail}</div>""",
+    """          <div className="user-badge">{userEmail}</div>
+          <button type="button" className="secondary inline-btn" onClick={() => setShowExport(old => !old)}><Save size={17}/> Exportar Excel</button>""",
+    'Leads - botão exportação'
 )
 
-leads_start = text.find('function Leads({ organization, settings, userEmail }) {')
-leads_end = text.find('function Clients({ organization, userEmail, userId }) {', leads_start)
-leads_component = text[leads_start:leads_end]
-first_header_close = leads_component.find('      </header>')
-if first_header_close < 0:
-    raise SystemExit('Cabeçalho de Leads não encontrado para inserir painel de exportação.')
-insert_at = first_header_close + len('      </header>')
-if '<LeadExportPanel' not in leads_component:
+start, end = component_bounds(LEADS_START, LEADS_END, 'Leads - painel exportação')
+part = text[start:end]
+if '<LeadExportPanel' not in part:
+    header_end = part.find('      </header>')
+    if header_end < 0:
+        raise SystemExit('Cabeçalho de Leads não encontrado.')
+    header_end += len('      </header>')
     panel = """
 
       {showExport && (
@@ -372,53 +396,56 @@ if '<LeadExportPanel' not in leads_component:
           onMessage={setMessage}
         />
       )}"""
-    leads_component = leads_component[:insert_at] + panel + leads_component[insert_at:]
-    text = text[:leads_start] + leads_component + text[leads_end:]
+    part = part[:header_end] + panel + part[header_end:]
+    text = text[:start] + part + text[end:]
 
 
-# 3) Leads Perdidos também aparecem em "Leads sem interesse".
+# -----------------------------------------------------------------------------
+# 3) LEADS SEM INTERESSE: incluir também status Perdido.
+# -----------------------------------------------------------------------------
+REPO_START = 'function NotInterestedRepository({ organization, userEmail }) {'
+REPO_END = 'function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {'
+
 replace_in_component(
-    'function NotInterestedRepository({ organization, userEmail }) {',
-    'function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {',
+    REPO_START,
+    REPO_END,
     ".in('status', ['not_interested','discarded'])",
     ".in('status', ['not_interested','discarded','lost'])",
-    'Leads sem interesse - incluir perdidos'
+    'Leads sem interesse - consulta'
 )
-
 replace_in_component(
-    'function NotInterestedRepository({ organization, userEmail }) {',
-    'function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {',
+    REPO_START,
+    REPO_END,
     'Leads sem interesse e descartados ficam fora do funil, mas podem ser recuperados.',
     'Leads sem interesse, descartados e negócios perdidos ficam registrados nesta área e podem ser recuperados.',
     'Leads sem interesse - descrição'
 )
-
 replace_in_component(
-    'function NotInterestedRepository({ organization, userEmail }) {',
-    'function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {',
+    REPO_START,
+    REPO_END,
     'Leads marcados como Sem interesse ou Descartado aparecerão aqui.',
     'Leads marcados como Sem interesse, Descartado ou Perdido aparecerão aqui.',
-    'Leads sem interesse - estado vazio'
+    'Leads sem interesse - vazio'
 )
-
-old_repo_status = """                <span className={`repository-status-v33 ${lead.status === 'discarded' ? 'discarded' : 'not-interested'}`}>
-                  {lead.status === 'discarded' ? 'Descartado' : 'Sem interesse'}
-                </span>"""
-new_repo_status = """                <span className={`repository-status-v33 ${lead.status === 'discarded' ? 'discarded' : lead.status === 'lost' ? 'lost' : 'not-interested'}`}>
-                  {lead.status === 'discarded' ? 'Descartado' : lead.status === 'lost' ? 'Perdido' : 'Sem interesse'}
-                </span>"""
 replace_in_component(
-    'function NotInterestedRepository({ organization, userEmail }) {',
-    'function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {',
-    old_repo_status,
-    new_repo_status,
-    'Leads sem interesse - identificação de Perdido'
+    REPO_START,
+    REPO_END,
+    """                <span className={`repository-status-v33 ${lead.status === 'discarded' ? 'discarded' : 'not-interested'}`}>
+                  {lead.status === 'discarded' ? 'Descartado' : 'Sem interesse'}
+                </span>""",
+    """                <span className={`repository-status-v33 ${lead.status === 'discarded' ? 'discarded' : lead.status === 'lost' ? 'lost' : 'not-interested'}`}>
+                  {lead.status === 'discarded' ? 'Descartado' : lead.status === 'lost' ? 'Perdido' : 'Sem interesse'}
+                </span>""",
+    'Leads sem interesse - badge Perdido'
 )
 
 
-# 4) Menu lateral compacto no desktop e correções visuais.
+# -----------------------------------------------------------------------------
+# 4) MENU LATERAL: trilho de ícones no desktop, expansão por hover/foco/click.
+#    Mobile permanece com o menu já existente.
+# -----------------------------------------------------------------------------
 if '/* V41 - menu lateral compacto e expansível */' not in css:
-    css += r"""
+    css += r'''
 
 /* V41 - menu lateral compacto e expansível */
 @media (min-width: 901px) {
@@ -457,6 +484,7 @@ if '/* V41 - menu lateral compacto e expansível */' not in css:
 
   .sidebar-brand > div:last-child {
     opacity: 0;
+    visibility: hidden;
     transform: translateX(-6px);
     transition: opacity .14s ease, transform .14s ease;
     white-space: nowrap;
@@ -465,6 +493,7 @@ if '/* V41 - menu lateral compacto e expansível */' not in css:
   .sidebar:hover .sidebar-brand > div:last-child,
   .sidebar:focus-within .sidebar-brand > div:last-child {
     opacity: 1;
+    visibility: visible;
     transform: translateX(0);
   }
 
@@ -501,8 +530,7 @@ if '/* V41 - menu lateral compacto e expansível */' not in css:
   }
 }
 
-
-/* V41 - checkboxes de envio previsíveis e clicáveis */
+/* V41 - checkboxes de envio */
 .sending-row > input[type="checkbox"],
 .sending-toolbar input[type="checkbox"] {
   width: 18px !important;
@@ -513,18 +541,15 @@ if '/* V41 - menu lateral compacto e expansível */' not in css:
   accent-color: #00a88f;
   cursor: pointer;
 }
-
 .sending-row > input[type="checkbox"]:disabled {
   cursor: not-allowed;
   opacity: .45;
 }
 
-
-/* V41 - prefixo monetário fixo */
+/* V41 - padrão visual R$ para valores monetários */
 label:has(> input[type="number"][step="0.01"]) {
   position: relative;
 }
-
 label:has(> input[type="number"][step="0.01"])::after {
   content: "R$";
   position: absolute;
@@ -536,17 +561,12 @@ label:has(> input[type="number"][step="0.01"])::after {
   font-weight: 700;
   pointer-events: none;
 }
-
 label:has(> input[type="number"][step="0.01"]) > input {
   padding-left: 40px !important;
 }
 
-
 /* V41 - exportação */
-.export-panel-v41 {
-  margin-bottom: 16px;
-}
-
+.export-panel-v41 { margin-bottom: 16px; }
 .export-panel-head-v41 {
   display: flex;
   justify-content: space-between;
@@ -554,89 +574,57 @@ label:has(> input[type="number"][step="0.01"]) > input {
   align-items: flex-start;
   margin-bottom: 18px;
 }
-
-.export-panel-head-v41 h2 {
-  margin-bottom: 5px;
-}
-
+.export-panel-head-v41 h2 { margin-bottom: 5px; }
 .export-fields-v41 {
   display: grid;
   grid-template-columns: minmax(180px, .9fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
   gap: 12px;
   align-items: end;
 }
-
-.export-button-v41 {
-  min-height: 43px;
-  justify-content: center;
-}
-
-.repository-status-v33.lost {
-  background: #fef2f2;
-  color: #b91c1c;
-}
+.export-button-v41 { min-height: 43px; justify-content: center; }
+.repository-status-v33.lost { background: #fef2f2; color: #b91c1c; }
 
 @media (max-width: 900px) {
-  .export-fields-v41 {
-    grid-template-columns: 1fr 1fr;
-  }
+  .export-fields-v41 { grid-template-columns: 1fr 1fr; }
 }
-
 @media (max-width: 600px) {
-  .export-panel-head-v41 {
-    flex-direction: column;
-  }
-
-  .export-fields-v41 {
-    grid-template-columns: 1fr;
-  }
-
-  .export-button-v41 {
-    width: 100%;
-  }
+  .export-panel-head-v41 { flex-direction: column; }
+  .export-fields-v41 { grid-template-columns: 1fr; }
+  .export-button-v41 { width: 100%; }
 }
-"""
+'''
 
 
-# 5) Validações da V41.
-def get_component(start_marker, end_marker):
-    start = text.find(start_marker)
-    end = text.find(end_marker, start)
-    if start < 0 or end < 0:
-        raise SystemExit(f'Componente ausente na validação: {start_marker}')
+# -----------------------------------------------------------------------------
+# 5) Validação obrigatória da V41 antes do Vite.
+# -----------------------------------------------------------------------------
+def get_component(start_marker, end_marker, label):
+    start, end = component_bounds(start_marker, end_marker, label)
     return text[start:end]
 
-sending = get_component(
-    'function MessageSending({ organization, settings, userEmail }) {',
-    'function CampaignWorkspace({ organization, settings, userEmail }) {'
-)
-leads = get_component(
-    'function Leads({ organization, settings, userEmail }) {',
-    'function Clients({ organization, userEmail, userId }) {'
-)
-repo = get_component(
-    'function NotInterestedRepository({ organization, userEmail }) {',
-    'function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {'
-)
+sending = get_component(SENDING_START, SENDING_END, 'Envio validação')
+leads_part = get_component(LEADS_START, LEADS_END, 'Leads validação')
+repo = get_component(REPO_START, REPO_END, 'Repositório validação')
 
 checks = [
     ('flag geral controlada', 'allSelectableSelected' in sending and 'toggleAll(e.target.checked)' in sending),
     ('flags individuais controladas', 'toggle(l.id, e.target.checked)' in sending),
-    ('sem texto Sem mensagem ativa', 'Sem mensagem ativa' not in sending),
-    ('validação de mensagem antes do envio', 'selectedEligibleIds' in sending),
-    ('exportação por período', 'LeadExportPanel' in text and 'Período personalizado' in text and 'type="month"' in text),
+    ('texto Sem mensagem ativa removido da listagem', "? 'Sem telefone' : ''" in sending),
+    ('validação da mensagem mantida no envio', 'selectedEligibleIds' in sending),
+    ('leads na fila não selecionáveis', 'disabled={isQueued || !hasPhone}' in sending),
+    ('exportação por mês', 'type="month"' in text and 'Por mês' in text),
+    ('exportação por intervalo', 'Período personalizado' in text),
+    ('exportação de todo período', 'Todo o período' in text),
     ('arquivo compatível com Excel', "text/csv;charset=utf-8;" in text),
-    ('perdidos no repositório', ".in('status', ['not_interested','discarded','lost'])" in repo and "'Perdido'" in repo),
-    ('botão exportar em Leads', 'setShowExport' in leads and 'Exportar Excel' in leads),
+    ('botão exportar presente', 'Exportar Excel' in leads_part),
+    ('perdidos em Leads sem interesse', ".in('status', ['not_interested','discarded','lost'])" in repo and "'Perdido'" in repo),
     ('menu compacto', '/* V41 - menu lateral compacto e expansível */' in css and '.sidebar:hover' in css),
-    ('prefixo R$', 'content: "R$";' in css),
-    ('checkbox de envio corrigido', '.sending-row > input[type="checkbox"]' in css),
+    ('padrão R$', 'content: "R$";' in css),
 ]
-
 failed = [name for name, ok in checks if not ok]
 if failed:
     raise SystemExit('Validação V41 falhou: ' + '; '.join(failed))
 
 APP.write_text(text, encoding='utf-8')
 CSS.write_text(css, encoding='utf-8')
-print('V41 aplicada: envio, exportação, moeda, leads perdidos e menu lateral atualizados.')
+print('V41 aplicada e validada: flags, exportação, R$, perdidos e menu lateral.')

@@ -1,8 +1,8 @@
 import http from 'k6/http'
 import { check, sleep } from 'k6'
 
-const BASE_URL = __ENV.SUPABASE_URL
-const API_KEY = __ENV.SUPABASE_KEY
+const BASE_URL = __ENV.SUPABASE_URL || 'https://ovenrdiykmfnjtvqnalz.supabase.co'
+const API_KEY = __ENV.SUPABASE_KEY || 'sb_publishable_Q2F3ab3kHYpI_RZfrhdEfA_49dQEm9G'
 const ORG_ID = '11111111-1111-4111-8111-111111111111'
 const VUS = Number(__ENV.VUS || 250)
 const DURATION = __ENV.DURATION || '20s'
@@ -11,8 +11,8 @@ const RAMP_DURATION = __ENV.RAMP_DURATION || '20s'
 const HOLD_DURATION = __ENV.HOLD_DURATION || '20s'
 const sessions = JSON.parse(open('./.sessions.json'))
 
-if (!BASE_URL || !API_KEY || !sessions.length) {
-  throw new Error('Missing staging configuration or authenticated sessions')
+if (!sessions.length) {
+  throw new Error('Missing authenticated staging sessions')
 }
 
 const thresholds = {

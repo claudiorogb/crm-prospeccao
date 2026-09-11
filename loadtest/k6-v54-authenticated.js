@@ -103,20 +103,20 @@ function leads(token) {
 
 function clients(token) {
   const results = http.batch([
-    ['GET', `${BASE_URL}/rest/v1/leads?select=id,business_name,status,phone,whatsapp,contact_name,last_contact_date,next_contact_date&organization_id=eq.${ORG_ID}&status=eq.won&order=business_name.asc`, null, { headers: headers(token), tags: { workload: 'clients', operation: 'won_leads' }, timeout: '10s' }],
-    ['GET', `${BASE_URL}/rest/v1/sales?select=id,lead_id,amount,sale_date,product_service,notes&organization_id=eq.${ORG_ID}&order=sale_date.desc`, null, { headers: headers(token), tags: { workload: 'clients', operation: 'sales_history' }, timeout: '10s' }],
-    ['GET', `${BASE_URL}/rest/v1/activities?select=id,lead_id,type,notes,occurred_at&organization_id=eq.${ORG_ID}&order=occurred_at.desc&limit=500`, null, { headers: headers(token), tags: { workload: 'clients', operation: 'activity_history' }, timeout: '10s' }]
+    ['GET', `${BASE_URL}/rest/v1/leads?select=*&organization_id=eq.${ORG_ID}&status=eq.won&order=business_name.asc`, null, { headers: headers(token), tags: { workload: 'clients', operation: 'won_leads' }, timeout: '10s' }],
+    ['GET', `${BASE_URL}/rest/v1/sales?select=*&organization_id=eq.${ORG_ID}&order=sale_date.desc`, null, { headers: headers(token), tags: { workload: 'clients', operation: 'sales_history' }, timeout: '10s' }],
+    ['GET', `${BASE_URL}/rest/v1/activities?select=*&organization_id=eq.${ORG_ID}&order=occurred_at.desc`, null, { headers: headers(token), tags: { workload: 'clients', operation: 'activity_history' }, timeout: '10s' }]
   ])
   results.forEach((r, i) => verify(r, `clients_${i + 1}`))
 }
 
 function campaigns(token) {
   const targetSelect = encodeURIComponent('id,name,description,is_active,catalog_segment_id,created_at,target_segment_search_terms(id,term,priority,is_active)')
-  const campaignSelect = encodeURIComponent('id,name,status,target_segment_id,created_at,target_segments(name)')
+  const campaignSelect = encodeURIComponent('*,target_segments(name)')
   const results = http.batch([
     ['GET', `${BASE_URL}/rest/v1/target_segments?select=${targetSelect}&organization_id=eq.${ORG_ID}&order=created_at.asc`, null, { headers: headers(token), tags: { workload: 'campaigns', operation: 'targets' }, timeout: '10s' }],
     ['GET', `${BASE_URL}/rest/v1/campaigns?select=${campaignSelect}&organization_id=eq.${ORG_ID}&order=created_at.desc`, null, { headers: headers(token), tags: { workload: 'campaigns', operation: 'campaigns' }, timeout: '10s' }],
-    ['GET', `${BASE_URL}/rest/v1/message_templates?select=id,name,target_segment_id,is_active,created_at&organization_id=eq.${ORG_ID}&order=created_at.desc`, null, { headers: headers(token), tags: { workload: 'campaigns', operation: 'templates' }, timeout: '10s' }]
+    ['GET', `${BASE_URL}/rest/v1/message_templates?select=*&organization_id=eq.${ORG_ID}&order=created_at.desc`, null, { headers: headers(token), tags: { workload: 'campaigns', operation: 'templates' }, timeout: '10s' }]
   ])
   results.forEach((r, i) => verify(r, `campaigns_${i + 1}`))
 }

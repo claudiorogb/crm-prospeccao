@@ -1,9 +1,10 @@
-name: Validate CRM V41 build
+name: Validate CRM build and dependencies
 
 on:
   push:
     paths:
-      - 'scripts/apply_v41_usability_export_sidebar.py'
+      - 'scripts/**'
+      - 'src/**'
       - 'package.json'
       - '.github/workflows/validate-v41.yml'
 
@@ -24,6 +25,9 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Validate production build
         run: npm run build

@@ -13,7 +13,7 @@ permissions:
 jobs:
   v54-capacity:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
 
     steps:
       - name: Checkout staging
@@ -33,7 +33,7 @@ jobs:
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
-      - name: Find V54 authenticated capacity boundary
+      - name: Refine V54 capacity boundary
         shell: bash
         run: |
           set +e
@@ -59,9 +59,9 @@ jobs:
             return 1
           }
 
-          last_pass=0
-          first_fail=none
-          for vus in 150 175 200 225 250 300 350; do
+          last_pass=150
+          first_fail=175
+          for vus in 155 160 165 170; do
             if run_stage "$vus"; then
               last_pass="$vus"
               sleep 5
@@ -80,7 +80,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: crm-staging-v54-capacity-results
+          name: crm-staging-v54-capacity-refined-results
           path: |
             loadtest/auth-summary-v54.json
             loadtest/results-v54/
@@ -91,4 +91,4 @@ jobs:
         if: always()
         run: rm -f loadtest/.sessions-v54.json
 
-# Triggered only after staging data and temporary test authorization were validated.
+# Refinement run after 150 passed and 175 failed.

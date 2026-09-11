@@ -1,0 +1,46 @@
+name: Validate V54 performance optimizations
+
+on:
+  push:
+    branches: [staging]
+    paths:
+      - '.github/workflows/v54-staging-build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout staging
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Apply V54 patch
+        run: python3 scripts/apply_v54_performance_optimizations.py
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build exactly as production
+        run: npm run build
+
+      - name: Commit validated source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          if git diff --cached --quiet; then
+            echo "No source changes to commit"
+          else
+            git commit -m "Apply V54 performance optimizations"
+            git push origin staging
+          fi

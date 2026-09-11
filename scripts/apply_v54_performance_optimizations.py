@@ -182,30 +182,24 @@ leads = leads.replace(
     1
 )
 
-pagination_marker = """      </section>
-    </>
-  )
-}
-"""
-pagination_replacement = """      </section>
+pagination_section = """
 
-      <section className=\"bulk-toolbar\">
+      <section className="bulk-toolbar">
         <div>
           <strong>{totalLeads}</strong> lead{totalLeads === 1 ? '' : 's'} encontrado{totalLeads === 1 ? '' : 's'}
-          <span className=\"muted\"> • Página {page + 1} de {totalPages} • até {LEADS_PAGE_SIZE} por página</span>
+          <span className="muted"> • Página {page + 1} de {totalPages} • até {LEADS_PAGE_SIZE} por página</span>
         </div>
-        <div className=\"bulk-actions\">
-          <button className=\"secondary inline-btn\" onClick={() => goToPage(page - 1)} disabled={page <= 0}>Anterior</button>
-          <button className=\"secondary inline-btn\" onClick={() => goToPage(page + 1)} disabled={page >= totalPages - 1}>Próxima</button>
+        <div className="bulk-actions">
+          <button className="secondary inline-btn" onClick={() => goToPage(page - 1)} disabled={page <= 0}>Anterior</button>
+          <button className="secondary inline-btn" onClick={() => goToPage(page + 1)} disabled={page >= totalPages - 1}>Próxima</button>
         </div>
       </section>
-    </>
-  )
-}
 """
-if pagination_marker not in leads:
-    raise RuntimeError('pagination insertion marker not found')
-leads = leads.replace(pagination_marker, pagination_replacement, 1)
+closing_marker = "    </>\n  )\n}"
+closing_index = leads.rfind(closing_marker)
+if closing_index < 0:
+    raise RuntimeError('Leads closing marker not found')
+leads = leads[:closing_index] + pagination_section + leads[closing_index:]
 
 text = text[:leads_start] + leads + text[leads_end:]
 

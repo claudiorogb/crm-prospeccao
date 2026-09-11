@@ -119,9 +119,9 @@ text = text.replace(
 
 # -----------------------------------------------------------------------------
 # 4) Cabeçalho REALMENTE congelado no funil.
-#    O sticky anterior estava dentro do elemento com overflow horizontal e por isso
-#    não acompanhava a rolagem vertical da página. Criamos uma faixa sticky irmã,
-#    sincronizada horizontalmente com o Kanban.
+#    A V35 já cria uma barra horizontal fixa e refs de sincronização. Em vez de
+#    substituir esse mecanismo, acrescentamos uma faixa sticky irmã e sincronizamos
+#    as três partes: Kanban, barra inferior e cabeçalho.
 # -----------------------------------------------------------------------------
 if "useEffect, useMemo, useState" in text:
     text = text.replace("useEffect, useMemo, useState", "useEffect, useMemo, useRef, useState", 1)
@@ -137,14 +137,21 @@ start, end, leads = component(
 lead_signature = 'function Leads({ organization, settings, userEmail }) {\n'
 if lead_signature not in leads:
     raise SystemExit('V51: assinatura de Leads não encontrada.')
-leads = leads.replace(
-    lead_signature,
-    lead_signature + '  const stickyKanbanHeaderRef = useRef(null)\n',
-    1
-)
+if 'stickyKanbanHeaderRef = useRef(null)' not in leads:
+    leads = leads.replace(
+        lead_signature,
+        lead_signature + '  const stickyKanbanHeaderRef = useRef(null)\n',
+        1
+    )
 
-kanban_open = '      <section className="sales-kanban-wrap sales-kanban-always-scroll">'
-kanban_open_new = r'''      <div className="kanban-sticky-scope-v51">
+section_marker = '''      <section
+        className="sales-kanban-wrap sales-kanban-always-scroll"
+        ref={kanbanScrollRef}
+        onScroll={e => {'''
+if section_marker not in leads:
+    raise SystemExit('V51: container do Kanban da V35 não encontrado.')
+
+sticky_header = r'''      <div className="kanban-sticky-scope-v51">
         <div className="kanban-sticky-viewport-v51" ref={stickyKanbanHeaderRef} aria-hidden="true">
           <div className="sales-kanban kanban-sticky-grid-v51">
             {Object.entries(statusLabel)
@@ -157,18 +164,31 @@ kanban_open_new = r'''      <div className="kanban-sticky-scope-v51">
               ))}
           </div>
         </div>
-        <section
-          className="sales-kanban-wrap sales-kanban-always-scroll"
-          onScroll={e => {
-            if (stickyKanbanHeaderRef.current) stickyKanbanHeaderRef.current.scrollLeft = e.currentTarget.scrollLeft
-          }}
-        >'''
-if kanban_open not in leads:
-    raise SystemExit('V51: início do Kanban não encontrado.')
-leads = leads.replace(kanban_open, kanban_open_new, 1)
 
-kanban_pos = leads.find('className="sales-kanban-wrap sales-kanban-always-scroll"')
-section_end = leads.find('\n      </section>', kanban_pos)
+'''
+leads = leads.replace(section_marker, sticky_header + section_marker, 1)
+
+scroll_old = '''        onScroll={e => {
+          const target = kanbanFixedScrollRef.current
+          if (target && Math.abs(target.scrollLeft - e.currentTarget.scrollLeft) > 1) {
+            target.scrollLeft = e.currentTarget.scrollLeft
+          }
+        }}'''
+scroll_new = '''        onScroll={e => {
+          const target = kanbanFixedScrollRef.current
+          if (target && Math.abs(target.scrollLeft - e.currentTarget.scrollLeft) > 1) {
+            target.scrollLeft = e.currentTarget.scrollLeft
+          }
+          if (stickyKanbanHeaderRef.current && Math.abs(stickyKanbanHeaderRef.current.scrollLeft - e.currentTarget.scrollLeft) > 1) {
+            stickyKanbanHeaderRef.current.scrollLeft = e.currentTarget.scrollLeft
+          }
+        }}'''
+if scroll_old not in leads:
+    raise SystemExit('V51: sincronização do Kanban da V35 não encontrada.')
+leads = leads.replace(scroll_old, scroll_new, 1)
+
+section_pos = leads.find(section_marker)
+section_end = leads.find('\n      </section>', section_pos)
 if section_end < 0:
     raise SystemExit('V51: fim do Kanban não encontrado.')
 section_end += len('\n      </section>')
@@ -242,6 +262,7 @@ checks = [
     ('campanha inativa vermelha', 'campaign-inactive-v51' in campaigns),
     ('useRef do cabeçalho', 'stickyKanbanHeaderRef = useRef(null)' in text),
     ('faixa sticky fora do overflow', 'kanban-sticky-viewport-v51' in text and 'kanban-sticky-scope-v51' in text),
+    ('barra inferior preservada', 'kanbanFixedScrollRef.current' in text),
     ('sincronização horizontal', 'stickyKanbanHeaderRef.current.scrollLeft' in text),
     ('cabeçalho original oculto', '.sales-kanban-always-scroll .kanban-column > .kanban-column-head' in css),
 ]

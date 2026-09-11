@@ -103,7 +103,7 @@ replace_async_function('removeNumber', r'''  async function removeNumber(number)
       }
     }
 
-    const { error } = await softDeleteRow('whatsapp_numbers', number.id, number.organization_id || organization?.id, {
+    const { error } = await softDeleteRow('whatsapp_numbers', number.id, number.organization_id, {
       is_active: false,
       is_default: false
     })

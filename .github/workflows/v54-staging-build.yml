@@ -5,6 +5,7 @@ on:
     branches: [staging]
     paths:
       - '.github/workflows/v54-staging-build.yml'
+      - 'scripts/apply_v54_performance_optimizations.py'
 
 permissions:
   contents: write

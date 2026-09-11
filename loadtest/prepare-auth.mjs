@@ -1,13 +1,9 @@
 import { writeFileSync } from 'node:fs'
 
-const baseUrl = process.env.SUPABASE_URL
-const apiKey = process.env.SUPABASE_KEY
-const sessionFile = process.env.SESSIONS_FILE || '/tmp/crm-loadtest-sessions.json'
-const sessionCount = Number(process.env.SESSION_COUNT || 20)
-
-if (!baseUrl || !apiKey) {
-  throw new Error('SUPABASE_URL and SUPABASE_KEY are required')
-}
+const baseUrl = process.env.SUPABASE_URL || 'https://ovenrdiykmfnjtvqnalz.supabase.co'
+const apiKey = process.env.SUPABASE_KEY || 'sb_publishable_Q2F3ab3kHYpI_RZfrhdEfA_49dQEm9G'
+const sessionFile = process.env.SESSIONS_FILE || 'loadtest/.sessions.json'
+const sessionCount = Number(process.env.SESSION_COUNT || 10)
 
 const sessions = []
 const signupDurations = []

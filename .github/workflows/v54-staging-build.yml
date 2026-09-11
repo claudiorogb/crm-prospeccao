@@ -28,13 +28,7 @@ jobs:
       - name: Apply V54 patch
         run: python3 scripts/apply_v54_performance_optimizations.py
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Build exactly as production
-        run: npm run build
-
-      - name: Commit validated source
+      - name: Commit V54 source before historical build transforms
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -45,3 +39,9 @@ jobs:
             git commit -m "Apply V54 performance optimizations"
             git push origin staging
           fi
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build exactly as production
+        run: npm run build

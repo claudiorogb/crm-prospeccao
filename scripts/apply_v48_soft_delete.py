@@ -13,7 +13,6 @@ def replace_async_function(name, replacement):
         raise SystemExit(f'Função {name} não encontrada ou ambígua para V48.')
 
 
-# Helper único: toda exclusão normal vira arquivamento com autor e data.
 if 'async function softDeleteRow(' not in text:
     marker = 'function AdminSectionHeader('
     pos = text.find(marker)
@@ -117,19 +116,21 @@ replace_async_function('removeNumber', r'''  async function removeNumber(number)
   }''')
 
 replace_async_function('deleteUser', r'''  async function deleteUser(item) {
-    await runAction(
-      { action: 'delete_user', user_id: item.id },
-      'Usuário arquivado. Ele não poderá acessar o CRM até ser reativado.'
-    )
+    setNotice('')
+    const { error } = await supabase.rpc('archive_user_soft', { target_user: item.id })
+    if (error) {
+      setNotice(error.message || 'Não foi possível arquivar o usuário.')
+      return
+    }
+    setNotice('Usuário arquivado. Ele não poderá acessar o CRM até ser reativado.')
+    await loadData()
   }''')
 
-# Linguagem da interface passa a refletir que a ação é reversível.
 text = text.replace("if (!label.includes('excluir')) return", "if (!label.includes('excluir') && !label.includes('arquivar')) return")
 text = text.replace('<h3>Confirmar exclusão</h3>', '<h3>Confirmar arquivamento</h3>')
 text = text.replace("Esta ação pode ser permanente.", "O registro será ocultado das telas normais, mas permanecerá preservado no banco.")
 text = text.replace('>Sim, excluir</button>', '>Sim, arquivar</button>')
 
-# Botões de exclusão de entidades de negócio passam a indicar arquivamento.
 replacements = [
     ('<Trash2 size={14}/> Excluir', '<Trash2 size={14}/> Arquivar'),
     ('title="Remove o registro definitivamente"', 'title="Arquiva o registro preservando o histórico"'),
@@ -137,14 +138,12 @@ replacements = [
 for old, new in replacements:
     text = text.replace(old, new)
 
-# Ajusta textos específicos que ainda falavam em exclusão definitiva.
 text = text.replace('Usuário excluído.', 'Usuário arquivado.')
 text = text.replace('Número excluído.', 'Número arquivado.')
 text = text.replace('Campanha excluída.', 'Campanha arquivada.')
 text = text.replace('Mensagem excluída.', 'Mensagem arquivada.')
 text = text.replace('Público-alvo excluído.', 'Público-alvo arquivado.')
 
-# Validações: não permitimos que os fluxos visíveis continuem com delete físico.
 required = [
     'async function softDeleteRow(',
     "softDeleteRow('leads'",
@@ -153,14 +152,13 @@ required = [
     "softDeleteRow('message_templates'",
     "softDeleteRow('target_segments'",
     "softDeleteRow('whatsapp_numbers'",
-    "{ action: 'delete_user', user_id: item.id }",
+    "supabase.rpc('archive_user_soft'",
     'Confirmar arquivamento',
 ]
 missing = [item for item in required if item not in text]
 if missing:
     raise SystemExit('V48 incompleta: ' + '; '.join(missing))
 
-# Não pode restar delete físico nas entidades de negócio tratadas por V48.
 for table in ['leads', 'sales', 'campaigns', 'message_templates', 'target_segments', 'whatsapp_numbers']:
     pattern = re.compile(rf"from\(['\"]{re.escape(table)}['\"]\).*?\.delete\(\)", re.S)
     if pattern.search(text):

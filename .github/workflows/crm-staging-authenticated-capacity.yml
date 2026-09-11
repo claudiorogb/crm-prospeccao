@@ -27,16 +27,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: npm
+          node-version: '24'
 
       - name: Create isolated authenticated sessions
         run: node loadtest/prepare-auth.mjs
 
       - name: Install frontend and browser dependencies
         run: |
-          npm ci
-          npm install --no-save playwright@1.55.0
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund playwright@1.55.0
           npx playwright install --with-deps chromium
 
       - name: Start staging frontend locally

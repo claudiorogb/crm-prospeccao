@@ -12,11 +12,12 @@ def component(start_marker, end_marker, label):
     return start, end, text[start:end]
 
 
-# 1) Remove Qualificado das opções de status do funil.
+# 1) Remove Qualificado de todos os mapas de status gerados pelas versões anteriores.
 qualified_label = "    qualified: 'Qualificado',\n"
-if qualified_label not in text:
+qualified_count = text.count(qualified_label)
+if qualified_count < 1:
     raise SystemExit('V53: status Qualificado não encontrado.')
-text = text.replace(qualified_label, '', 1)
+text = text.replace(qualified_label, '')
 
 # 2) Tela Envio passa a trabalhar apenas com Novo e Na fila.
 start, end, sending = component(
@@ -57,10 +58,10 @@ start, end, leads_check = component(
 )
 
 checks = [
-    ('Qualificado removido do seletor', "qualified: 'Qualificado'" not in leads_check),
-    ('Qualificado removido do funil', "'qualified'" not in leads_check),
-    ('Qualificado removido da tela Envio', "'qualified'" not in sending_check),
-    ('ordem simplificada do funil', "['new','contacted','replied','interested','proposal','won','lost']" in leads_check),
+    ('Qualificado removido dos mapas de status', "qualified: 'Qualificado'" not in text),
+    ('Qualificado removido da ordem do funil', old_order not in leads_check),
+    ('Qualificado removido da tela Envio', old_sending_statuses not in sending_check and new_sending_statuses in sending_check),
+    ('ordem simplificada do funil', new_order in leads_check),
     ('Perdido continua por último', "'won','lost']" in leads_check),
 ]
 failed = [name for name, ok in checks if not ok]
@@ -68,4 +69,4 @@ if failed:
     raise SystemExit('Validação V53 falhou: ' + '; '.join(failed))
 
 APP.write_text(text, encoding='utf-8')
-print('V53 aplicada: etapa Qualificado removida; fluxo passa de Novo diretamente para Contatado.')
+print(f'V53 aplicada: Qualificado removido de {qualified_count} mapa(s); fluxo passa de Novo diretamente para Contatado.')

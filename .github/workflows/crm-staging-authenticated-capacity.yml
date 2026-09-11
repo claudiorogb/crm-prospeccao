@@ -19,6 +19,7 @@ jobs:
       SUPABASE_KEY: sb_publishable_Q2F3ab3kHYpI_RZfrhdEfA_49dQEm9G
       SESSION_COUNT: '20'
       SESSIONS_FILE: loadtest/.sessions.json
+      TEST_REVISION: 'browser-fix-1'
 
     steps:
       - name: Checkout staging

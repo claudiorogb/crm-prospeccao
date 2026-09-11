@@ -85,18 +85,31 @@ if 'function ResetPasswordScreen(' not in text:
         raise SystemExit('Âncora para ResetPasswordScreen não encontrada.')
     text = text.replace(anchor, reset_component + anchor, 1)
 
-# 3) System admin can send a recovery email to any user without knowing or setting their password.
-old_delete = """  async function deleteUser(item) {\n    if (!window.confirm(`Excluir definitivamente o usuário ${item.email}?`)) return"""
-new_delete = """  async function sendPasswordReset(item) {\n    setNotice('')\n    const { error } = await supabase.auth.resetPasswordForEmail(item.email, {\n      redirectTo: window.location.origin\n    })\n    setNotice(error ? (error.message || 'Não foi possível enviar o link.') : `Link de redefinição enviado para ${item.email}.`)\n  }\n\n  async function deleteUser(item) {\n    if (!window.confirm(`Excluir definitivamente o usuário ${item.email}?`)) return"""
-if old_delete not in text:
-    raise SystemExit('Função deleteUser não encontrada para V47.')
-text = text.replace(old_delete, new_delete, 1)
+# 3) System admin can send a recovery email without ever seeing or setting the user's password.
+admin_start = text.find('function AdminUsers(')
+admin_end = text.find('function AdminClients(', admin_start)
+if admin_start < 0 or admin_end < 0:
+    raise SystemExit('Componente AdminUsers não encontrado para V47.')
+admin = text[admin_start:admin_end]
 
-old_action = """                <span>\n                  {!isSelf && (\n                    <button className=\"text-danger mini\" onClick={() => deleteUser(item)}>\n                      Excluir\n                    </button>\n                  )}\n                </span>"""
-new_action = """                <span className=\"row-actions\">\n                  <button className=\"secondary mini\" onClick={() => sendPasswordReset(item)}>\n                    Redefinir senha\n                  </button>\n                  {!isSelf && (\n                    <button className=\"text-danger mini\" onClick={() => deleteUser(item)}>\n                      Excluir\n                    </button>\n                  )}\n                </span>"""
-if old_action not in text:
-    raise SystemExit('Ações do usuário não encontradas para V47.')
-text = text.replace(old_action, new_action, 1)
+if 'async function sendPasswordReset(item)' not in admin:
+    insert_anchor = '  const filtered = users.filter(item => {'
+    if insert_anchor not in admin:
+        raise SystemExit('Âncora de funções do AdminUsers não encontrada para V47.')
+    reset_fn = """  async function sendPasswordReset(item) {\n    setNotice('')\n    const { error } = await supabase.auth.resetPasswordForEmail(item.email, {\n      redirectTo: window.location.origin\n    })\n    setNotice(error ? (error.message || 'Não foi possível enviar o link.') : `Link de redefinição enviado para ${item.email}.`)\n  }\n\n"""
+    admin = admin.replace(insert_anchor, reset_fn + insert_anchor, 1)
+
+if 'Redefinir senha' not in admin:
+    action_anchor = """                <span>{formatDateTime(item.last_sign_in_at)}</span>\n\n                <span>"""
+    if action_anchor not in admin:
+        raise SystemExit('Coluna Ação do AdminUsers não encontrada para V47.')
+    admin = admin.replace(
+        action_anchor,
+        """                <span>{formatDateTime(item.last_sign_in_at)}</span>\n\n                <span className=\"row-actions\">\n                  <button className=\"secondary mini\" onClick={() => sendPasswordReset(item)}>Redefinir senha</button>""",
+        1
+    )
+
+text = text[:admin_start] + admin + text[admin_end:]
 
 # 4) App detects PASSWORD_RECOVERY before rendering normal application access.
 old_state = """  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)\n\n  useEffect(() => {"""

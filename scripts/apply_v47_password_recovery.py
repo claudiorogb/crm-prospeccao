@@ -4,64 +4,23 @@ APP = Path('src/App.jsx')
 text = APP.read_text(encoding='utf-8')
 
 # 1) AuthScreen: forgot-password mode + 10-char password rule.
-text = text.replace(
-"""      if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({""",
-"""      if (mode === 'forgot') {
-        const { error } = await supabase.auth.resetPasswordForEmail(form.email.trim(), {
-          redirectTo: window.location.origin
-        })
-        if (error) throw error
-        setMessage('Se o e-mail estiver cadastrado, enviaremos um link para criar uma nova senha.')
-      } else if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({"""
-)
+old_signup = """      if (mode === 'signup') {\n        if (form.password.length < 10) {\n          throw new Error('A senha precisa ter pelo menos 10 caracteres.')\n        }\n        const { error } = await supabase.auth.signUp({"""
+new_signup = """      if (mode === 'forgot') {\n        const { error } = await supabase.auth.resetPasswordForEmail(form.email.trim(), {\n          redirectTo: window.location.origin\n        })\n        if (error) throw error\n        setMessage('Se o e-mail estiver cadastrado, enviaremos um link para criar uma nova senha.')\n      } else if (mode === 'signup') {\n        if (form.password.length < 10) {\n          throw new Error('A senha precisa ter pelo menos 10 caracteres.')\n        }\n        const { error } = await supabase.auth.signUp({"""
+if old_signup not in text:
+    raise SystemExit('Fluxo de cadastro pós-V46 não encontrado para V47.')
+text = text.replace(old_signup, new_signup, 1)
 
-text = text.replace(
-"""          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Criar conta</button>
-        </div>
+old_tabs = """          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Criar conta</button>\n        </div>\n\n        <form onSubmit={submit}>"""
+new_tabs = """          <button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setMessage('') }}>Criar conta</button>\n        </div>\n\n        {mode === 'forgot' && (\n          <div className=\"notice\">Informe seu e-mail. Você receberá um link seguro para criar uma nova senha.</div>\n        )}\n\n        <form onSubmit={submit}>"""
+if old_tabs not in text:
+    raise SystemExit('Abas de autenticação não encontradas para V47.')
+text = text.replace(old_tabs, new_tabs, 1)
 
-        <form onSubmit={submit}>""",
-"""          <button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setMessage('') }}>Criar conta</button>
-        </div>
-
-        {mode === 'forgot' && (
-          <div className=\"notice\">Informe seu e-mail. Você receberá um link seguro para criar uma nova senha.</div>
-        )}
-
-        <form onSubmit={submit}>"""
-)
-
-text = text.replace(
-"""          <label>
-            Senha
-            <input type=\"password\" minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder=\"Mínimo de 6 caracteres\" required />
-          </label>
-          <button className=\"primary full\" disabled={loading}>
-            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : 'Criar conta'}
-          </button>
-        </form>""",
-"""          {mode !== 'forgot' && (
-            <label>
-              Senha
-              <input type=\"password\" minLength={10} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder=\"Mínimo de 10 caracteres\" required />
-            </label>
-          )}
-          <button className=\"primary full\" disabled={loading}>
-            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : mode === 'forgot' ? 'Enviar link de redefinição' : 'Criar conta'}
-          </button>
-          {mode === 'login' && (
-            <button type=\"button\" className=\"secondary full\" onClick={() => { setMode('forgot'); setMessage('') }}>
-              Esqueci minha senha
-            </button>
-          )}
-          {mode === 'forgot' && (
-            <button type=\"button\" className=\"secondary full\" onClick={() => { setMode('login'); setMessage('') }}>
-              Voltar para entrar
-            </button>
-          )}
-        </form>"""
-)
+old_password = """          <label>\n            Senha\n            <input type=\"password\" minLength={10} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder=\"Mínimo de 10 caracteres\" required />\n          </label>\n          <button className=\"primary full\" disabled={loading}>\n            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : 'Criar conta'}\n          </button>\n        </form>"""
+new_password = """          {mode !== 'forgot' && (\n            <label>\n              Senha\n              <input type=\"password\" minLength={10} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder=\"Mínimo de 10 caracteres\" required />\n            </label>\n          )}\n          <button className=\"primary full\" disabled={loading}>\n            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : mode === 'forgot' ? 'Enviar link de redefinição' : 'Criar conta'}\n          </button>\n          {mode === 'login' && (\n            <button type=\"button\" className=\"secondary full\" onClick={() => { setMode('forgot'); setMessage('') }}>\n              Esqueci minha senha\n            </button>\n          )}\n          {mode === 'forgot' && (\n            <button type=\"button\" className=\"secondary full\" onClick={() => { setMode('login'); setMessage('') }}>\n              Voltar para entrar\n            </button>\n          )}\n        </form>"""
+if old_password not in text:
+    raise SystemExit('Campo de senha pós-V46 não encontrado para V47.')
+text = text.replace(old_password, new_password, 1)
 
 # 2) Recovery screen shown when Supabase opens a recovery session.
 anchor = "\nfunction Onboarding({ user, onCreated }) {"
@@ -93,7 +52,6 @@ function ResetPasswordScreen({ onDone }) {
       return
     }
 
-    setMessage('Senha alterada com sucesso. Você poderá entrar com a nova senha.')
     await supabase.auth.signOut()
     setLoading(false)
     onDone()
@@ -123,81 +81,41 @@ function ResetPasswordScreen({ onDone }) {
 }
 '''
 if 'function ResetPasswordScreen(' not in text:
-    text = text.replace(anchor, reset_component + anchor)
+    if anchor not in text:
+        raise SystemExit('Âncora para ResetPasswordScreen não encontrada.')
+    text = text.replace(anchor, reset_component + anchor, 1)
 
 # 3) System admin can send a recovery email to any user without knowing or setting their password.
-text = text.replace(
-"""  async function deleteUser(item) {
-    if (!window.confirm(`Excluir definitivamente o usuário ${item.email}?`)) return""",
-"""  async function sendPasswordReset(item) {
-    setNotice('')
-    const { error } = await supabase.auth.resetPasswordForEmail(item.email, {
-      redirectTo: window.location.origin
-    })
-    setNotice(error ? (error.message || 'Não foi possível enviar o link.') : `Link de redefinição enviado para ${item.email}.`)
-  }
+old_delete = """  async function deleteUser(item) {\n    if (!window.confirm(`Excluir definitivamente o usuário ${item.email}?`)) return"""
+new_delete = """  async function sendPasswordReset(item) {\n    setNotice('')\n    const { error } = await supabase.auth.resetPasswordForEmail(item.email, {\n      redirectTo: window.location.origin\n    })\n    setNotice(error ? (error.message || 'Não foi possível enviar o link.') : `Link de redefinição enviado para ${item.email}.`)\n  }\n\n  async function deleteUser(item) {\n    if (!window.confirm(`Excluir definitivamente o usuário ${item.email}?`)) return"""
+if old_delete not in text:
+    raise SystemExit('Função deleteUser não encontrada para V47.')
+text = text.replace(old_delete, new_delete, 1)
 
-  async function deleteUser(item) {
-    if (!window.confirm(`Excluir definitivamente o usuário ${item.email}?`)) return"""
-)
-
-text = text.replace(
-"""                <span>
-                  {!isSelf && (
-                    <button className=\"text-danger mini\" onClick={() => deleteUser(item)}>
-                      Excluir
-                    </button>
-                  )}
-                </span>""",
-"""                <span className=\"row-actions\">
-                  <button className=\"secondary mini\" onClick={() => sendPasswordReset(item)}>
-                    Redefinir senha
-                  </button>
-                  {!isSelf && (
-                    <button className=\"text-danger mini\" onClick={() => deleteUser(item)}>
-                      Excluir
-                    </button>
-                  )}
-                </span>"""
-)
+old_action = """                <span>\n                  {!isSelf && (\n                    <button className=\"text-danger mini\" onClick={() => deleteUser(item)}>\n                      Excluir\n                    </button>\n                  )}\n                </span>"""
+new_action = """                <span className=\"row-actions\">\n                  <button className=\"secondary mini\" onClick={() => sendPasswordReset(item)}>\n                    Redefinir senha\n                  </button>\n                  {!isSelf && (\n                    <button className=\"text-danger mini\" onClick={() => deleteUser(item)}>\n                      Excluir\n                    </button>\n                  )}\n                </span>"""
+if old_action not in text:
+    raise SystemExit('Ações do usuário não encontradas para V47.')
+text = text.replace(old_action, new_action, 1)
 
 # 4) App detects PASSWORD_RECOVERY before rendering normal application access.
-text = text.replace(
-"""  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+old_state = """  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)\n\n  useEffect(() => {"""
+new_state = """  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)\n  const [passwordRecovery, setPasswordRecovery] = useState(false)\n\n  useEffect(() => {"""
+if old_state not in text:
+    raise SystemExit('Estado principal do App não encontrado para V47.')
+text = text.replace(old_state, new_state, 1)
 
-  useEffect(() => {""",
-"""  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [passwordRecovery, setPasswordRecovery] = useState(false)
+old_listener = """    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {\n      setSession(newSession)\n    })"""
+new_listener = """    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {\n      setSession(newSession)\n      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)\n    })"""
+if old_listener not in text:
+    raise SystemExit('Listener de autenticação não encontrado para V47.')
+text = text.replace(old_listener, new_listener, 1)
 
-  useEffect(() => {"""
-)
-
-text = text.replace(
-"""    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession)
-    })""",
-"""    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession)
-      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
-    })"""
-)
-
-text = text.replace(
-"""  if (loading || (session && accessLoading)) {
-    return <div className=\"loading-screen\">Carregando...</div>
-  }
-
-  if (!session) return <AuthScreen />""",
-"""  if (loading || (session && accessLoading && !passwordRecovery)) {
-    return <div className=\"loading-screen\">Carregando...</div>
-  }
-
-  if (passwordRecovery && session) {
-    return <ResetPasswordScreen onDone={() => setPasswordRecovery(false)} />
-  }
-
-  if (!session) return <AuthScreen />"""
-)
+old_render = """  if (loading || (session && accessLoading)) {\n    return <div className=\"loading-screen\">Carregando...</div>\n  }\n\n  if (!session) return <AuthScreen />"""
+new_render = """  if (loading || (session && accessLoading && !passwordRecovery)) {\n    return <div className=\"loading-screen\">Carregando...</div>\n  }\n\n  if (passwordRecovery && session) {\n    return <ResetPasswordScreen onDone={() => setPasswordRecovery(false)} />\n  }\n\n  if (!session) return <AuthScreen />"""
+if old_render not in text:
+    raise SystemExit('Renderização principal do App não encontrada para V47.')
+text = text.replace(old_render, new_render, 1)
 
 checks = {
     'forgot mode': "mode === 'forgot'" in text,

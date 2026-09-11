@@ -6,24 +6,41 @@ const API_KEY = __ENV.SUPABASE_KEY
 const ORG_ID = '11111111-1111-4111-8111-111111111111'
 const VUS = Number(__ENV.VUS || 250)
 const DURATION = __ENV.DURATION || '20s'
+const RAMPED = __ENV.RAMPED === 'true'
+const RAMP_DURATION = __ENV.RAMP_DURATION || '20s'
+const HOLD_DURATION = __ENV.HOLD_DURATION || '20s'
 const sessions = JSON.parse(open('./.sessions.json'))
 
 if (!BASE_URL || !API_KEY || !sessions.length) {
   throw new Error('Missing staging configuration or authenticated sessions')
 }
 
-export const options = {
-  vus: VUS,
-  duration: DURATION,
-  gracefulStop: '5s',
-  thresholds: {
-    http_req_failed: ['rate<0.01'],
-    http_req_duration: ['p(95)<3000'],
-    checks: ['rate>0.99']
-  },
-  noConnectionReuse: false,
-  userAgent: 'CRM-Staging-Authenticated-E2E/1.0'
+const thresholds = {
+  http_req_failed: ['rate<0.01'],
+  http_req_duration: ['p(95)<3000'],
+  checks: ['rate>0.99']
 }
+
+export const options = RAMPED
+  ? {
+      stages: [
+        { duration: RAMP_DURATION, target: VUS },
+        { duration: HOLD_DURATION, target: VUS },
+        { duration: '5s', target: 0 }
+      ],
+      gracefulRampDown: '5s',
+      thresholds,
+      noConnectionReuse: false,
+      userAgent: 'CRM-Staging-Authenticated-E2E/2.0'
+    }
+  : {
+      vus: VUS,
+      duration: DURATION,
+      gracefulStop: '5s',
+      thresholds,
+      noConnectionReuse: false,
+      userAgent: 'CRM-Staging-Authenticated-E2E/2.0'
+    }
 
 let bootstrapped = false
 

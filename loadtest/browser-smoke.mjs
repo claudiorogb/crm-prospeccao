@@ -24,7 +24,8 @@ try {
 
   started = performance.now()
   await page.locator('button.nav-item').filter({ hasText: 'Campanhas' }).click()
-  await page.getByRole('heading', { name: 'Campanhas' }).waitFor({ timeout: 30000 })
+  await page.getByRole('button', { name: 'Público-alvo', exact: true }).waitFor({ timeout: 30000 })
+  await page.getByRole('button', { name: 'Campanha', exact: true }).waitFor({ timeout: 30000 })
   summary.steps.campaigns_ms = Math.round(performance.now() - started)
 
   started = performance.now()

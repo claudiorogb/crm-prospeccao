@@ -13,7 +13,7 @@ permissions:
 jobs:
   v54-capacity:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Checkout staging
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Create isolated staging sessions
+      - name: Create isolated staging sessions and V54 preflight
         env:
           SESSION_COUNT: '5'
           SESSIONS_FILE: loadtest/.sessions-v54.json
@@ -33,7 +33,7 @@ jobs:
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
-      - name: Refine V54 capacity boundary
+      - name: Find V54 authenticated capacity boundary
         shell: bash
         run: |
           set +e
@@ -59,9 +59,10 @@ jobs:
             return 1
           }
 
-          last_pass=150
-          first_fail=175
-          for vus in 155 160 165 170; do
+          last_pass=0
+          first_fail=0
+
+          for vus in 150 175 200 250 300 350 500; do
             if run_stage "$vus"; then
               last_pass="$vus"
               sleep 5
@@ -70,6 +71,13 @@ jobs:
               break
             fi
           done
+
+          if [ "$first_fail" -eq 150 ]; then
+            sleep 5
+            if run_stage 125; then
+              last_pass=125
+            fi
+          fi
 
           echo "last_pass=${last_pass}" > loadtest/results-v54/capacity-boundary.txt
           echo "first_fail=${first_fail}" >> loadtest/results-v54/capacity-boundary.txt
@@ -80,7 +88,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: crm-staging-v54-capacity-refined-results
+          name: crm-staging-v54-capacity-results
           path: |
             loadtest/auth-summary-v54.json
             loadtest/results-v54/
@@ -90,5 +98,3 @@ jobs:
       - name: Remove ephemeral sessions
         if: always()
         run: rm -f loadtest/.sessions-v54.json
-
-# Refinement run after 150 passed and 175 failed.

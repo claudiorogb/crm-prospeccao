@@ -322,33 +322,18 @@ function Dashboard({ organization, userEmail, onGoCampaigns }) {
     let active = true
 
     async function loadStats() {
-      const [{ data: leadsData, error: leadsError }, { data: salesData, error: salesError }] = await Promise.all([
-        supabase
-          .from('leads')
-          .select('id,status,last_contact_date,last_contacted_at,proposal_value,proposal_sent_at')
-          .eq('organization_id', organization.id),
-        supabase
-          .from('sales')
-          .select('amount,lead_id')
-          .eq('organization_id', organization.id)
-      ])
+      const { data, error } = await supabase
+        .rpc('get_dashboard_stats', { p_organization_id: organization.id })
 
-      if (!active || leadsError || salesError) return
-
-      const leads = leadsData || []
-      const sales = salesData || []
-      const contactedStatuses = new Set(['contacted','replied','interested','not_interested','won','lost'])
-      const wonIds = new Set(leads.filter(l => l.status === 'won').map(l => l.id))
+      if (!active || error) return
 
       setStats({
-        leadsFound: leads.length,
-        contacted: leads.filter(l => l.last_contact_date || l.last_contacted_at || contactedStatuses.has(l.status)).length,
-        ongoing: leads.filter(l => l.status === 'interested').length,
-        won: wonIds.size,
-        wonValue: sales.filter(s => wonIds.has(s.lead_id)).reduce((sum, s) => sum + Number(s.amount || 0), 0),
-        ongoingValue: leads
-          .filter(l => l.status === 'interested' && l.proposal_sent_at)
-          .reduce((sum, l) => sum + Number(l.proposal_value || 0), 0)
+        leadsFound: Number(data?.leads_found || 0),
+        contacted: Number(data?.contacted || 0),
+        ongoing: Number(data?.ongoing || 0),
+        won: Number(data?.won || 0),
+        wonValue: Number(data?.won_value || 0),
+        ongoingValue: Number(data?.ongoing_value || 0)
       })
     }
 
@@ -1442,6 +1427,10 @@ function Leads({ organization, settings, userEmail }) {
   const [selected, setSelected] = useState(new Set())
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState({ search: '', segment: 'all', status: 'all' })
+  const LEADS_PAGE_SIZE = 50
+  const [page, setPage] = useState(0)
+  const [totalLeads, setTotalLeads] = useState(0)
+  const [statusCounts, setStatusCounts] = useState({})
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
@@ -1462,20 +1451,17 @@ function Leads({ organization, settings, userEmail }) {
     status: 'new'
   })
 
-  async function loadData() {
+  async function loadLookups() {
     const [
-      { data: leadData, error: leadError },
       { data: campaignData },
       { data: targetData },
       { data: templateData }
     ] = await Promise.all([
-      supabase.from('leads').select('*, campaigns(name), target_segments(name)').eq('organization_id',organization.id).order('created_at',{ascending:false}),
       supabase.from('campaigns').select('id,name,target_segment_id,target_segments(name)').eq('organization_id',organization.id).order('created_at',{ascending:false}),
       supabase.from('target_segments').select('id,name').eq('organization_id',organization.id).eq('is_active',true).order('name'),
-      supabase.from('message_templates').select('*').eq('organization_id',organization.id).eq('is_active',true).order('created_at',{ascending:false})
+      supabase.from('message_templates').select('id,name,target_segment_id,is_active').eq('organization_id',organization.id).eq('is_active',true).order('created_at',{ascending:false})
     ])
 
-    if (!leadError) setLeads(leadData || [])
     setCampaigns(campaignData || [])
     setTargetSegments(targetData || [])
     setTemplates(templateData || [])
@@ -1484,39 +1470,65 @@ function Leads({ organization, settings, userEmail }) {
     }
   }
 
+  async function loadLeadPage(pageToLoad = page, currentFilter = filter) {
+    const { data, error } = await supabase.rpc('get_leads_page', {
+      p_organization_id: organization.id,
+      p_search: currentFilter.search.trim() || null,
+      p_target_segment_id: currentFilter.segment === 'all' ? null : currentFilter.segment,
+      p_status: currentFilter.status === 'all' ? null : currentFilter.status,
+      p_limit: LEADS_PAGE_SIZE,
+      p_offset: pageToLoad * LEADS_PAGE_SIZE
+    })
+
+    if (error) {
+      setMessage(`Não foi possível carregar os leads: ${error.message}`)
+      return
+    }
+
+    const payload = data || {}
+    setLeads(Array.isArray(payload.rows) ? payload.rows : [])
+    setTotalLeads(Number(payload.total || 0))
+    setStatusCounts(payload.status_counts || {})
+    setPage(pageToLoad)
+  }
+
+  async function loadData() {
+    await Promise.all([
+      loadLookups(),
+      loadLeadPage(page, filter)
+    ])
+  }
+
+  useEffect(() => {
+    loadLookups()
+  }, [organization.id])
+
+  useEffect(() => {
+    let active = true
+    const timer = setTimeout(async () => {
+      if (!active) return
+      setSelected(new Set())
+      await loadLeadPage(0, filter)
+    }, 250)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [organization.id, filter.search, filter.segment, filter.status])
+
   useEffect(() => {
     let active = true
 
-    loadData()
-
-    async function refreshLeadStatuses() {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('id,status,last_contact_date')
-        .eq('organization_id', organization.id)
-
-      if (error || !active) return
-
-      const leadUpdates = new Map((data || []).map(item => [item.id, item]))
-
-      setLeads(old =>
-        old.map(lead => {
-          const next = leadUpdates.get(lead.id)
-          if (!next) return lead
-
-          return {
-            ...lead,
-            status: next.status ?? lead.status,
-            last_contact_date: next.last_contact_date ?? lead.last_contact_date
-          }
-        })
-      )
+    async function refreshVisibleLeads() {
+      if (!active) return
+      await loadLeadPage(page, filter)
     }
 
-    const timer = setInterval(refreshLeadStatuses, 3000)
+    const timer = setInterval(refreshVisibleLeads, 10000)
 
     function handleFocus() {
-      refreshLeadStatuses()
+      refreshVisibleLeads()
     }
 
     window.addEventListener('focus', handleFocus)
@@ -1526,7 +1538,7 @@ function Leads({ organization, settings, userEmail }) {
       clearInterval(timer)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [organization.id])
+  }, [organization.id, page, filter.search, filter.segment, filter.status])
 
   async function saveLead(e) {
     e.preventDefault()
@@ -1633,16 +1645,15 @@ function Leads({ organization, settings, userEmail }) {
   }
 
 
-  const visibleLeads = leads.filter(l => {
-    const q = filter.search.trim().toLowerCase()
-    const matchSearch = !q ||
-      (l.business_name || '').toLowerCase().includes(q) ||
-      (l.city || '').toLowerCase().includes(q) ||
-      (l.phone || '').toLowerCase().includes(q)
-    const matchSegment = filter.segment === 'all' || l.target_segment_id === filter.segment
-    const matchStatus = filter.status === 'all' || l.status === filter.status
-    return matchSearch && matchSegment && matchStatus
-  })
+  const visibleLeads = leads
+  const totalPages = Math.max(1, Math.ceil(totalLeads / LEADS_PAGE_SIZE))
+
+  async function goToPage(nextPage) {
+    const safePage = Math.min(Math.max(nextPage, 0), totalPages - 1)
+    if (safePage === page) return
+    setSelected(new Set())
+    await loadLeadPage(safePage, filter)
+  }
 
   const eligibleVisibleLeads = visibleLeads.filter(l => l.status !== 'discarded')
 
@@ -1907,7 +1918,7 @@ function Leads({ organization, settings, userEmail }) {
                 <div className="kanban-column" key={status}>
                   <div className="kanban-column-head">
                     <strong>{label}</strong>
-                    <span>{columnLeads.length}</span>
+                    <span>{Number(statusCounts?.[status] || 0)}</span>
                   </div>
 
                   <div className="kanban-column-cards">
@@ -2016,6 +2027,18 @@ function Leads({ organization, settings, userEmail }) {
                 </div>
               )
             })}
+        </div>
+      </section>
+
+
+      <section className="bulk-toolbar">
+        <div>
+          <strong>{totalLeads}</strong> lead{totalLeads === 1 ? '' : 's'} encontrado{totalLeads === 1 ? '' : 's'}
+          <span className="muted"> • Página {page + 1} de {totalPages} • até {LEADS_PAGE_SIZE} por página</span>
+        </div>
+        <div className="bulk-actions">
+          <button className="secondary inline-btn" onClick={() => goToPage(page - 1)} disabled={page <= 0}>Anterior</button>
+          <button className="secondary inline-btn" onClick={() => goToPage(page + 1)} disabled={page >= totalPages - 1}>Próxima</button>
         </div>
       </section>
     </>

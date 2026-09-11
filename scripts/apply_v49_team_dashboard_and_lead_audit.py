@@ -14,9 +14,16 @@ def bounds(start_marker, end_marker, label):
     return start, end
 
 
+def replace_once(old, new, label):
+    global text
+    if old not in text:
+        raise SystemExit(f'V49: marcador não encontrado: {label}')
+    text = text.replace(old, new, 1)
+
+
 # -----------------------------------------------------------------------------
-# 1) Dashboard da empresa: mantém os indicadores atuais, remove o atalho de
-#    Campanhas e acrescenta desempenho automático de TODOS os usuários da empresa.
+# 1) Dashboard da empresa: mantém indicadores atuais, remove Campanhas e inclui
+#    desempenho automático de todos os usuários ativos da própria organização.
 # -----------------------------------------------------------------------------
 team_and_dashboard = r'''function TeamPerformance({ organization }) {
   const [rows, setRows] = useState([])
@@ -54,7 +61,10 @@ team_and_dashboard = r'''function TeamPerformance({ organization }) {
         </div>
         {rows.map(row => (
           <div className="team-performance-row-v49" key={row.user_id}>
-            <span><strong>{row.full_name || 'Usuário'}</strong><small>{row.role === 'owner' ? 'Proprietário' : row.role === 'admin' ? 'Administrador' : 'Usuário'}</small></span>
+            <span>
+              <strong>{row.full_name || 'Usuário'}</strong>
+              <small>{row.role === 'owner' ? 'Proprietário' : row.role === 'admin' ? 'Administrador' : 'Usuário'}</small>
+            </span>
             <span>{Number(row.active_leads || 0)}</span>
             <span>{Number(row.won_count || 0)}</span>
             <span>{formatCurrency(row.won_value || 0)}</span>
@@ -82,26 +92,37 @@ function Dashboard({ organization, userEmail, onGoCampaigns }) {
     let active = true
     async function loadStats() {
       const [{ data: leadsData, error: leadsError }, { data: salesData, error: salesError }] = await Promise.all([
-        supabase.from('leads').select('id,status,last_contact_date,last_contacted_at,proposal_value,proposal_sent_at').eq('organization_id', organization.id),
-        supabase.from('sales').select('amount,lead_id').eq('organization_id', organization.id)
+        supabase
+          .from('leads')
+          .select('id,status,last_contact_date,last_contacted_at,proposal_value,proposal_sent_at')
+          .eq('organization_id', organization.id),
+        supabase
+          .from('sales')
+          .select('amount,lead_id')
+          .eq('organization_id', organization.id)
       ])
+
       if (!active || leadsError || salesError) return
       const leads = leadsData || []
       const sales = salesData || []
       const contactedStatuses = new Set(['contacted','replied','interested','proposal','not_interested','won','lost'])
       const wonIds = new Set(leads.filter(l => l.status === 'won').map(l => l.id))
       const lostLeads = leads.filter(l => l.status === 'lost')
+
       setStats({
         leadsFound: leads.length,
         contacted: leads.filter(l => l.last_contact_date || l.last_contacted_at || contactedStatuses.has(l.status)).length,
         ongoing: leads.filter(l => ['interested','proposal'].includes(l.status)).length,
         won: wonIds.size,
         wonValue: sales.filter(s => wonIds.has(s.lead_id)).reduce((sum, s) => sum + Number(s.amount || 0), 0),
-        ongoingValue: leads.filter(l => ['interested','proposal'].includes(l.status) && l.proposal_sent_at).reduce((sum, l) => sum + Number(l.proposal_value || 0), 0),
+        ongoingValue: leads
+          .filter(l => ['interested','proposal'].includes(l.status) && l.proposal_sent_at)
+          .reduce((sum, l) => sum + Number(l.proposal_value || 0), 0),
         lost: lostLeads.length,
         lostValue: lostLeads.reduce((sum, l) => sum + Number(l.proposal_value || 0), 0)
       })
     }
+
     loadStats()
     const timer = setInterval(loadStats, 15000)
     return () => { active = false; clearInterval(timer) }
@@ -139,44 +160,148 @@ text = text[:start] + team_and_dashboard + text[end:]
 
 
 # -----------------------------------------------------------------------------
-# 2) Cadastro manual: sempre entra em NOVO, registra usuário captador e observações.
+# 2) Cadastro manual separado: preserva a estrutura atual, sempre cria em NOVO,
+#    grava captador e observações e mostra discretamente quem está cadastrando.
 # -----------------------------------------------------------------------------
-start, end = bounds('function Leads({ organization, settings, userEmail }) {', 'function Clients({ organization, userEmail, userId }) {', 'Leads')
-leads = text[start:end]
-leads = leads.replace('function Leads({ organization, settings, userEmail }) {', 'function Leads({ organization, settings, userEmail, userId }) {', 1)
+manual_component = r'''function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [capturerName, setCapturerName] = useState('')
+  const [form, setForm] = useState({
+    business_name: '',
+    phone: '',
+    website: '',
+    email: '',
+    address: '',
+    city: settings?.default_city || 'Campinas',
+    state: settings?.default_state || 'SP',
+    contact_name: '',
+    capture_notes: ''
+  })
 
-state_marker = "    proposal_sent_at: '',\n    status: 'new'"
-if state_marker not in leads:
-    raise SystemExit('V49: estado do formulário de lead não encontrado.')
-leads = leads.replace(state_marker, "    proposal_sent_at: '',\n    capture_notes: '',\n    status: 'new'")
+  useEffect(() => {
+    let active = true
+    if (!userId) return undefined
+    supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (active) setCapturerName(data?.full_name || '')
+      })
+    return () => { active = false }
+  }, [userId])
 
-payload_marker = "      status: form.status,\n      source: 'manual'"
-if payload_marker not in leads:
-    raise SystemExit('V49: payload do cadastro manual não encontrado.')
-leads = leads.replace(payload_marker, "      status: 'new',\n      source: 'manual',\n      captured_by: userId,\n      capture_notes: form.capture_notes?.trim() || null", 1)
+  async function saveLead(e) {
+    e.preventDefault()
+    setLoading(true)
+    setMessage('')
 
-heading = "          <h2>Cadastro manual</h2>"
-if heading not in leads:
-    raise SystemExit('V49: cabeçalho do cadastro manual não encontrado.')
-leads = leads.replace(heading, heading + "\n          <p className=\"muted capture-audit-note-v49\">Captado por: <strong>{userEmail}</strong> • o lead será criado automaticamente na etapa Novo.</p>", 1)
+    const { error } = await supabase.from('leads').insert({
+      organization_id: organization.id,
+      business_name: form.business_name.trim(),
+      phone: form.phone.trim() || null,
+      website: form.website.trim() || null,
+      email: form.email.trim() || null,
+      address: form.address.trim() || null,
+      city: form.city.trim() || null,
+      state: form.state || null,
+      contact_name: form.contact_name.trim() || null,
+      capture_notes: form.capture_notes.trim() || null,
+      captured_by: userId,
+      status: 'new',
+      source: 'manual'
+    })
 
-form_actions = '''            <div className="form-actions">\n              <button type="button" className="secondary" onClick={()=>setShowForm(false)}>Cancelar</button>\n              <button className="primary" disabled={loading}>{loading?'Salvando...':'Salvar lead'}</button>\n            </div>'''
-if form_actions not in leads:
-    raise SystemExit('V49: ações do formulário de lead não encontradas.')
-notes_field = '''            <label>\n              Observações da captação\n              <textarea\n                className="client-textarea"\n                value={form.capture_notes || ''}\n                onChange={e=>setForm({...form,capture_notes:e.target.value})}\n                placeholder="Ex.: produto de interesse, contexto da captação, informações relevantes..."\n              />\n            </label>\n\n'''
-leads = leads.replace(form_actions, notes_field + form_actions, 1)
-text = text[:start] + leads + text[end:]
+    if (error) setMessage(error.message)
+    else {
+      setMessage('Lead cadastrado com sucesso na etapa Novo.')
+      setForm(old => ({
+        ...old,
+        business_name: '',
+        phone: '',
+        website: '',
+        email: '',
+        address: '',
+        contact_name: '',
+        capture_notes: ''
+      }))
+    }
+    setLoading(false)
+  }
 
-# Passa o ID autenticado para o cadastro manual.
-old_leads_call = "{section === 'leads' && <Leads organization={organization} settings={settings} userEmail={userEmail} />}"
-new_leads_call = "{section === 'leads' && <Leads organization={organization} settings={settings} userEmail={userEmail} userId={userId} />}"
-if old_leads_call not in text:
-    raise SystemExit('V49: chamada de Leads no funil não encontrada.')
-text = text.replace(old_leads_call, new_leads_call, 1)
+  return (
+    <>
+      <header className="topbar compact-subpage-header">
+        <div>
+          <span className="eyebrow">FUNIL DE VENDAS</span>
+          <h1>Cadastro novo lead</h1>
+          <p className="muted">Cadastro manual independente de público-alvo ou campanha.</p>
+        </div>
+        <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
+      </header>
+
+      {message && <div className="notice">{message}</div>}
+
+      <section className="panel campaign-form-panel">
+        <span className="eyebrow">NOVO LEAD</span>
+        <h2>Cadastro manual</h2>
+        <p className="muted capture-audit-note-v49">
+          Captado por: <strong>{capturerName || userEmail}</strong> • entrada automática na etapa Novo.
+        </p>
+
+        <form onSubmit={saveLead} className="campaign-form">
+          <div className="field-grid">
+            <label>Empresa<input value={form.business_name} onChange={e=>setForm({...form,business_name:e.target.value})} required /></label>
+            <label>Nome do contato<input value={form.contact_name} onChange={e=>setForm({...form,contact_name:e.target.value})} /></label>
+          </div>
+          <div className="field-grid">
+            <label>Telefone / WhatsApp<input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} /></label>
+            <label>E-mail<input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} /></label>
+          </div>
+          <label>Site<input value={form.website} onChange={e=>setForm({...form,website:e.target.value})} /></label>
+          <label>Endereço<input value={form.address} onChange={e=>setForm({...form,address:e.target.value})} /></label>
+          <div className="field-grid">
+            <label>Cidade<input value={form.city} onChange={e=>setForm({...form,city:e.target.value})} /></label>
+            <label>UF<select value={form.state} onChange={e=>setForm({...form,state:e.target.value})}>{UF_OPTIONS.map(uf=><option key={uf} value={uf}>{uf}</option>)}</select></label>
+          </div>
+          <label>
+            Observações da captação
+            <textarea
+              className="client-textarea"
+              value={form.capture_notes}
+              onChange={e=>setForm({...form,capture_notes:e.target.value})}
+              placeholder="Ex.: produto de interesse, data/contexto da captação e outras informações relevantes."
+            />
+          </label>
+          <div className="form-actions"><button className="primary" disabled={loading}>{loading?'Salvando...':'Salvar lead'}</button></div>
+        </form>
+      </section>
+    </>
+  )
+}
+
+
+'''
+start, end = bounds(
+    'function ManualLeadRegistration({ organization, settings, userEmail }) {',
+    'function NotInterestedRepository({ organization, userEmail }) {',
+    'Cadastro manual'
+)
+text = text[:start] + manual_component + text[end:]
+
+# A estrutura V32.1 mantém Cadastro novo lead dentro da aba Leads.
+replace_once(
+    "{leadSection === 'new-lead' && <ManualLeadRegistration organization={organization} settings={settings} userEmail={userEmail} />}",
+    "{leadSection === 'new-lead' && <ManualLeadRegistration organization={organization} settings={settings} userEmail={userEmail} userId={userId} />}",
+    'passagem de userId ao cadastro manual'
+)
 
 
 # -----------------------------------------------------------------------------
-# 3) Visão comercial exclusiva do System Admin, consolidada e separada por empresa.
+# 3) Visão comercial exclusiva do System Admin: consolidado geral + lista por
+#    empresa + detalhamento automático da equipe da empresa selecionada.
 # -----------------------------------------------------------------------------
 platform_component = r'''function PlatformSalesOverview({ userEmail }) {
   const [companies, setCompanies] = useState([])
@@ -190,7 +315,10 @@ platform_component = r'''function PlatformSalesOverview({ userEmail }) {
       const { data, error } = await supabase.rpc('get_platform_sales_overview')
       if (!active) return
       if (error) setMessage(error.message)
-      else { setCompanies(data || []); setMessage('') }
+      else {
+        setCompanies(data || [])
+        setMessage('')
+      }
     }
     load()
     const timer = setInterval(load, 15000)
@@ -198,12 +326,18 @@ platform_component = r'''function PlatformSalesOverview({ userEmail }) {
   }, [])
 
   useEffect(() => {
-    if (!selectedId) { setTeam([]); return }
+    if (!selectedId) {
+      setTeam([])
+      return undefined
+    }
     let active = true
     supabase.rpc('get_team_performance', { p_organization_id: selectedId }).then(({ data, error }) => {
       if (!active) return
       if (error) setMessage(error.message)
-      else { setTeam(data || []); setMessage('') }
+      else {
+        setTeam(data || [])
+        setMessage('')
+      }
     })
     return () => { active = false }
   }, [selectedId])
@@ -225,6 +359,7 @@ platform_component = r'''function PlatformSalesOverview({ userEmail }) {
       </header>
 
       {message && <div className="notice error">{message}</div>}
+
       <section className="stats-grid dashboard-commercial-grid platform-sales-total-v49">
         <StatCard label="Leads em trabalho" value={totalActive} detail="Consolidado de todas as empresas" />
         <StatCard label="Negócios fechados" value={totalWon} detail="Consolidado de todas as empresas" />
@@ -235,7 +370,12 @@ platform_component = r'''function PlatformSalesOverview({ userEmail }) {
         <div className="panel-head"><div><span className="eyebrow">EMPRESAS</span><h2>Resultados por empresa</h2></div></div>
         <div className="company-performance-list-v49">
           {companies.map(company => (
-            <button key={company.organization_id} type="button" className={`company-performance-row-v49 ${selectedId === company.organization_id ? 'active' : ''}`} onClick={() => setSelectedId(company.organization_id)}>
+            <button
+              key={company.organization_id}
+              type="button"
+              className={`company-performance-row-v49 ${selectedId === company.organization_id ? 'active' : ''}`}
+              onClick={() => setSelectedId(company.organization_id)}
+            >
               <strong>{company.organization_name}</strong>
               <span>{Number(company.active_leads || 0)} leads</span>
               <span>{Number(company.won_count || 0)} fechados</span>
@@ -251,10 +391,15 @@ platform_component = r'''function PlatformSalesOverview({ userEmail }) {
         <section className="panel team-performance-v49 platform-company-detail-v49">
           <div className="panel-head"><div><span className="eyebrow">{selected.organization_name}</span><h2>Equipe da empresa</h2></div></div>
           <div className="team-performance-list-v49">
-            <div className="team-performance-row-v49 team-performance-head-v49"><span>Usuário</span><span>Leads</span><span>Negócios fechados</span><span>Valor fechado</span></div>
+            <div className="team-performance-row-v49 team-performance-head-v49">
+              <span>Usuário</span><span>Leads</span><span>Negócios fechados</span><span>Valor fechado</span>
+            </div>
             {team.map(row => (
               <div className="team-performance-row-v49" key={row.user_id}>
-                <span><strong>{row.full_name || 'Usuário'}</strong><small>{row.role === 'owner' ? 'Proprietário' : row.role === 'admin' ? 'Administrador' : 'Usuário'}</small></span>
+                <span>
+                  <strong>{row.full_name || 'Usuário'}</strong>
+                  <small>{row.role === 'owner' ? 'Proprietário' : row.role === 'admin' ? 'Administrador' : 'Usuário'}</small>
+                </span>
                 <span>{Number(row.active_leads || 0)}</span>
                 <span>{Number(row.won_count || 0)}</span>
                 <span>{formatCurrency(row.won_value || 0)}</span>
@@ -274,22 +419,73 @@ if admin_marker not in text:
     raise SystemExit('V49: AdminOverview não encontrado.')
 text = text.replace(admin_marker, platform_component + admin_marker, 1)
 
-# Menu especial do System Admin (sem organização vinculada): Vendas + Administração.
-old_admin_nav = '''          <nav>\n            <button className="nav-item active">\n              <Shield size={18}/> Administração\n            </button>\n          </nav>'''
-new_admin_nav = '''          <nav>\n            <button className={`nav-item ${page !== 'administration' ? 'active' : ''}`} onClick={() => { setPage('platform-sales'); setMobileMenuOpen(false) }}>\n              <Activity size={18}/> Vendas\n            </button>\n            <button className={`nav-item ${page === 'administration' ? 'active' : ''}`} onClick={() => { setPage('administration'); setMobileMenuOpen(false) }}>\n              <Shield size={18}/> Administração\n            </button>\n          </nav>'''
-if old_admin_nav not in text:
-    raise SystemExit('V49: menu especial do System Admin não encontrado.')
-text = text.replace(old_admin_nav, new_admin_nav, 1)
+# System Admin sem organização vinculada: Vendas vira a página inicial e Administração continua separada.
+old_admin_nav = '''          <nav>
+            <button className="nav-item active">
+              <Shield size={18}/> Administração
+            </button>
+          </nav>'''
+new_admin_nav = '''          <nav>
+            <button className={`nav-item ${page !== 'administration' ? 'active' : ''}`} onClick={() => { setPage('platform-sales'); setMobileMenuOpen(false) }}>
+              <Activity size={18}/> Vendas
+            </button>
+            <button className={`nav-item ${page === 'administration' ? 'active' : ''}`} onClick={() => { setPage('administration'); setMobileMenuOpen(false) }}>
+              <Shield size={18}/> Administração
+            </button>
+          </nav>'''
+replace_once(old_admin_nav, new_admin_nav, 'menu especial do System Admin')
 
-old_admin_main = '''        <main className="content">\n          <Administration\n            organizations={adminOrganizations}\n            reloadOrganizations={loadAdminOrganizations}\n            userEmail={userEmail}\n          />\n        </main>'''
-new_admin_main = '''        <main className="content">\n          {page === 'administration' ? (\n            <Administration\n              organizations={adminOrganizations}\n              reloadOrganizations={loadAdminOrganizations}\n              userEmail={userEmail}\n            />\n          ) : (\n            <PlatformSalesOverview userEmail={userEmail} />\n          )}\n        </main>'''
-if old_admin_main not in text:
-    raise SystemExit('V49: conteúdo especial do System Admin não encontrado.')
-text = text.replace(old_admin_main, new_admin_main, 1)
+old_admin_main = '''        <main className="content">
+          <Administration
+            organizations={adminOrganizations}
+            reloadOrganizations={loadAdminOrganizations}
+            userEmail={userEmail}
+          />
+        </main>'''
+new_admin_main = '''        <main className="content">
+          {page === 'administration' ? (
+            <Administration
+              organizations={adminOrganizations}
+              reloadOrganizations={loadAdminOrganizations}
+              userEmail={userEmail}
+            />
+          ) : (
+            <PlatformSalesOverview userEmail={userEmail} />
+          )}
+        </main>'''
+replace_once(old_admin_main, new_admin_main, 'conteúdo especial do System Admin')
+
+# Se um System Admin também estiver vinculado a uma empresa, mantém acesso à visão consolidada.
+normal_admin_nav = '''          {isSystemAdmin && (
+            <button className={`nav-item ${page === 'administration' ? 'active' : ''}`} onClick={() => { setPage('administration'); setMobileMenuOpen(false) }}>
+              <Shield size={18}/> Administração
+            </button>
+          )}'''
+normal_admin_nav_new = '''          {isSystemAdmin && (
+            <>
+              <button className={`nav-item ${page === 'platform-sales' ? 'active' : ''}`} onClick={() => { setPage('platform-sales'); setMobileMenuOpen(false) }}>
+                <Activity size={18}/> Vendas
+              </button>
+              <button className={`nav-item ${page === 'administration' ? 'active' : ''}`} onClick={() => { setPage('administration'); setMobileMenuOpen(false) }}>
+                <Shield size={18}/> Administração
+              </button>
+            </>
+          )}'''
+replace_once(normal_admin_nav, normal_admin_nav_new, 'menu normal do System Admin')
+
+admin_route = '''        {page === 'administration' && isSystemAdmin && (
+          <Administration'''
+admin_route_new = '''        {page === 'platform-sales' && isSystemAdmin && (
+          <PlatformSalesOverview userEmail={userEmail} />
+        )}
+        {page === 'administration' && isSystemAdmin && (
+          <Administration'''
+replace_once(admin_route, admin_route_new, 'rota consolidada do System Admin')
 
 
 # -----------------------------------------------------------------------------
-# 4) CSS: cabeçalho do funil congelado, sidebar fecha ao retirar o mouse e tabelas.
+# 4) CSS: cabeçalho do funil acompanha a rolagem, sidebar fecha ao retirar o
+#    mouse e os indicadores por usuário permanecem compactos.
 # -----------------------------------------------------------------------------
 css += r'''
 
@@ -304,7 +500,7 @@ css += r'''
 }
 
 @media (min-width: 901px) {
-  /* focus-within não pode manter o menu aberto depois que o mouse sair */
+  /* O clique não mantém mais a sidebar aberta quando o mouse sai dela. */
   .sidebar:not(:hover) {
     width: 64px !important;
     box-shadow: none !important;
@@ -340,15 +536,19 @@ css += r'''
 }
 '''
 
+
 # -----------------------------------------------------------------------------
-# 5) Validação forte: falhar o build se algum requisito da rodada desaparecer.
+# 5) Validação forte. O build só segue para Vite se todos os requisitos existirem.
 # -----------------------------------------------------------------------------
+dashboard_part = text[text.find('function Dashboard'):text.find('function CatalogAdmin')]
+manual_part = text[text.find('function ManualLeadRegistration'):text.find('function NotInterestedRepository')]
 checks = [
-    ('dashboard sem atalho Campanhas', 'dashboard-shortcut clickable' not in text[text.find('function Dashboard'):text.find('function CatalogAdmin')]),
+    ('dashboard sem Campanhas', 'dashboard-shortcut clickable' not in dashboard_part),
     ('dashboard por usuário', 'get_team_performance' in text and 'TeamPerformance' in text),
-    ('cadastro manual sempre Novo', "status: 'new',\n      source: 'manual'" in text),
-    ('captador registrado', 'captured_by: userId' in text),
-    ('observações da captação', 'Observações da captação' in text and 'capture_notes' in text),
+    ('cadastro manual sempre Novo', "status: 'new'" in manual_part and "source: 'manual'" in manual_part),
+    ('captador registrado', 'captured_by: userId' in manual_part),
+    ('observações da captação', 'Observações da captação' in manual_part and 'capture_notes' in manual_part),
+    ('userId passado ao cadastro manual', 'ManualLeadRegistration organization={organization} settings={settings} userEmail={userEmail} userId={userId}' in text),
     ('visão consolidada System Admin', 'get_platform_sales_overview' in text and 'Informações de vendas' in text),
     ('cabeçalho do funil sticky', '.sales-kanban-always-scroll .kanban-column-head' in css and 'position: sticky !important' in css),
     ('sidebar fecha fora do hover', '.sidebar:not(:hover)' in css),

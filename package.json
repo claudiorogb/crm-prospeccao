@@ -1,11 +1,11 @@
 {
-  "name": "crm-prospeccao-v48",
+  "name": "crm-prospeccao-v49",
   "private": true,
-  "version": "0.48.0",
+  "version": "0.49.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "python3 scripts/apply_v32_improvements.py && python3 scripts/apply_v32_1_structure_fix.py && python3 scripts/apply_v33_funnel_repository_dashboard.py && python3 scripts/apply_v34_wordwrap_target_delete_confirmation.py && python3 scripts/apply_v35_fixed_funnel_scrollbar.py && python3 scripts/apply_v37_equal_kanban_column_height.py && python3 scripts/apply_v38_recover_funnel_remove_delete_safely.py && python3 scripts/apply_v39_page_controls_vertical_scroll.py && python3 scripts/apply_v40_mouse_wheel_page_scroll.py && python3 scripts/apply_v41_usability_export_sidebar.py && python3 scripts/apply_v42_fix_message_sending.py && python3 scripts/apply_v43_smart_whatsapp_schedule.py && python3 scripts/apply_v44_compact_send_window.py && python3 scripts/apply_v45_overdue_returns.py && python3 scripts/apply_v46_security_frontend.py && python3 scripts/apply_v47_password_recovery.py && python3 scripts/apply_v48_soft_delete.py && vite build",
+    "build": "python3 scripts/apply_v32_improvements.py && python3 scripts/apply_v32_1_structure_fix.py && python3 scripts/apply_v33_funnel_repository_dashboard.py && python3 scripts/apply_v34_wordwrap_target_delete_confirmation.py && python3 scripts/apply_v35_fixed_funnel_scrollbar.py && python3 scripts/apply_v37_equal_kanban_column_height.py && python3 scripts/apply_v38_recover_funnel_remove_delete_safely.py && python3 scripts/apply_v39_page_controls_vertical_scroll.py && python3 scripts/apply_v40_mouse_wheel_page_scroll.py && python3 scripts/apply_v41_usability_export_sidebar.py && python3 scripts/apply_v42_fix_message_sending.py && python3 scripts/apply_v43_smart_whatsapp_schedule.py && python3 scripts/apply_v44_compact_send_window.py && python3 scripts/apply_v45_overdue_returns.py && python3 scripts/apply_v46_security_frontend.py && python3 scripts/apply_v47_password_recovery.py && python3 scripts/apply_v48_soft_delete.py && python3 scripts/apply_v49_team_dashboard_and_lead_audit.py && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

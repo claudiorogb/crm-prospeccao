@@ -90,3 +90,5 @@ jobs:
       - name: Remove ephemeral sessions
         if: always()
         run: rm -f loadtest/.sessions-v54.json
+
+# Triggered only after staging data and temporary test authorization were validated.

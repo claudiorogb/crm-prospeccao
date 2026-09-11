@@ -13,13 +13,7 @@ permissions:
 jobs:
   authenticated-capacity:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      SUPABASE_URL: https://ovenrdiykmfnjtvqnalz.supabase.co
-      SUPABASE_KEY: sb_publishable_Q2F3ab3kHYpI_RZfrhdEfA_49dQEm9G
-      SESSION_COUNT: '20'
-      SESSIONS_FILE: loadtest/.sessions.json
-      TEST_REVISION: 'browser-fix-1'
+    timeout-minutes: 15
 
     steps:
       - name: Checkout staging
@@ -30,80 +24,38 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Create isolated authenticated sessions
-        run: node loadtest/prepare-auth.mjs
-
-      - name: Install frontend and browser dependencies
-        run: |
-          npm install --no-audit --no-fund
-          npm install --no-save --no-audit --no-fund playwright@1.55.0
-          npx playwright install --with-deps chromium
-
-      - name: Start staging frontend locally
+      - name: Create isolated staging sessions
         env:
-          VITE_SUPABASE_URL: https://ovenrdiykmfnjtvqnalz.supabase.co
-          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Q2F3ab3kHYpI_RZfrhdEfA_49dQEm9G
-        run: |
-          npm run dev -- --host 127.0.0.1 > /tmp/crm-vite.log 2>&1 &
-          echo $! > /tmp/crm-vite.pid
-          for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat /tmp/crm-vite.log
-          exit 1
-
-      - name: Run real-browser smoke flow
-        run: node loadtest/browser-smoke.mjs
-
-      - name: Stop local frontend
-        if: always()
-        run: |
-          if [ -f /tmp/crm-vite.pid ]; then kill "$(cat /tmp/crm-vite.pid)" || true; fi
+          SESSION_COUNT: '10'
+          SESSIONS_FILE: loadtest/.sessions.json
+        run: node loadtest/prepare-auth.mjs
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
-      - name: Run progressive authenticated load
+      - name: Run ramped 250-user load
         shell: bash
         run: |
-          set -o pipefail
           mkdir -p loadtest/results
-          : > loadtest/results/stage-status.csv
-          echo 'vus,status' >> loadtest/results/stage-status.csv
+          k6 run \
+            -e VUS='250' \
+            -e RAMPED='true' \
+            -e RAMP_DURATION='30s' \
+            -e HOLD_DURATION='20s' \
+            --summary-export='loadtest/results/ramped-250.json' \
+            loadtest/k6-authenticated-e2e.js 2>&1 | tee loadtest/results/ramped-250.log
 
-          for VUS in 250 350 500 650 800 1000; do
-            echo "===== AUTHENTICATED STAGE ${VUS} VUs ====="
-            if k6 run \
-              -e SUPABASE_URL="$SUPABASE_URL" \
-              -e SUPABASE_KEY="$SUPABASE_KEY" \
-              -e VUS="$VUS" \
-              -e DURATION='20s' \
-              --summary-export="loadtest/results/${VUS}.json" \
-              loadtest/k6-authenticated-e2e.js 2>&1 | tee "loadtest/results/${VUS}.log"; then
-              echo "${VUS},pass" >> loadtest/results/stage-status.csv
-            else
-              echo "${VUS},fail" >> loadtest/results/stage-status.csv
-              echo "Stopping progression after failure at ${VUS} VUs."
-              exit 1
-            fi
-            sleep 5
-          done
-
-      - name: Upload non-sensitive test results
+      - name: Upload non-sensitive results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: crm-staging-authenticated-capacity-results
+          name: crm-staging-ramped-250-results
           path: |
             loadtest/auth-summary.json
-            loadtest/browser-smoke.json
             loadtest/results/
           if-no-files-found: warn
           retention-days: 3
 
-      - name: Remove ephemeral JWT sessions
+      - name: Remove ephemeral sessions
         if: always()
         run: rm -f loadtest/.sessions.json

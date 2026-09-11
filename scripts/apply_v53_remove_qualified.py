@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 APP = Path('src/App.jsx')
 text = APP.read_text(encoding='utf-8')
@@ -13,11 +14,13 @@ def component(start_marker, end_marker, label):
 
 
 # 1) Remove Qualificado de todos os mapas de status gerados pelas versões anteriores.
-qualified_label = "    qualified: 'Qualificado',\n"
-qualified_count = text.count(qualified_label)
+text, qualified_count = re.subn(
+    r"(?m)^\s*qualified:\s*['\"]Qualificado['\"],?\s*\n",
+    '',
+    text
+)
 if qualified_count < 1:
     raise SystemExit('V53: status Qualificado não encontrado.')
-text = text.replace(qualified_label, '')
 
 # 2) Tela Envio passa a trabalhar apenas com Novo e Na fila.
 start, end, sending = component(
@@ -57,8 +60,9 @@ start, end, leads_check = component(
     'Leads final'
 )
 
+qualified_label_left = re.search(r"(?m)^\s*qualified:\s*['\"]Qualificado['\"],?\s*$", text) is not None
 checks = [
-    ('Qualificado removido dos mapas de status', "qualified: 'Qualificado'" not in text),
+    ('Qualificado removido dos mapas de status', not qualified_label_left),
     ('Qualificado removido da ordem do funil', old_order not in leads_check),
     ('Qualificado removido da tela Envio', old_sending_statuses not in sending_check and new_sending_statuses in sending_check),
     ('ordem simplificada do funil', new_order in leads_check),

@@ -4,6 +4,7 @@ import App from './App'
 import { supabase } from './lib/supabase'
 import './styles.css'
 import './role-access.css'
+import './user-account-confirmation.js'
 
 async function syncOrganizationRole(session) {
   if (!session?.user?.id) {

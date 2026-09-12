@@ -1,0 +1,6 @@
+/* Restrição visual por perfil da empresa.
+   A segurança real da captação também é validada na Edge Function capture_places_leads. */
+body[data-org-role="member"] .workspace-tabs button:nth-child(3),
+body[data-org-role="loading"] .workspace-tabs button:nth-child(3) {
+  display: none;
+}

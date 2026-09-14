@@ -1,0 +1,239 @@
+import { supabase } from './lib/supabase'
+
+const ADMIN_PANEL_ID = 'axiva-weekly-capture-admin'
+const CAPTURE_STATUS_ID = 'axiva-weekly-capture-status'
+
+function currentBrazilWeekStart() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date())
+
+  const get = type => parts.find(p => p.type === type)?.value || ''
+  const date = new Date(`${get('year')}-${get('month')}-${get('day')}T12:00:00Z`)
+  const day = date.getUTCDay()
+  const diff = day === 0 ? 6 : day - 1
+  date.setUTCDate(date.getUTCDate() - diff)
+  return date.toISOString().slice(0, 10)
+}
+
+function normalizedUsage(settings) {
+  if (!settings) return 0
+  return settings.lead_capture_week_start === currentBrazilWeekStart()
+    ? Number(settings.lead_capture_weekly_usage || 0)
+    : 0
+}
+
+function remainingText(settings) {
+  if (settings?.lead_capture_weekly_limit == null) return 'Sem limite definido'
+  const limit = Number(settings.lead_capture_weekly_limit || 0)
+  const usage = normalizedUsage(settings)
+  return `${Math.max(limit - usage, 0)} restante${Math.max(limit - usage, 0) === 1 ? '' : 's'}`
+}
+
+async function loadSettings(organizationId) {
+  if (!organizationId) return null
+  const { data, error } = await supabase
+    .from('organization_settings')
+    .select('organization_id,lead_capture_weekly_limit,lead_capture_weekly_usage,lead_capture_week_start')
+    .eq('organization_id', organizationId)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+function fieldMarkup(settings) {
+  const usage = normalizedUsage(settings)
+  const limit = settings?.lead_capture_weekly_limit
+  const value = limit == null ? '' : String(limit)
+  const displayLimit = limit == null ? 'Ilimitado' : limit
+
+  return `
+    <span class="eyebrow">LIMITE SEMANAL</span>
+    <h2>Captações automáticas</h2>
+    <p class="muted">Defina quantas vezes esta empresa pode iniciar a captação automática por semana. O contador reinicia na segunda-feira.</p>
+    <div class="campaign-form">
+      <label>
+        Captações permitidas por semana
+        <input id="axiva-weekly-capture-input" type="number" min="0" step="1" value="${value}" placeholder="Sem limite" />
+      </label>
+      <div class="settings-preview">
+        <div><strong>Uso nesta semana:</strong> ${usage} / ${displayLimit}</div>
+        <div><strong>Disponível:</strong> ${remainingText(settings)}</div>
+      </div>
+      <small class="muted">Deixe o campo vazio para não aplicar limite. O valor 0 bloqueia novas captações.</small>
+      <div class="form-actions">
+        <button id="axiva-weekly-capture-save" class="primary inline-btn" type="button">Salvar limite semanal</button>
+      </div>
+      <div id="axiva-weekly-capture-notice"></div>
+    </div>
+  `
+}
+
+async function renderAdminPanel() {
+  const isGooglePlacesPage = [...document.querySelectorAll('h2')]
+    .some(el => el.textContent?.trim() === 'Google Places')
+  if (!isGooglePlacesPage) {
+    document.getElementById(ADMIN_PANEL_ID)?.remove()
+    return
+  }
+
+  const orgSelect = document.querySelector('.admin-org-select select')
+  const host = document.querySelector('.admin-content')
+  if (!orgSelect || !host) return
+
+  let panel = document.getElementById(ADMIN_PANEL_ID)
+  if (!panel) {
+    panel = document.createElement('section')
+    panel.id = ADMIN_PANEL_ID
+    panel.className = 'panel'
+    const apiPanel = [...host.querySelectorAll('.panel')]
+      .find(el => el.textContent?.includes('SITUAÇÃO DA API'))
+    if (apiPanel) host.insertBefore(panel, apiPanel)
+    else host.appendChild(panel)
+  }
+
+  const organizationId = orgSelect.value
+  if (!organizationId || panel.dataset.organizationId === organizationId && panel.dataset.loaded === 'true') return
+
+  panel.dataset.organizationId = organizationId
+  panel.dataset.loaded = 'false'
+  panel.innerHTML = '<p class="muted">Carregando limite semanal...</p>'
+
+  try {
+    const settings = await loadSettings(organizationId)
+    if (orgSelect.value !== organizationId) return
+    panel.innerHTML = fieldMarkup(settings)
+    panel.dataset.loaded = 'true'
+
+    const saveButton = panel.querySelector('#axiva-weekly-capture-save')
+    const input = panel.querySelector('#axiva-weekly-capture-input')
+    const notice = panel.querySelector('#axiva-weekly-capture-notice')
+
+    saveButton?.addEventListener('click', async () => {
+      const raw = input.value.trim()
+      const weeklyLimit = raw === '' ? null : Number(raw)
+
+      if (weeklyLimit !== null && (!Number.isInteger(weeklyLimit) || weeklyLimit < 0)) {
+        notice.className = 'notice error'
+        notice.textContent = 'Informe um número inteiro igual ou maior que zero.'
+        return
+      }
+
+      saveButton.disabled = true
+      notice.className = ''
+      notice.textContent = ''
+
+      const { error } = await supabase
+        .from('organization_settings')
+        .update({ lead_capture_weekly_limit: weeklyLimit })
+        .eq('organization_id', organizationId)
+
+      if (error) {
+        notice.className = 'notice error'
+        notice.textContent = error.message
+        saveButton.disabled = false
+        return
+      }
+
+      notice.className = 'notice'
+      notice.textContent = 'Limite semanal salvo.'
+      panel.dataset.loaded = 'false'
+      setTimeout(() => renderAdminPanel(), 300)
+    })
+  } catch (error) {
+    panel.innerHTML = `<div class="notice error">Não foi possível carregar o limite semanal: ${error?.message || error}</div>`
+  }
+}
+
+let currentOrgId = null
+let currentOrgResolvedAt = 0
+
+async function resolveCurrentOrganizationId() {
+  const now = Date.now()
+  if (currentOrgId && now - currentOrgResolvedAt < 60000) return currentOrgId
+
+  const { data: sessionData } = await supabase.auth.getSession()
+  const userId = sessionData?.session?.user?.id
+  if (!userId) return null
+
+  const { data } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle()
+
+  currentOrgId = data?.organization_id || null
+  currentOrgResolvedAt = now
+  return currentOrgId
+}
+
+async function renderCaptureStatus(force = false) {
+  const captureTitle = [...document.querySelectorAll('h1')]
+    .find(el => el.textContent?.trim() === 'Captação')
+  const panel = document.querySelector('.capture-panel')
+
+  if (!captureTitle || !panel) {
+    document.getElementById(CAPTURE_STATUS_ID)?.remove()
+    return
+  }
+
+  let box = document.getElementById(CAPTURE_STATUS_ID)
+  if (!box) {
+    box = document.createElement('div')
+    box.id = CAPTURE_STATUS_ID
+    box.className = 'notice compact-notice'
+    const controls = panel.querySelector('.capture-controls')
+    if (controls) panel.insertBefore(box, controls)
+    else panel.appendChild(box)
+  }
+
+  if (!force && box.dataset.loadedAt && Date.now() - Number(box.dataset.loadedAt) < 10000) return
+
+  try {
+    const organizationId = await resolveCurrentOrganizationId()
+    if (!organizationId) return
+    const settings = await loadSettings(organizationId)
+    const usage = normalizedUsage(settings)
+    const limit = settings?.lead_capture_weekly_limit
+    const limitText = limit == null ? 'Sem limite' : `${usage} de ${limit} utilizadas`
+
+    box.innerHTML = `<strong>Captações desta semana:</strong> ${limitText}${limit == null ? '' : ` • ${remainingText(settings)}`}`
+    box.dataset.loadedAt = String(Date.now())
+
+    const button = panel.querySelector('.capture-button')
+    if (button && limit != null && usage >= Number(limit)) {
+      button.disabled = true
+      button.title = 'Limite semanal de captações atingido.'
+    }
+  } catch {
+    // O bloqueio real continua no servidor mesmo se o indicador visual não puder ser carregado.
+  }
+}
+
+function bindCaptureRefresh() {
+  const button = document.querySelector('.capture-button')
+  if (!button || button.dataset.captureLimitBound === 'true') return
+  button.dataset.captureLimitBound = 'true'
+  button.addEventListener('click', () => {
+    setTimeout(() => renderCaptureStatus(true), 1800)
+    setTimeout(() => renderCaptureStatus(true), 4500)
+  })
+}
+
+async function enhance() {
+  await renderAdminPanel()
+  await renderCaptureStatus()
+  bindCaptureRefresh()
+}
+
+setInterval(() => {
+  enhance().catch(() => {})
+}, 1200)
+
+enhance().catch(() => {})

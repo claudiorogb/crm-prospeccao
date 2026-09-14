@@ -1,54 +1,30 @@
 const BRAND_NAME = 'AXIVA CRM'
+const MARK_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAYAAAAehFoBAAAOA0lEQVR42u2YeXBVVZ7Hf+ece+59WxYigbANhE0a4kZAVAwhjUESEhJjcgkGZGkk0oShupuusqer5r7XVo/bODbdPSFpBQw77wVIQhIC4rwEaFsc6FZkUYdWwCaQl5DtbXc9Z/6AZ9mCqGjX1FT5/evWrXvrfOqc7287AN/re/3/Foo9ZDZ7fy3EJw5ODEdbdz9asDXTrwhtM90WIMRnN+9ZqTsc92PTICLw8/tn5SsI3AjAzQEh/m0hSrxe4pNlq8LfMOG/davR4Hw0N00DXC4xIRw90jr38Rmxb4XYA+cwrJ3A4g5uLMlpqo3uzyrePad5mtQCoNkoDncIsCRoGGCXJMg8sDsJ5ngqwA8CAJjfBewv325Lbem92tyNIJWrURMoERNVNZxAqQc4IEDAAQBw7MfDc+UlA6/2bddtNnKJoF2lb9TNbcnN1cY2r5Masgs3jwxGZBvjVqQ/qAUkumrm/tqXIMtjZvr9wreFXd3cnNzS27m/F6NUHIkaRKRCokAjdwtifv3seW+mn6j+bI3PgEFR8K8mDfxRUiRyLCJSclbXty88UDftXO4aLXPTJltDTpEvRdWWOERRUkNhrdMmrf1hk/dnbVlZZvrxanq7sD/xepOO8HBLD8F3QihsgChSB8KRf4rynM2P5PkBAE5MKTdu8LDCOfYgxBR/Y0pTNPJ2ryiNjNO0K/eKjumbsvM+ntPcLLXk5mpzD+5Zc0EQfhMMhjSnwy6NNPnK/TlFVZl+v9CWlfW17KFwBXuQh1UeOTJgQ+jKgR5Kp6JgSOdUpA5C1KFadO7BwoX+GU3e1w3JNnYo58/vzi5o/Lsd9iDESrxe4snKuzJBshe4NDXYS4WU97Vw03NHGge05ObqY9etk5pmF61Ljui/sDscUliN6p8wo3J2w87Ctqysr2UPRVGwB9z81KlTri3hwP4eSqfyUEhnAqFOQqxUxuSDhQv9uS17V3clxC2+rKvTL6iq70ZLAIBPlq1Mv1/YOiv/vVQsLLDrJusiZMKenv56fvy4cO7oUXOiVxH9ecXPD4qqbrvNIYY0w/wbRr7Hm/fO+ipoRVGwx+3m3OfDSy6cqe2gwjQWDOkcE+oUKBsDaP6+uSWNmX6/gAE+RZoJot0BAkIXbgoMABBbdG/O403DGP9nkXHoQCRj2sUPt4DPZ51JnsnSq6vp4XmlnqGasd7ucNLeqAan1EhtaZ1vSltWllni9ZJbwU5xgK/bZnuUBUM6FwTqopSP46ikLqdoT4yhcc5jdSmR6MIhgH51jzNuzg0e/qLSq6vpifJyY8benc9dxOgZziwYYVgvHJUXPZN+/Dg9MWWKAQDwcMPO6ksIr1CjUZ6IceB+IjxQ89iC87Ggup4zEbjdiLvd8NB+ny9gtxdZff06EEKdArFGA8zfl1OyJ7up9hcQ5xo9jBkvvp6Zd+5mOf5Lga8vQsDjMad6t+xsx3g+MUwYYbGKPy5c+p9T11c3RDB8crq8fM29vi0beyhdqkWjcAcR/meeS5r+XK7cqXCOPQAcfD4MsmxltOzedVmistkb0rhAJBcVrLHA59fPKd49p2XPsgt2aYMBHBL7Q8eO55c+kF5dTV3jx/OZra3M4/GwvyscN9ZAxIFzCwDwOxPve/Le948Pa2fw8N9063dzt2w63RlSN4cSB/rGrltne7dk0bL7a7clX5ZseVc1fVx9r1p//NLxR6YARKG1lYAsmw827apql6hs9vVriFLRjok+TDfm188rrSvxekkv53aGCZiGDpzzOACAEytWmIAQb/scFr514b52JCgtTS900seSDOujMMLotGrUy2PHnnQFAs+HkwevmLDuN1XvFJflx6nGQUAEeojw4JK2M9s5AIKsLHN6U+1/dNilcqOvXwNCRCchxijVyD84r7QOAMBXUsKeShiyMSUYXjcK04PjXPZlAADKTRyAvkmSX7Rjx/i3QsGjPYCS402re1piwrK/XO3+WZ/TlZEU6q88u3r1qrt2bD0W4Oh+TCkM1Y2XR6fE/fk9KmyLdndrSCBSAhWNMSYr2JtbfGCOv3GtaBjt+x4t2vqNm5+vUqaiCG0ej5m3rebh94LqwaDF7DbDMJLttg+v6MY4bLNJQ3Ttlb/8eOXaSTu2/zkA+B6qqszlEo2oDQRMJRIPEL5XoMVbswtaHmqq3dEV7yoVGYPhqra8ZXbhxrH7fyuey+k2FADwoGue/aLw1wVu83jMTEURGssWH53kdDyZIBBQRZF+arE0C0DSwmG4bHf8JO33lT/NF2hmvKGfNiQbvtqvEaYBdgH/JFU3H9maXdDCOScGwERN00AnBHQOdwJCfJj9bguQh30Z7Dfa4S/u9OxNmwo/MYxndd0cgDjDwIGbgCAOADIkYeJljG1nJduRHoTHYYzYSIr3HZdLC8FbQuD0RD53Str0Szb6CjXMwERmW1aTl9cBnMNXtavottosRcHg8TDOOdry3kEHdFx/39EB0cREfkhVTZ8s6xVeb+oBzfB3IzwSA4dBBA79y/ARcllGRs+3buC/sbxeArHCcItAXb5793B/JNrUw/gkRClJNs0zhUmJD/81Eun3AQCUnObfZBDA8A9WoiSZHIHGEXBmWmBxKw5ZlugDAJBlC27h15tJuG1LyLJ18a237Bs0zXm5vR3aQyEYlZIS10dp4sBQ6INXZDm6Zu/eUXu7rv5XF8apBCEYBOxPpYNdhZ5HCwIAAJcuXXIMHTpURQixf5wlFEUAj8ec/Npra7sBVpmGkcAsi3CLmdhhTxqM8MmXx4xOf/3K+eFHonAowGAMxsgaTnDLmcVP5oGiYAUA3rp7UsFFhH4nMLNjInUU++bNO6+43ShWgr8bS8Rgq6qUi5y/1GVao4KABkQZj49ItiRkmJcTgM/b092dcrhPfzNgsjGgaTrWdNwfjqbOq6mZAh4Pc7vd6GJEfaFD1Yf1OFyTPzW1CkCIN+YPJcA5+k6AM6/DTnvtD09dRODWGYeBpnF2FManGKWQBDx4n0CypwB0t3RdPdTJ+GjR0CEOY5GrURZCfOJJVW+ds6EmEyFkiaZ11Gmzgz2qggTwJ+AcndjXfi34FAV/K0vEcu+smo0FZzS9LkoEGGyam2cMiNvY0BvZKTDmuo8KOc9Pm/bOXP/ho90YTSWiCCMY25Ag4I8+JMILRm+vCkSwOTAKj5fEgtbly998cPv2BfEIXT6wYEHrZ03iqVMiSkvTbxs4lp4Kt21LPxEJtQYF6krRNd/ZFU8vGF5ZeRrZ7HeOVoM/PLxqjX9CVdXhdgsyEEaQzNmbdTMyctPS0vQJles3dlFpKQuFNEawFE+pfrfTPr/xySfrYkH8o8mTk48GOrYZdmn0SIyf8T+xyHuz1Im/DuySfbXj3rfUxqAkuoaY+ttnVzy9YOamTUudrrih4yxz/uFVa/xjKyt3X+GQwSwLBgI/+csfTChOS0vTQVGED368clmSFq0hLpeELab16zo9GY7uyXj11fmxtU52di7pstlndap66vlQ+EXOOQJZZl/cVHyr+csny9a/vfHGHW/39tf3iFLKYNM4Iw+UchBCbExS0q4igYz0r1jhvevV6uoeSoss04SBAvrrg5xlL83K6lUUBYPbbYGi4I8qVi0ZoEa3YadDwozrQcPg5wxze/r63xeDx8NEhD6yqTrYHU6wYeHkdYhro1ZJCbm1JWIjTVkZnfzu2wcuCTQzMRgNPGJ3Ta+U5XMlXi/xlcgMEPD0Da++dIHD2mhUZQMICcxKSMiqKSv74GYjEng8bFJllS9AabEVCumAMZUEwgZzVvpuRUXtjI0b88HpTH0wKanmhezsvq9XOD43Gk27a9zrXU5HZnxfKHiPXcqPwQaSkxEg4FNrNv70EsZrtb6QdYckaZNFsaCmrOyDTEURfLJsfn4Q4JwDAsCnVpaXTly/fmen01nMwmFdM4EGqLDr/srK0sPLlvkAAA4DwOotW+LfCAb/YIri2FESUQ4tWtp00x2OXYjMqN/54qeS+HMhFGU/YOixBvmJhkxFEWKtZrZ3W/lZXa/qD0fNOEz4OERyWpcvfzOWUb705BACzjmatL7KFxBoEQuHdSBEsAkEjRbx4qPLy7eUeL3k497eNRep9LKhRiDJsro+rqhIvsHDMdjZjd7VV+ziz4lhwhiMKxrkJxoy/X4BZs6ENo/HnLVja8E506gKa7rpEkVhvEiXfCVsbORSFITcbji98ml5MLPqsdMpgmWZUdPk5020+YH162WfLFsCQgFqmSDabGAThE9uCLoYbF5T7eMXMfotRxhGcfZsS9GC9enV1+7O2rKyzIK9OzI+FcDXbxpGnNMhjCHCav/iZdvTq6vpLWE/u2LyMAUAEELsVPmK4hg0tpgZ0XV2kfOt06uq8o899dTWEYa+dCTgf30oObnopkG38EDdtHctozVql2wjQurrrfny0ky/XxjU2cl9smwte6Puvj8Gw4d6VT1BkiQyRNU8x8qWumN3GLfRU3POOZlUXV0bILSAh8I6J5i6qGjeFy8V1pctbv7SwiH796W9H44c1BPihgzpC+47MlcuRD4fKrl2hcWKWhruPKOF/T2GlSIiDEMNq+pY6aKV1/sLCwD4bXV9Hg/nfj+Z+MFHu7qIUGSGQ5aFMY6XqDZKEvKiunXY1d7OY6f3mSU6Nf3fbYmJQ1LCkSPlA0cuRAhxpaSE+06f5pxz6Db1l4hkTxkoCEYK5zuOlS5aCV4vAbf79mBj9lAUhLKyrDNT00sHMcM7wOmwBomiIUl2W1C3nj1RXm60ATD4Xt/re/3f6H8BTTsqz1EGZL4AAAAASUVORK5CYII='
 
-function brandMarkElement() {
-  const img = document.createElement('img')
-  img.src = '/axiva-mark.svg'
-  img.alt = 'AXIVA'
-  img.className = 'axiva-brand-symbol'
-  return img
-}
-
-function applyAxivaBranding() {
+function applyBranding() {
   document.title = BRAND_NAME
 
   document.querySelectorAll('.brand-mark').forEach(mark => {
-    if (mark.dataset.axivaBranded === 'true') return
+    const current = mark.querySelector('img[data-axiva-mark]')
+    if (current) return
     mark.textContent = ''
-    mark.appendChild(brandMarkElement())
-    mark.dataset.axivaBranded = 'true'
-    mark.setAttribute('aria-label', 'AXIVA')
+    const img = document.createElement('img')
+    img.src = MARK_DATA_URL
+    img.alt = 'AXIVA'
+    img.dataset.axivaMark = 'true'
+    img.style.width = '100%'
+    img.style.height = '100%'
+    img.style.objectFit = 'contain'
+    img.style.display = 'block'
+    mark.style.padding = '0'
+    mark.style.background = 'transparent'
+    mark.appendChild(img)
   })
 
   document.querySelectorAll('h1, strong').forEach(element => {
-    if (element.textContent.trim() === 'CRM Prospecção') {
-      element.textContent = BRAND_NAME
-    }
+    if (element.textContent.trim() === 'CRM Prospecção') element.textContent = BRAND_NAME
   })
 }
 
-const style = document.createElement('style')
-style.textContent = `
-  .brand-mark[data-axiva-branded="true"] {
-    padding: 0 !important;
-    overflow: hidden;
-    background: #05090f !important;
-    border: 1px solid rgba(255,255,255,.10);
-  }
-
-  .brand-mark[data-axiva-branded="true"] .axiva-brand-symbol {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-  }
-`
-document.head.appendChild(style)
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', applyAxivaBranding, { once: true })
-} else {
-  applyAxivaBranding()
-}
-
-const observer = new MutationObserver(applyAxivaBranding)
-observer.observe(document.documentElement, { childList: true, subtree: true })
+applyBranding()
+window.setInterval(applyBranding, 700)

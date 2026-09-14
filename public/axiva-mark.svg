@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">AXIVA</title>
+  <desc id="desc">Símbolo X da marca AXIVA</desc>
+  <rect width="100" height="100" rx="18" fill="#05090f"/>
+  <path d="M14 18h17l14 17c3.5 4.2 5 8.1 5 15-6.3-1.1-10.3-3.4-14-7.7L14 18Z" fill="#ffffff"/>
+  <path d="M86 18H69L55 35c-3.5 4.2-5 8.1-5 15 6.3-1.1 10.3-3.4 14-7.7L86 18Z" fill="#ffffff"/>
+  <path d="M14 82h17l14-17c3.5-4.2 5-8.1 5-15-6.3 1.1-10.3 3.4-14 7.7L14 82Z" fill="#20b7b5"/>
+  <path d="M86 82H69L55 65c-3.5-4.2-5-8.1-5-15 6.3 1.1 10.3 3.4 14 7.7L86 82Z" fill="#20b7b5"/>
+</svg>

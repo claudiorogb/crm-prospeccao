@@ -4425,7 +4425,6 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
                 <span className="muted">(opcional)</span>
               </span>
               <select value={form.target_segment_id} onChange={e=>setForm({...form,target_segment_id:e.target.value})}>
-                <option value="">Sem público-alvo</option>
                 <option value="">Não informar</option>
                 {targetSegments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}
               </select>

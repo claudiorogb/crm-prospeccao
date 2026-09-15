@@ -2300,7 +2300,7 @@ function Leads({ organization, settings, userEmail }) {
       clearInterval(timer)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [organization.id, page, filter.search, filter.segment, filter.status])
+  }, [organization.id, filter.search, filter.segment, filter.status])
 
   useEffect(() => {
     let active = true

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
+import MarketingListImport from './marketing-list-import'
 import './email-marketing.css'
 
 const BUCKET = 'email-campaign-attachments'
@@ -68,8 +69,10 @@ export function EmailMarketing({ organization, userEmail }) {
   const [connection, setConnection] = useState(null)
   const [limits, setLimits] = useState(null)
   const [clients, setClients] = useState([])
+  const [marketingContacts, setMarketingContacts] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [selected, setSelected] = useState(() => new Set())
+  const [selectedMarketing, setSelectedMarketing] = useState(() => new Set())
   const [search, setSearch] = useState('')
   const [files, setFiles] = useState([])
   const [providerChoice, setProviderChoice] = useState('gmail')
@@ -81,21 +84,24 @@ export function EmailMarketing({ organization, userEmail }) {
 
   async function loadData() {
     if (!organization?.id) return
-    const [connectionResult, limitResult, clientsResult, campaignResult] = await Promise.all([
+    const [connectionResult, limitResult, clientsResult, marketingResult, campaignResult] = await Promise.all([
       supabase.from('email_connections').select('organization_id,provider,email_address,sender_email,sender_name,status,last_error,connected_at').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('organization_email_limits').select('*').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('leads').select('id,business_name,contact_name,email,city,state,email_marketing_opt_out').eq('organization_id', organization.id).eq('status', 'won').is('deleted_at', null).order('business_name'),
+      supabase.from('email_marketing_contacts').select('id,email,contact_name,company_name,source,status,consent_confirmed,unsubscribed_at').eq('organization_id', organization.id).order('email'),
       supabase.from('email_campaigns').select('id,name,subject,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at').eq('organization_id', organization.id).order('created_at', { ascending: false }).limit(30)
     ])
 
     if (connectionResult.error) setMessage(`Não foi possível carregar a conta de e-mail: ${connectionResult.error.message}`)
     if (limitResult.error) setMessage(`Não foi possível carregar o limite de envio: ${limitResult.error.message}`)
     if (clientsResult.error) setMessage(`Não foi possível carregar os clientes: ${clientsResult.error.message}`)
+    if (marketingResult.error) setMessage(`Não foi possível carregar a lista de e-mail marketing: ${marketingResult.error.message}`)
     if (campaignResult.error) setMessage(`Não foi possível carregar as campanhas: ${campaignResult.error.message}`)
 
     setConnection(connectionResult.data || null)
     setLimits(limitResult.data || null)
     setClients(clientsResult.data || [])
+    setMarketingContacts(marketingResult.data || [])
     setCampaigns(campaignResult.data || [])
     if (connectionResult.data?.sender_email) setSenderEmail(connectionResult.data.sender_email)
     if (connectionResult.data?.sender_name) setSenderName(connectionResult.data.sender_name)
@@ -120,13 +126,25 @@ export function EmailMarketing({ organization, userEmail }) {
 
   const eligibleClients = useMemo(() => clients.filter(c => validEmail(c.email) && !c.email_marketing_opt_out), [clients])
   const unavailableCount = clients.length - eligibleClients.length
+  const eligibleMarketingContacts = useMemo(
+    () => marketingContacts.filter(c => validEmail(c.email) && c.status === 'active' && c.consent_confirmed),
+    [marketingContacts]
+  )
+  const unavailableMarketingCount = marketingContacts.length - eligibleMarketingContacts.length
   const filteredClients = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return eligibleClients
     return eligibleClients.filter(c => [c.business_name, c.contact_name, c.email, c.city, c.state].some(v => String(v || '').toLowerCase().includes(q)))
   }, [eligibleClients, search])
+  const filteredMarketingContacts = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return eligibleMarketingContacts
+    return eligibleMarketingContacts.filter(c => [c.company_name, c.contact_name, c.email, c.source].some(v => String(v || '').toLowerCase().includes(q)))
+  }, [eligibleMarketingContacts, search])
 
   const selectedClients = useMemo(() => eligibleClients.filter(c => selected.has(c.id)), [eligibleClients, selected])
+  const selectedMarketingContacts = useMemo(() => eligibleMarketingContacts.filter(c => selectedMarketing.has(c.id)), [eligibleMarketingContacts, selectedMarketing])
+  const selectedTotal = selectedClients.length + selectedMarketingContacts.length
   const filesTotal = files.reduce((sum, file) => sum + Number(file.size || 0), 0)
   const todayUsage = limits?.usage_date === currentBrazilDate() ? Number(limits?.sent_today || 0) : 0
   const dailyLimit = Number(limits?.daily_send_limit || 0)
@@ -140,11 +158,29 @@ export function EmailMarketing({ organization, userEmail }) {
     })
   }
 
+  function toggleMarketingContact(id) {
+    setSelectedMarketing(old => {
+      const next = new Set(old)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   function toggleAllFiltered() {
     setSelected(old => {
       const next = new Set(old)
       const allSelected = filteredClients.length > 0 && filteredClients.every(c => next.has(c.id))
       filteredClients.forEach(c => allSelected ? next.delete(c.id) : next.add(c.id))
+      return next
+    })
+  }
+
+  function toggleAllFilteredMarketing() {
+    setSelectedMarketing(old => {
+      const next = new Set(old)
+      const allSelected = filteredMarketingContacts.length > 0 && filteredMarketingContacts.every(c => next.has(c.id))
+      filteredMarketingContacts.forEach(c => allSelected ? next.delete(c.id) : next.add(c.id))
       return next
     })
   }
@@ -214,7 +250,7 @@ export function EmailMarketing({ organization, userEmail }) {
   async function createCampaign(event) {
     event.preventDefault()
     if (connection?.status !== 'connected') return setMessage('Conecte uma conta Gmail ou Resend antes de enviar uma campanha.')
-    if (!selectedClients.length) return setMessage('Selecione pelo menos um cliente da base de Clientes.')
+    if (!selectedTotal) return setMessage('Selecione pelo menos um destinatário entre Clientes do CRM ou Lista de E-mail Marketing.')
     if (!form.name.trim() || !form.subject.trim() || !form.body.trim()) return setMessage('Nome da campanha, assunto e mensagem são obrigatórios.')
     if (filesTotal > MAX_TOTAL_BYTES) return setMessage('O total de anexos excede 15 MB.')
 
@@ -222,12 +258,13 @@ export function EmailMarketing({ organization, userEmail }) {
     let campaignId = null
     const uploaded = []
     try {
-      const { data, error } = await supabase.rpc('create_email_campaign', {
+      const { data, error } = await supabase.rpc('create_email_campaign_v2', {
         p_organization_id: organization.id,
         p_name: form.name.trim(),
         p_subject: form.subject.trim(),
         p_body_text: form.body,
-        p_recipient_ids: selectedClients.map(c => c.id)
+        p_client_ids: selectedClients.map(c => c.id),
+        p_marketing_contact_ids: selectedMarketingContacts.map(c => c.id)
       })
       if (error) throw error
       campaignId = data
@@ -252,8 +289,9 @@ export function EmailMarketing({ organization, userEmail }) {
 
       setForm({ name: '', subject: '', body: '' })
       setSelected(new Set())
+      setSelectedMarketing(new Set())
       setFiles([])
-      setMessage(`Campanha criada para ${selectedClients.length} cliente${selectedClients.length === 1 ? '' : 's'}. Os envios respeitarão o limite diário definido pelo administrador.`)
+      setMessage('Campanha criada e colocada na fila. E-mails duplicados entre as duas bases são enviados apenas uma vez.')
       await loadData()
     } catch (error) {
       if (campaignId) {
@@ -284,7 +322,7 @@ export function EmailMarketing({ organization, userEmail }) {
         <div>
           <span className="eyebrow">CAMPANHAS</span>
           <h1>E-mail Marketing</h1>
-          <p className="muted">Campanhas enviadas exclusivamente para a base de Clientes. Leads do Funil não aparecem como destinatários.</p>
+          <p className="muted">Envie para Clientes do CRM e para listas próprias de e-mail marketing. Leads frios do Funil não são usados como destinatários.</p>
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
@@ -341,7 +379,7 @@ export function EmailMarketing({ organization, userEmail }) {
       <form className="panel email-compose-panel" onSubmit={createCampaign}>
         <div className="email-section-title">
           <div><span className="eyebrow">NOVA CAMPANHA</span><h2>Criar e-mail</h2></div>
-          <span className="email-client-only-badge">Somente Clientes</span>
+          <span className="email-client-only-badge">Clientes + Lista própria</span>
         </div>
 
         <div className="field-grid">
@@ -365,26 +403,54 @@ export function EmailMarketing({ organization, userEmail }) {
 
         <div className="email-recipient-box">
           <div className="email-recipient-head">
-            <div><strong>Destinatários da base de Clientes</strong><span>{eligibleClients.length} cliente{eligibleClients.length === 1 ? '' : 's'} disponível{eligibleClients.length === 1 ? '' : 'is'} com e-mail • {unavailableCount} indisponível{unavailableCount === 1 ? '' : 'is'}</span></div>
-            <strong>{selectedClients.length} selecionado{selectedClients.length === 1 ? '' : 's'}</strong>
+            <div>
+              <strong>Destinatários autorizados</strong>
+              <span>{eligibleClients.length} cliente{eligibleClients.length === 1 ? '' : 's'} do CRM • {eligibleMarketingContacts.length} contato{eligibleMarketingContacts.length === 1 ? '' : 's'} em listas próprias</span>
+            </div>
+            <strong>{selectedTotal} selecionado{selectedTotal === 1 ? '' : 's'}</strong>
           </div>
+
+          <MarketingListImport organization={organization} onImported={loadData} />
+
           <div className="email-recipient-tools">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar cliente, contato ou e-mail" />
-            <button type="button" className="secondary" onClick={toggleAllFiltered}>{filteredClients.length && filteredClients.every(c => selected.has(c.id)) ? 'Desmarcar exibidos' : 'Selecionar exibidos'}</button>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar cliente, contato, empresa, origem ou e-mail" />
           </div>
-          <div className="email-recipient-list">
-            {filteredClients.length === 0 ? <p className="muted">Nenhum cliente elegível encontrado.</p> : filteredClients.map(client => (
-              <label className="email-recipient-row" key={client.id}>
-                <input type="checkbox" checked={selected.has(client.id)} onChange={() => toggleClient(client.id)} />
-                <span><strong>{client.business_name}</strong><small>{client.contact_name || 'Contato não informado'} • {client.email}{client.city ? ` • ${client.city}${client.state ? `/${client.state}` : ''}` : ''}</small></span>
-              </label>
-            ))}
+
+          <div className="email-recipient-source">
+            <div className="email-recipient-source-head">
+              <div><strong>Clientes do CRM</strong><span>{eligibleClients.length} disponível{eligibleClients.length === 1 ? '' : 'is'} • {unavailableCount} indisponível{unavailableCount === 1 ? '' : 'is'}</span></div>
+              <button type="button" className="secondary" onClick={toggleAllFiltered}>{filteredClients.length && filteredClients.every(c => selected.has(c.id)) ? 'Desmarcar exibidos' : 'Selecionar exibidos'}</button>
+            </div>
+            <div className="email-recipient-list">
+              {filteredClients.length === 0 ? <p className="muted email-empty-list">Nenhum cliente elegível encontrado.</p> : filteredClients.map(client => (
+                <label className="email-recipient-row" key={client.id}>
+                  <input type="checkbox" checked={selected.has(client.id)} onChange={() => toggleClient(client.id)} />
+                  <span><strong>{client.business_name}</strong><small>{client.contact_name || 'Contato não informado'} • {client.email}{client.city ? ` • ${client.city}${client.state ? `/${client.state}` : ''}` : ''}</small></span>
+                </label>
+              ))}
+            </div>
           </div>
-          <p className="muted email-compliance-note">Clientes descadastrados e registros sem e-mail não podem ser selecionados. A seleção é validada novamente no servidor antes da campanha ser criada.</p>
+
+          <div className="email-recipient-source">
+            <div className="email-recipient-source-head">
+              <div><strong>Lista de E-mail Marketing</strong><span>{eligibleMarketingContacts.length} disponível{eligibleMarketingContacts.length === 1 ? '' : 'is'} • {unavailableMarketingCount} indisponível{unavailableMarketingCount === 1 ? '' : 'is'}</span></div>
+              <button type="button" className="secondary" onClick={toggleAllFilteredMarketing}>{filteredMarketingContacts.length && filteredMarketingContacts.every(c => selectedMarketing.has(c.id)) ? 'Desmarcar exibidos' : 'Selecionar exibidos'}</button>
+            </div>
+            <div className="email-recipient-list">
+              {filteredMarketingContacts.length === 0 ? <p className="muted email-empty-list">Nenhum contato de lista elegível encontrado.</p> : filteredMarketingContacts.map(contact => (
+                <label className="email-recipient-row" key={contact.id}>
+                  <input type="checkbox" checked={selectedMarketing.has(contact.id)} onChange={() => toggleMarketingContact(contact.id)} />
+                  <span><strong>{contact.company_name || contact.contact_name || contact.email}</strong><small>{contact.contact_name && contact.company_name ? `${contact.contact_name} • ` : ''}{contact.email}{contact.source ? ` • ${contact.source}` : ''}</small></span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <p className="muted email-compliance-note">Leads do Funil continuam excluídos. Descadastros valem para as duas bases. Se o mesmo e-mail estiver nas duas, ele recebe apenas uma mensagem por campanha.</p>
         </div>
 
         <div className="form-actions">
-          <button className="primary" disabled={loading || connection?.status !== 'connected' || selectedClients.length === 0}>{loading ? 'Processando...' : 'Criar campanha e iniciar fila'}</button>
+          <button className="primary" disabled={loading || connection?.status !== 'connected' || selectedTotal === 0}>{loading ? 'Processando...' : 'Criar campanha e iniciar fila'}</button>
           <span className="muted">Se a campanha ultrapassar o limite diário, os demais envios continuam automaticamente nos dias seguintes.</span>
         </div>
       </form>

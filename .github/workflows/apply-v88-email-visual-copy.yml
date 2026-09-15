@@ -1,0 +1,60 @@
+name: Apply V88 Email Visual Copy
+
+on:
+  push:
+    branches:
+      - feature/email-ui-polish-v87
+    paths:
+      - scripts/apply_v88_email_visual_copy.py
+      - .github/workflows/apply-v88-email-visual-copy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/email-ui-polish-v87
+          fetch-depth: 0
+
+      - name: Apply V88 patch
+        run: python scripts/apply_v88_email_visual_copy.py
+
+      - name: Guardrails
+        run: |
+          ! grep -q "Inclua um endereço individual sem precisar importar uma planilha" src/marketing-list-import.jsx
+          grep -q "Importe uma lista própria em Excel ou CSV.</span>" src/marketing-list-import.jsx
+          ! grep -q "Ela fica separada do Funil e da base de Clientes" src/marketing-list-import.jsx
+          ! grep -q "Leads do Funil continuam excluídos" src/email-marketing.jsx
+          grep -q "email-attachments-box .email-file-button" src/email-marketing.css
+          grep -q "email-recipient-head>div" src/email-marketing.css
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Validate production build
+        run: npm run build
+
+      - name: Commit generated V88 UI
+        run: |
+          if git diff --quiet; then
+            echo "No generated changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/email-marketing.jsx src/marketing-list-import.jsx src/email-marketing.css
+          git commit -m "V88: compact attachment control and refine email copy"
+          git push origin HEAD:feature/email-ui-polish-v87

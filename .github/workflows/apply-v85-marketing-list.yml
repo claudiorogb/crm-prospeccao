@@ -1,0 +1,71 @@
+name: Apply V85 Marketing Lists
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v85-marketing-list.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/email-marketing-list-v85
+          fetch-depth: 0
+
+      - name: Apply V85 patch
+        run: python scripts/apply_v85_marketing_list.py
+
+      - name: Guardrails
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/email-marketing.jsx').read_text(encoding='utf-8')
+          m=Path('src/marketing-list-import.jsx').read_text(encoding='utf-8')
+          required=[
+            "MarketingListImport from './marketing-list-import'",
+            "create_email_campaign_v2",
+            "email_marketing_contacts",
+            "selectedMarketingContacts",
+            "Clientes + Lista própria",
+            "Leads do Funil continuam excluídos",
+          ]
+          missing=[x for x in required if x not in s]
+          if missing: raise SystemExit('Missing V85 items: '+', '.join(missing))
+          if "Campanhas enviadas exclusivamente para a base de Clientes" in s:
+            raise SystemExit('Old clients-only rule still present')
+          if "import_email_marketing_contacts" not in m:
+            raise SystemExit('Marketing list importer RPC missing')
+          print('V85 guardrails OK')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Validate production build
+        run: npm run build
+
+      - name: Commit generated V85 UI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/email-marketing.jsx src/email-marketing.css
+          if git diff --cached --quiet; then
+            echo "No generated changes"
+          else
+            git commit -m "V85: support saved email marketing lists"
+            git push origin HEAD:feature/email-marketing-list-v85
+          fi

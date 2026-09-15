@@ -24,6 +24,18 @@ jobs:
       - name: Restore effective App and CSS
         run: git checkout origin/audit-effective-pre-v78 -- src/App.jsx src/styles.css
 
+      - name: Adapt V78 script to effective baseline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/apply_v78_admin_commercial_area.py')
+          s=p.read_text(encoding='utf-8')
+          old="""count = text.count(admin_call_old)\nif count != 2:\n    raise SystemExit(f'chamadas de Administration: esperado 2, encontrado {count}')"""
+          new="""count = text.count(admin_call_old)\nif count != 1:\n    raise SystemExit(f'chamadas de Administration: esperado 1, encontrado {count}')"""
+          if old not in s: raise SystemExit('V78 adaptation marker not found')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
+
       - name: Reapply V78-V83 deliberately
         run: |
           python scripts/apply_v78_admin_commercial_area.py

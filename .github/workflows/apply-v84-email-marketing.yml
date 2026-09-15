@@ -1,0 +1,79 @@
+name: Apply V84 Email Marketing
+
+on:
+  push:
+    branches:
+      - feature/email-marketing-v84
+    paths:
+      - 'scripts/apply_v84_email_marketing.py'
+      - 'src/email-marketing.jsx'
+      - 'src/email-marketing.css'
+      - '.github/workflows/apply-v84-email-marketing.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/email-marketing-v84
+          fetch-depth: 0
+
+      - name: Apply navigation patch
+        run: python scripts/apply_v84_email_marketing.py
+
+      - name: Guardrails
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          app=Path('src/App.jsx').read_text(encoding='utf-8')
+          email=Path('src/email-marketing.jsx').read_text(encoding='utf-8')
+          required_app=[
+            "from './email-marketing'",
+            "['email','E-mail marketing']",
+            "<EmailMarketing organization={organization}",
+            "['email', 'E-mail', Send]",
+            "<AdminEmailMarketing organizations={productionOrganizations}"
+          ]
+          missing=[x for x in required_app if x not in app]
+          if missing: raise SystemExit('Missing App markers: '+', '.join(missing))
+          required_email=[
+            ".eq('status', 'won')",
+            "create_email_campaign",
+            "register_email_campaign_attachment",
+            "queue_email_campaign",
+            "email-provider-oauth",
+            "email_marketing_opt_out",
+            "MAX_TOTAL_BYTES = 15 * 1024 * 1024"
+          ]
+          missing=[x for x in required_email if x not in email]
+          if missing: raise SystemExit('Missing email security markers: '+', '.join(missing))
+          if ".neq('status', 'won')" in email:
+            raise SystemExit('Unexpected funnel recipient access')
+          print('V84 guardrails OK')
+          PY
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Validate production build
+        run: npm run build
+
+      - name: Commit generated App patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          if git diff --cached --quiet; then
+            echo "No App changes"
+          else
+            git commit -m "V84: wire email marketing into campaigns and admin"
+            git push origin HEAD:feature/email-marketing-v84
+          fi

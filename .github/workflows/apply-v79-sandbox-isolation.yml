@@ -1,0 +1,39 @@
+name: Apply V79 sandbox isolation
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v79_sandbox_isolation.py'
+      - '.github/workflows/apply-v79-sandbox-isolation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply V79 patch
+        run: python scripts/apply_v79_sandbox_isolation.py
+
+      - name: Validate current application
+        run: |
+          npm install
+          npx vite build
+
+      - name: Commit generated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "V79: isolate sandbox from production organizations and metrics"
+            git push
+          fi

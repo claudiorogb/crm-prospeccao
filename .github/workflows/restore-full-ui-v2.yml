@@ -18,42 +18,86 @@ jobs:
           ref: restore-full-ui-v2-2026-09-15
           fetch-depth: 0
 
-      - name: Apply requested funnel changes to complete UI
-        run: python scripts/restore_v81_v83_rich_ui.py
-
-      - name: Validate complete feature set
+      - name: Clean manual lead optional target
         run: |
           python - <<'PY'
           from pathlib import Path
-          s = Path('src/App.jsx').read_text(encoding='utf-8')
-          checks = {
-            'Retornos atrasados': 'function OverdueReturnsPage',
-            'Alerta de atrasados': 'function OverdueReturnsAlert',
-            'Dashboard completo': 'Total de propostas enviadas',
-            'Equipe': 'function TeamPerformance',
-            'Vendas': 'function SalesPage',
-            'Origem/conversão': 'get_origin_conversion',
-            'Cadastro manual': 'function ManualLeadRegistration',
-            'Canal do lead': 'E-mail marketing',
-            'Leads sem interesse': 'function NotInterestedRepository',
-            'Exportação': 'function LeadExportPanel',
-            'Jornada': 'save_lead_journey_checkpoint',
-            'Recuperação de senha': 'function ResetPasswordScreen',
-            'Área comercial': 'AdminCommercialArea',
-            'Integrações': 'AdminIntegrations',
-            'Encerrados': 'function ClosedLeads',
-            'Regra 50': 'TERMINAL_VISIBLE_LIMIT = 50',
-            'Funil contínuo': 'async function loadAllLeads',
+          p=Path('src/App.jsx')
+          s=p.read_text(encoding='utf-8')
+          duplicate='''                <option value="">Sem público-alvo</option>\n                <option value="">Não informar</option>'''
+          if duplicate in s:
+              s=s.replace(duplicate,'                <option value="">Não informar</option>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Compare exhaustively with effective pre-V78 UI
+        run: |
+          git fetch origin audit-effective-pre-v78
+          python - <<'PY'
+          import re, subprocess
+          from pathlib import Path
+          current=Path('src/App.jsx').read_text(encoding='utf-8')
+          css=Path('src/styles.css').read_text(encoding='utf-8')
+          baseline=subprocess.check_output(['git','show','origin/audit-effective-pre-v78:src/App.jsx'],text=True)
+          baseline_css=subprocess.check_output(['git','show','origin/audit-effective-pre-v78:src/styles.css'],text=True)
+          funcs=lambda s:set(re.findall(r'\bfunction\s+([A-Za-z0-9_]+)\s*\(',s))
+          missing_funcs=sorted(funcs(baseline)-funcs(current))
+          allowed_missing={'loadLeadPage','goToPage'}
+          unexpected=[f for f in missing_funcs if f not in allowed_missing]
+          if unexpected:
+              raise SystemExit('Unexpected historical functions missing: '+', '.join(unexpected))
+          css_re=re.compile(r'(?m)^\s*\.([A-Za-z0-9_-]+)')
+          missing_css=sorted(set(css_re.findall(baseline_css))-set(css_re.findall(css)))
+          if missing_css:
+              raise SystemExit('Historical CSS missing: '+', '.join(missing_css))
+
+          required={
+            'Dashboard completo':'Total de propostas enviadas',
+            'Dashboard negociação':'Total em Negociação',
+            'Dashboard ganhos':'Ganhos',
+            'Dashboard perdidos':'Perdidos',
+            'Equipe':'function TeamPerformance',
+            'Retornos atrasados':'function OverdueReturnsPage',
+            'Alerta atrasados':'function OverdueReturnsAlert',
+            'Atalho atrasados':'function OverdueReturnsNavItem',
+            'Cadastro manual':'function ManualLeadRegistration',
+            'Cadastro novo lead':'Cadastro novo lead',
+            'Leads sem interesse':'function NotInterestedRepository',
+            'Clientes':'function Clients',
+            'Vendas':'function SalesPage',
+            'Origem comercial':'get_origin_conversion',
+            'Jornada':'save_lead_journey_checkpoint',
+            'Exportação':'function LeadExportPanel',
+            'Recuperação senha':'function ResetPasswordScreen',
+            'Arquivamento seguro':'archive_record',
+            'Área comercial':'AdminCommercialArea',
+            'Integrações':'AdminIntegrations',
+            'Importação':'CustomerImportPanel',
+            'Encerrados':'function ClosedLeads',
+            'Limite terminal':'TERMINAL_VISIBLE_LIMIT = 50',
+            'Funil contínuo':'async function loadAllLeads',
+            'Canal CRM':'<option value="CRM">CRM</option>',
+            'Canal vendedor':'Prospecção vendedor',
+            'Canal WhatsApp':'<option value="WhatsApp">WhatsApp</option>',
+            'Canal email':'E-mail marketing',
+            'Canal redes':'Redes sociais',
+            'Público opcional':'<span className="muted">(opcional)</span>',
           }
-          missing=[name for name, marker in checks.items() if marker not in s]
-          if missing: raise SystemExit('Missing features: '+', '.join(missing))
-          a=s.index('function Leads({ organization, settings, userEmail }) {')
-          b=s.index('\nfunction Clients({ organization, userEmail, userId }) {',a)
-          leads=s[a:b]
+          missing=[name for name,marker in required.items() if marker not in current]
+          if missing:
+              raise SystemExit('Required features missing: '+', '.join(missing))
+
+          a=current.index('function Leads({ organization, settings, userEmail }) {')
+          b=current.index('\nfunction Clients({ organization, userEmail, userId }) {',a)
+          leads=current[a:b]
           forbidden=['Selecionar todos os filtrados','LEADS_PAGE_SIZE','const [page, setPage]']
-          bad=[x for x in forbidden if x in leads]
-          if bad: raise SystemExit('Forbidden funnel remnants: '+', '.join(bad))
-          print('Complete feature set OK')
+          bad=[m for m in forbidden if m in leads]
+          if bad:
+              raise SystemExit('Explicitly removed funnel items returned: '+', '.join(bad))
+          if '<option value="">Sem público-alvo</option>\n                <option value="">Não informar</option>' in current:
+              raise SystemExit('Duplicate optional target remained')
+          print('EXHAUSTIVE RESTORATION AUDIT OK')
+          print('Only intentionally removed historical functions:', sorted(allowed_missing & set(missing_funcs)))
           PY
 
       - name: Validate production build
@@ -62,14 +106,14 @@ jobs:
           npm audit --omit=dev --audit-level=high
           npm run build
 
-      - name: Commit consolidated restoration
+      - name: Commit final audited restoration
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.jsx src/styles.css scripts/restore_v81_v83_rich_ui.py
+          git add src/App.jsx src/styles.css
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "restore: full CRM UI with requested funnel changes only"
+            git commit -m "restore: final audited CRM interface"
             git push origin HEAD:restore-full-ui-v2-2026-09-15
           fi

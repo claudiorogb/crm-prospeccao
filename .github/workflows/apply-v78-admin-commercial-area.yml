@@ -21,10 +21,10 @@ jobs:
       - name: Apply V78 patch
         run: python scripts/apply_v78_admin_commercial_area.py
 
-      - name: Validate build
+      - name: Validate current application
         run: |
           npm install
-          npm run build
+          npx vite build
 
       - name: Commit generated changes
         run: |

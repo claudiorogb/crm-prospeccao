@@ -1,0 +1,84 @@
+name: Controlled full UI restoration V2
+
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-full-ui-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout restoration branch
+        uses: actions/checkout@v4
+        with:
+          ref: restore-full-ui-v2-2026-09-15
+          fetch-depth: 0
+
+      - name: Fetch effective pre-V78 baseline
+        run: git fetch origin audit-effective-pre-v78
+
+      - name: Restore effective App and CSS
+        run: git checkout origin/audit-effective-pre-v78 -- src/App.jsx src/styles.css
+
+      - name: Reapply V78-V83 deliberately
+        run: |
+          python scripts/apply_v78_admin_commercial_area.py
+          python scripts/apply_v79_sandbox_isolation.py
+          python scripts/apply_v80_true_admin_commercial_area.py
+          python scripts/apply_v81_remove_funnel_bulk_selection.py
+          python scripts/apply_v82_continuous_funnel.py
+          python scripts/apply_v83_terminal_visibility_and_closed.py
+
+      - name: Validate feature preservation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s = Path('src/App.jsx').read_text(encoding='utf-8')
+          required = {
+            'Retornos atrasados': 'function OverdueReturnsPage',
+            'Alerta de atrasados': 'function OverdueReturnsAlert',
+            'Menu de atrasados': 'function OverdueReturnsNavItem',
+            'Dashboard completo': 'Total de propostas enviadas',
+            'Desempenho da equipe': 'function TeamPerformance',
+            'Página de vendas': 'function SalesPage',
+            'Visão de vendas da plataforma': 'function PlatformSalesOverview',
+            'Cadastro manual': 'function ManualLeadRegistration',
+            'Origem do lead': 'customer_origin',
+            'Exportação': 'function LeadExportPanel',
+            'Jornada': 'save_lead_journey_checkpoint',
+            'Recuperação de senha': 'function ResetPasswordScreen',
+            'Arquivamento seguro': 'archive_record',
+            'Área comercial': 'AdminCommercialArea',
+            'Integrações': 'AdminIntegrations',
+            'Encerrados': 'function ClosedLeads',
+            'Limite terminal': 'TERMINAL_VISIBLE_LIMIT = 50',
+          }
+          missing = [name for name, marker in required.items() if marker not in s]
+          if missing:
+            raise SystemExit('Missing features: ' + ', '.join(missing))
+          if 'Selecionar todos os filtrados' in s:
+            raise SystemExit('Removed funnel bulk selector returned')
+          print('Feature preservation checks OK')
+          PY
+
+      - name: Validate production build
+        run: |
+          npm install
+          npm audit --omit=dev --audit-level=high
+          npm run build
+
+      - name: Commit restored frontend
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx src/styles.css
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "restore: consolidate full CRM UI and preserve requested changes"
+            git push origin HEAD:restore-full-ui-v2-2026-09-15
+          fi

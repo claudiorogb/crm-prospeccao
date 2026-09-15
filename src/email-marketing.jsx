@@ -81,6 +81,7 @@ export function EmailMarketing({ organization, userEmail }) {
   const [form, setForm] = useState({ name: '', subject: '', body: '' })
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [draftCampaignId, setDraftCampaignId] = useState(null)
 
   async function loadData() {
     if (!organization?.id) return
@@ -89,7 +90,7 @@ export function EmailMarketing({ organization, userEmail }) {
       supabase.from('organization_email_limits').select('*').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('leads').select('id,business_name,contact_name,email,city,state,email_marketing_opt_out').eq('organization_id', organization.id).eq('status', 'won').is('deleted_at', null).order('business_name'),
       supabase.from('email_marketing_contacts').select('id,email,contact_name,company_name,source,status,consent_confirmed,unsubscribed_at').eq('organization_id', organization.id).order('email'),
-      supabase.from('email_campaigns').select('id,name,subject,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at').eq('organization_id', organization.id).order('created_at', { ascending: false }).limit(30)
+      supabase.from('email_campaigns').select('id,name,subject,body_text,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at').eq('organization_id', organization.id).order('created_at', { ascending: false }).limit(30)
     ])
 
     if (connectionResult.error) setMessage(`Não foi possível carregar a conta de e-mail: ${connectionResult.error.message}`)
@@ -260,8 +261,8 @@ export function EmailMarketing({ organization, userEmail }) {
 
   async function createCampaign(event) {
     event.preventDefault()
-    if (connection?.status !== 'connected') return setMessage('Conecte uma conta Gmail ou Resend antes de enviar uma campanha.')
-    if (!selectedTotal) return setMessage('Selecione pelo menos um destinatário entre Clientes do CRM ou Lista de E-mail Marketing.')
+    if (draftCampaignId) return setMessage('Esta campanha já foi salva. Escolha os destinatários e depois inicie o envio.')
+    if (connection?.status !== 'connected') return setMessage('Conecte uma conta Gmail ou Resend antes de criar uma campanha.')
     if (!form.name.trim() || !form.subject.trim() || !form.body.trim()) return setMessage('Nome da campanha, assunto e mensagem são obrigatórios.')
     if (filesTotal > MAX_TOTAL_BYTES) return setMessage('O total de anexos excede 15 MB.')
 
@@ -274,8 +275,8 @@ export function EmailMarketing({ organization, userEmail }) {
         p_name: form.name.trim(),
         p_subject: form.subject.trim(),
         p_body_text: form.body,
-        p_client_ids: selectedClients.map(c => c.id),
-        p_marketing_contact_ids: selectedMarketingContacts.map(c => c.id)
+        p_client_ids: [],
+        p_marketing_contact_ids: []
       })
       if (error) throw error
       campaignId = data
@@ -295,14 +296,11 @@ export function EmailMarketing({ organization, userEmail }) {
         if (registerError) throw registerError
       }
 
-      const { error: queueError } = await supabase.rpc('queue_email_campaign', { p_campaign_id: campaignId })
-      if (queueError) throw queueError
-
-      setForm({ name: '', subject: '', body: '' })
+      setDraftCampaignId(campaignId)
       setSelected(new Set())
       setSelectedMarketing(new Set())
       setFiles([])
-      setMessage('Campanha criada e colocada na fila. E-mails duplicados entre as duas bases são enviados apenas uma vez.')
+      setMessage('Campanha salva como rascunho. Agora escolha os destinatários e, quando estiver pronto, inicie o envio.')
       await loadData()
     } catch (error) {
       if (campaignId) {
@@ -311,7 +309,60 @@ export function EmailMarketing({ organization, userEmail }) {
       if (uploaded.length) {
         try { await supabase.storage.from(BUCKET).remove(uploaded) } catch {}
       }
-      setMessage(error.message || 'Não foi possível criar a campanha.')
+      setMessage(error.message || 'Não foi possível salvar a campanha.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function saveRecipients(startSending = false) {
+    if (!draftCampaignId) return setMessage('Salve a campanha antes de escolher os destinatários.')
+    if (!selectedTotal) return setMessage('Selecione pelo menos um destinatário.')
+    setLoading(true); setMessage('')
+    try {
+      const { data, error } = await supabase.rpc('set_email_campaign_recipients', {
+        p_campaign_id: draftCampaignId,
+        p_client_ids: selectedClients.map(c => c.id),
+        p_marketing_contact_ids: selectedMarketingContacts.map(c => c.id)
+      })
+      if (error) throw error
+      const savedCount = Number(data || 0)
+      if (startSending) {
+        const { error: queueError } = await supabase.rpc('queue_email_campaign', { p_campaign_id: draftCampaignId })
+        if (queueError) throw queueError
+        setMessage(`Campanha iniciada com ${savedCount} destinatário${savedCount === 1 ? '' : 's'}.`)
+        setDraftCampaignId(null)
+        setForm({ name: '', subject: '', body: '' })
+        setSelected(new Set())
+        setSelectedMarketing(new Set())
+      } else {
+        setMessage(`${savedCount} destinatário${savedCount === 1 ? '' : 's'} salvo${savedCount === 1 ? '' : 's'} no rascunho.`)
+      }
+      await loadData()
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível salvar os destinatários.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function continueDraft(campaign) {
+    setLoading(true); setMessage('')
+    try {
+      const { data, error } = await supabase
+        .from('email_campaign_recipients')
+        .select('lead_id,marketing_contact_id')
+        .eq('campaign_id', campaign.id)
+      if (error) throw error
+      setDraftCampaignId(campaign.id)
+      setForm({ name: campaign.name || '', subject: campaign.subject || '', body: campaign.body_text || '' })
+      setSelected(new Set((data || []).map(r => r.lead_id).filter(Boolean)))
+      setSelectedMarketing(new Set((data || []).map(r => r.marketing_contact_id).filter(Boolean)))
+      setFiles([])
+      setMessage('Rascunho aberto. Revise ou escolha os destinatários e inicie o envio quando estiver pronto.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível abrir o rascunho.')
     } finally {
       setLoading(false)
     }
@@ -412,6 +463,7 @@ export function EmailMarketing({ organization, userEmail }) {
           )}
         </div>
 
+        {draftCampaignId && (
         <div className="email-recipient-box">
           <div className="email-recipient-head">
             <div>
@@ -459,9 +511,21 @@ export function EmailMarketing({ organization, userEmail }) {
 
         </div>
 
-        <div className="form-actions">
-          <button className="primary" disabled={loading || connection?.status !== 'connected' || selectedTotal === 0}>{loading ? 'Processando...' : 'Criar campanha e iniciar fila'}</button>
-          <span className="muted">Se a campanha ultrapassar o limite diário, os demais envios continuam automaticamente nos dias seguintes.</span>
+        )}
+
+        <div className="form-actions email-draft-actions">
+          {!draftCampaignId ? (
+            <>
+              <button className="primary" disabled={loading || connection?.status !== 'connected'}>{loading ? 'Salvando...' : 'Salvar campanha'}</button>
+              <span className="muted">Depois de salvar, você escolherá os destinatários antes de iniciar o envio.</span>
+            </>
+          ) : (
+            <>
+              <button type="button" className="secondary" disabled={loading || selectedTotal === 0} onClick={() => saveRecipients(false)}>Salvar destinatários</button>
+              <button type="button" className="primary" disabled={loading || selectedTotal === 0} onClick={() => saveRecipients(true)}>{loading ? 'Processando...' : 'Iniciar envio'}</button>
+              <span className="muted">{selectedTotal} destinatário{selectedTotal === 1 ? '' : 's'} selecionado{selectedTotal === 1 ? '' : 's'}.</span>
+            </>
+          )}
         </div>
       </form>
 
@@ -473,7 +537,14 @@ export function EmailMarketing({ organization, userEmail }) {
               <article className="email-campaign-row" key={campaign.id}>
                 <div><strong>{campaign.name}</strong><span>{campaign.subject}</span><small>{new Date(campaign.created_at).toLocaleString('pt-BR')} • {providerLabel(campaign.provider)} • {campaign.from_email}</small></div>
                 <div className="email-campaign-stats"><span className={`email-status ${campaign.status}`}>{campaignStatusLabel(campaign.status)}</span><strong>{campaign.sent_count}/{campaign.total_recipients} enviados</strong>{campaign.failed_count > 0 && <small>{campaign.failed_count} falha{campaign.failed_count === 1 ? '' : 's'}</small>}</div>
-                {['draft','queued','sending','paused','failed'].includes(campaign.status) && <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>}
+                {campaign.status === 'draft' ? (
+                  <div className="email-campaign-actions">
+                    <button type="button" className="secondary" disabled={loading} onClick={() => continueDraft(campaign)}>Continuar</button>
+                    <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>
+                  </div>
+                ) : ['queued','sending','paused','failed'].includes(campaign.status) ? (
+                  <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>
+                ) : null}
               </article>
             ))}
           </div>

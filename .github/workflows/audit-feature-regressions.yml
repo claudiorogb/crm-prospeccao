@@ -1,0 +1,49 @@
+name: Audit functional regressions
+
+on:
+  push:
+    paths:
+      - '.github/workflows/audit-feature-regressions.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch origin audit-baseline-effective-2026-09-14
+      - name: Compare effective baseline functions and CSS
+        run: |
+          python - <<'PY'
+          import re, subprocess
+          from pathlib import Path
+          current = Path('src/App.jsx').read_text(encoding='utf-8')
+          current_css = Path('src/styles.css').read_text(encoding='utf-8')
+          baseline = subprocess.check_output(['git','show','origin/audit-baseline-effective-2026-09-14:src/App.jsx'], text=True)
+          baseline_css = subprocess.check_output(['git','show','origin/audit-baseline-effective-2026-09-14:src/styles.css'], text=True)
+          fn = lambda s: set(re.findall(r'\bfunction\s+([A-Za-z0-9_]+)\s*\(', s))
+          base_fn, cur_fn = fn(baseline), fn(current)
+          missing = sorted(base_fn-cur_fn)
+          added = sorted(cur_fn-base_fn)
+          print('=== FUNCTIONS MISSING FROM CURRENT ===')
+          for x in missing: print(x)
+          print('=== FUNCTIONS ADDED TODAY/CURRENT ===')
+          for x in added: print(x)
+          css_re = re.compile(r'(?m)^\s*\.([A-Za-z0-9_-]+)')
+          base_css = set(css_re.findall(baseline_css)); cur_css=set(css_re.findall(current_css))
+          print('=== CSS CLASSES MISSING FROM CURRENT ===')
+          for x in sorted(base_css-cur_css): print(x)
+          markers = [
+            'crm_focus_lead','crm_overdue_alert_','customer_origin','lost_from_status','assigned_to',
+            'save_lead_journey_checkpoint','get_team_performance','get_seller_performance','get_origin_conversion',
+            'archive_record','resetPasswordForEmail','ResetPasswordScreen','proposal','negotiation','renegotiated_value',
+            'contract_value','contract_signed_at','sale_origin','seller_user_id','TeamPerformance','OverdueReturnsPage'
+          ]
+          print('=== BASELINE MARKERS MISSING FROM CURRENT ===')
+          for m in markers:
+            if m in baseline and m not in current: print(m)
+          PY

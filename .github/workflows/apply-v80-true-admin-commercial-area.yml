@@ -37,3 +37,5 @@ jobs:
             git commit -m "V80: make admin commercial area a full isolated client workspace"
             git push
           fi
+
+# Trigger V80 patch after workflow creation.

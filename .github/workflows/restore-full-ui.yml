@@ -1,0 +1,85 @@
+name: Controlled full UI restoration
+
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-full-ui.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout restoration branch
+        uses: actions/checkout@v4
+        with:
+          ref: restore-full-ui-2026-09-15
+          fetch-depth: 0
+
+      - name: Fetch audit baseline and main
+        run: |
+          git fetch origin audit-baseline-effective-2026-09-14
+          git fetch origin main
+
+      - name: Restore effective frontend from before today
+        run: |
+          git checkout origin/audit-baseline-effective-2026-09-14 -- src/App.jsx src/styles.css
+
+      - name: Reapply today's App and CSS changes in chronological order
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=e8c7b927be3da791c7d49f6187e8c8966fdb3319
+          for c in $(git rev-list --reverse ${BASE}..origin/main -- src/App.jsx src/styles.css); do
+            parent=$(git rev-parse ${c}^)
+            git diff --binary ${parent} ${c} -- src/App.jsx src/styles.css > /tmp/today.patch
+            if [ -s /tmp/today.patch ]; then
+              echo "Applying UI delta from $c"
+              git apply --3way /tmp/today.patch
+            fi
+          done
+
+      - name: Guardrails for restored features
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s = Path('src/App.jsx').read_text(encoding='utf-8')
+          required = {
+            'retornos atrasados': 'function OverdueReturnsPage',
+            'alerta atrasados': 'function OverdueReturnsAlert',
+            'desempenho equipe': 'function TeamPerformance',
+            'dashboard completo': 'Total de propostas enviadas',
+            'dashboard ganhos': 'Ganhos',
+            'dashboard perdidos': 'Perdidos',
+            'origem comercial': 'customer_origin',
+            'encerrados': 'function ClosedLeads',
+            'area comercial': 'AdminCommercialArea',
+            'cadastro manual': 'Cadastro manual',
+          }
+          missing = [name for name, marker in required.items() if marker not in s]
+          if missing:
+            raise SystemExit('Missing restored features: ' + ', '.join(missing))
+          if 'Selecionar todos os filtrados' in s:
+            raise SystemExit('Bulk selection returned to funnel unexpectedly')
+          print('Guardrails OK')
+          PY
+
+      - name: Validate production build
+        run: |
+          npm install
+          npm audit --omit=dev --audit-level=high
+          npm run build
+
+      - name: Commit restored consolidated frontend
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx src/styles.css
+          if git diff --cached --quiet; then
+            echo "No frontend changes"
+          else
+            git commit -m "restore: consolidate pre-existing UI with today's requested changes"
+            git push origin HEAD:restore-full-ui-2026-09-15
+          fi

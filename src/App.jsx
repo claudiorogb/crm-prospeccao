@@ -2096,8 +2096,6 @@ function Leads({ organization, settings, userEmail }) {
     } catch {}
     return { search: '', segment: 'all', status: 'all' }
   })
-  const LEADS_PAGE_SIZE = 50
-  const [page, setPage] = useState(0)
   const [totalLeads, setTotalLeads] = useState(0)
   const [statusCounts, setStatusCounts] = useState({})
   const [statusValueTotals, setStatusValueTotals] = useState({})
@@ -2142,50 +2140,124 @@ function Leads({ organization, settings, userEmail }) {
     }
   }
 
-  async function loadLeadPage(pageToLoad = page, currentFilter = filter) {
-    const { data, error } = await supabase.rpc('get_leads_page', {
-      p_organization_id: organization.id,
-      p_search: currentFilter.search.trim() || null,
-      p_target_segment_id: currentFilter.segment === 'all' ? null : currentFilter.segment,
-      p_status: currentFilter.status === 'all' ? null : currentFilter.status,
-      p_limit: LEADS_PAGE_SIZE,
-      p_offset: pageToLoad * LEADS_PAGE_SIZE
-    })
+  const ACTIVE_FUNNEL_STATUSES = ['new', 'qualified', 'queued', 'contacted', 'replied', 'interested', 'proposal', 'negotiation']
+  const TERMINAL_FUNNEL_STATUSES = ['not_interested', 'won', 'lost']
+  const TERMINAL_VISIBLE_LIMIT = 50
 
-    if (error) {
-      setMessage(`Não foi possível carregar os leads: ${error.message}`)
-      return
+  async function loadActiveStatus(status, currentFilter) {
+    const batchSize = 100
+    let offset = 0
+    let rows = []
+    let summary = null
+
+    while (true) {
+      const { data, error } = await supabase.rpc('get_leads_page', {
+        p_organization_id: organization.id,
+        p_search: currentFilter.search.trim() || null,
+        p_target_segment_id: currentFilter.segment === 'all' ? null : currentFilter.segment,
+        p_status: status,
+        p_limit: batchSize,
+        p_offset: offset
+      })
+      if (error) throw error
+
+      const payload = data || {}
+      if (!summary) summary = payload
+      const batchRows = Array.isArray(payload.rows) ? payload.rows : []
+      rows = [...rows, ...batchRows]
+      const total = Number(payload.total || 0)
+      if (!batchRows.length || rows.length >= total) break
+      offset += batchRows.length
     }
 
-    const payload = data || {}
-    const incomingRows = (Array.isArray(payload.rows) ? payload.rows : []).map(row => ({
-      ...row,
-      proposal_value: formatMoneyField(row.proposal_value),
-      renegotiated_value: formatMoneyField(row.renegotiated_value),
-      contract_value: formatMoneyField(row.contract_value)
-    }))
-    setLeads(current => incomingRows.map(row => {
-      const local = current.find(item => item.id === row.id)
-      const dirty = dirtyLeadFieldsRef.current[row.id]
-      if (!local || !dirty) return row
+    return {
+      status,
+      rows,
+      total: Number(summary?.total || rows.length),
+      value: Number(summary?.status_value_totals?.[status] || 0),
+      overdue: Number(summary?.status_overdue_counts?.[status] || 0)
+    }
+  }
 
-      const merged = { ...row }
-      Object.keys(dirty).forEach(field => {
-        merged[field] = local[field]
+  async function loadTerminalPreview(status, currentFilter, memberNames) {
+    let query = supabase
+      .from('leads')
+      .select('id,organization_id,campaign_id,target_segment_id,business_name,segment,phone,website,email,address,city,state,status,contact_name,last_contact_date,last_contacted_at,next_contact_date,commercial_notes,proposal_value,proposal_sent_at,renegotiated_value,contract_value,contract_signed_at,lost_from_status,captured_by,assigned_to,created_at,status_changed_at,campaigns(name),target_segments(name)')
+      .eq('organization_id', organization.id)
+      .eq('status', status)
+      .is('deleted_at', null)
+
+    if (currentFilter.segment !== 'all') query = query.eq('target_segment_id', currentFilter.segment)
+    const safeSearch = currentFilter.search.trim().replace(/[,%()]/g, ' ')
+    if (safeSearch) {
+      query = query.or(`business_name.ilike.%${safeSearch}%,city.ilike.%${safeSearch}%,phone.ilike.%${safeSearch}%`)
+    }
+
+    const { data, error } = await query
+      .order('status_changed_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(TERMINAL_VISIBLE_LIMIT)
+
+    if (error) throw error
+    const rows = (data || []).map(lead => {
+      const sellerId = lead.assigned_to || lead.captured_by || null
+      return {
+        ...lead,
+        seller_id: sellerId,
+        seller_name: sellerId ? (memberNames.get(sellerId) || 'Não atribuído') : 'Não atribuído'
+      }
+    })
+    const value = rows.reduce((sum, lead) => sum + Number(lead.contract_value ?? lead.renegotiated_value ?? lead.proposal_value ?? 0), 0)
+    return { status, rows, total: rows.length, value, overdue: 0 }
+  }
+
+  async function loadAllLeads(currentFilter = filter) {
+    try {
+      const { data: members } = await supabase
+        .from('organization_members')
+        .select('user_id,display_name')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+      const memberNames = new Map((members || []).map(member => [member.user_id, member.display_name || 'Usuário']))
+
+      const requestedActiveStatuses = currentFilter.status === 'all'
+        ? ACTIVE_FUNNEL_STATUSES
+        : ACTIVE_FUNNEL_STATUSES.includes(currentFilter.status) ? [currentFilter.status] : []
+      const requestedTerminalStatuses = currentFilter.status === 'all'
+        ? TERMINAL_FUNNEL_STATUSES
+        : TERMINAL_FUNNEL_STATUSES.includes(currentFilter.status) ? [currentFilter.status] : []
+
+      const [activeGroups, terminalGroups] = await Promise.all([
+        Promise.all(requestedActiveStatuses.map(status => loadActiveStatus(status, currentFilter))),
+        Promise.all(requestedTerminalStatuses.map(status => loadTerminalPreview(status, currentFilter, memberNames)))
+      ])
+
+      const groups = [...activeGroups, ...terminalGroups]
+      const rows = groups.flatMap(group => group.rows)
+      const counts = {}
+      const values = {}
+      const overdue = {}
+      groups.forEach(group => {
+        counts[group.status] = group.total
+        values[group.status] = group.value
+        overdue[group.status] = group.overdue
       })
-      return merged
-    }))
-    setTotalLeads(Number(payload.total || 0))
-    setStatusCounts(payload.status_counts || {})
-    setStatusValueTotals(payload.status_value_totals || {})
-    setStatusOverdueCounts(payload.status_overdue_counts || {})
-    setPage(pageToLoad)
+
+      setLeads(rows)
+      setTotalLeads(rows.length)
+      setStatusCounts(counts)
+      setStatusValueTotals(values)
+      setStatusOverdueCounts(overdue)
+    } catch (error) {
+      setMessage(`Não foi possível carregar os leads: ${error.message}`)
+    }
   }
 
   async function loadData() {
     await Promise.all([
       loadLookups(),
-      loadLeadPage(page, filter)
+      loadAllLeads(filter)
     ])
   }
 
@@ -2198,7 +2270,7 @@ function Leads({ organization, settings, userEmail }) {
     const timer = setTimeout(async () => {
       if (!active) return
       setSelected(new Set())
-      await loadLeadPage(0, filter)
+      await loadAllLeads(filter)
     }, 250)
 
     return () => {
@@ -2212,7 +2284,7 @@ function Leads({ organization, settings, userEmail }) {
 
     async function refreshVisibleLeads() {
       if (!active) return
-      await loadLeadPage(page, filter)
+      await loadAllLeads(filter)
     }
 
     const timer = setInterval(refreshVisibleLeads, 10000)
@@ -2547,14 +2619,6 @@ function Leads({ organization, settings, userEmail }) {
 
 
   const visibleLeads = leads
-  const totalPages = Math.max(1, Math.ceil(totalLeads / LEADS_PAGE_SIZE))
-
-  async function goToPage(nextPage) {
-    const safePage = Math.min(Math.max(nextPage, 0), totalPages - 1)
-    if (safePage === page) return
-    setSelected(new Set())
-    await loadLeadPage(safePage, filter)
-  }
 
   const eligibleVisibleLeads = visibleLeads.filter(l => l.status !== 'discarded')
 
@@ -2818,7 +2882,7 @@ function Leads({ organization, settings, userEmail }) {
         </select>
         <select value={filter.status} onChange={e=>setFilter({...filter,status:e.target.value})}>
           <option value="all">Todos os status</option>
-          {Object.entries(statusLabel).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+          {Object.entries(statusLabel).filter(([value]) => value !== 'discarded').map(([value,label])=><option key={value} value={value}>{label}</option>)}
         </select>
       </section>
 
@@ -4361,19 +4425,25 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
                 <span className="muted">(opcional)</span>
               </span>
               <select value={form.target_segment_id} onChange={e=>setForm({...form,target_segment_id:e.target.value})}>
+                <option value="">Sem público-alvo</option>
                 <option value="">Não informar</option>
                 {targetSegments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}
               </select>
             </label>
             <label>
               Origem
-              <select value={form.customer_origin} onChange={e=>setForm({...form,customer_origin:e.target.value})} required>
-                <option value="">Selecione</option>
-                <option value="Base">Base</option>
-                <option value="Captação ativa">Captação ativa</option>
-                <option value="Recomendação">Recomendação</option>
+              <select value={form.customer_origin} onChange={e=>setForm({...form,customer_origin:e.target.value})}>
+                <option value="">Não informado</option>
+                <option value="CRM">CRM</option>
+                <option value="Prospecção vendedor">Prospecção vendedor</option>
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="E-mail marketing">E-mail marketing</option>
                 <option value="Redes sociais">Redes sociais</option>
                 <option value="Google">Google</option>
+                <option value="Recomendação">Recomendação</option>
+                <option value="Base">Base</option>
+                <option value="Captação ativa">Captação ativa</option>
+                <option value="Outro">Outro</option>
               </select>
             </label>
           </div>
@@ -4478,6 +4548,227 @@ function NotInterestedRepository({ organization, userEmail }) {
 }
 
 
+function ClosedLeads({ organization, userEmail }) {
+  const [rows, setRows] = useState([])
+  const [campaigns, setCampaigns] = useState([])
+  const [targetSegments, setTargetSegments] = useState([])
+  const [total, setTotal] = useState(0)
+  const [limit, setLimit] = useState(100)
+  const [message, setMessage] = useState('')
+  const [filter, setFilter] = useState({
+    search: '',
+    status: 'all',
+    segment: 'all',
+    campaign: 'all',
+    from: '',
+    to: ''
+  })
+
+  async function loadLookups() {
+    const [{ data: campaignData }, { data: targetData }] = await Promise.all([
+      supabase
+        .from('campaigns')
+        .select('id,name')
+        .eq('organization_id', organization.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('target_segments')
+        .select('id,name')
+        .eq('organization_id', organization.id)
+        .order('name')
+    ])
+
+    setCampaigns(campaignData || [])
+    setTargetSegments(targetData || [])
+  }
+
+  async function getVisibleTerminalIds() {
+    const statuses = ['lost', 'not_interested']
+    const groups = await Promise.all(statuses.map(async status => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('organization_id', organization.id)
+        .eq('status', status)
+        .is('deleted_at', null)
+        .order('status_changed_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+      return data || []
+    }))
+
+    return groups.flat().map(item => item.id)
+  }
+
+  async function loadClosed(requestedLimit = limit, currentFilter = filter) {
+    setMessage('')
+    try {
+      const visibleIds = await getVisibleTerminalIds()
+
+      let query = supabase
+        .from('leads')
+        .select('id,business_name,phone,city,state,status,target_segment_id,campaign_id,contact_name,proposal_value,renegotiated_value,contract_value,status_changed_at,campaigns(name),target_segments(name)', { count: 'exact' })
+        .eq('organization_id', organization.id)
+        .in('status', ['lost', 'not_interested'])
+        .is('deleted_at', null)
+
+      if (visibleIds.length) {
+        query = query.not('id', 'in', `(${visibleIds.join(',')})`)
+      }
+
+      if (currentFilter.status !== 'all') query = query.eq('status', currentFilter.status)
+      if (currentFilter.segment !== 'all') query = query.eq('target_segment_id', currentFilter.segment)
+      if (currentFilter.campaign !== 'all') query = query.eq('campaign_id', currentFilter.campaign)
+      if (currentFilter.from) query = query.gte('status_changed_at', `${currentFilter.from}T00:00:00`)
+      if (currentFilter.to) query = query.lte('status_changed_at', `${currentFilter.to}T23:59:59.999`)
+
+      const safeSearch = currentFilter.search.trim().replace(/[,%()]/g, ' ')
+      if (safeSearch) {
+        query = query.or(`business_name.ilike.%${safeSearch}%,city.ilike.%${safeSearch}%,phone.ilike.%${safeSearch}%`)
+      }
+
+      const { data, error, count } = await query
+        .order('status_changed_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(0, Math.max(requestedLimit - 1, 0))
+
+      if (error) throw error
+      setRows(data || [])
+      setTotal(Number(count || 0))
+    } catch (error) {
+      setRows([])
+      setTotal(0)
+      setMessage(`Não foi possível carregar os encerrados: ${error.message}`)
+    }
+  }
+
+  useEffect(() => {
+    loadLookups()
+  }, [organization.id])
+
+  useEffect(() => {
+    let active = true
+    setLimit(100)
+    const timer = setTimeout(async () => {
+      if (!active) return
+      await loadClosed(100, filter)
+    }, 250)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [organization.id, filter.search, filter.status, filter.segment, filter.campaign, filter.from, filter.to])
+
+  async function loadMore() {
+    const next = limit + 100
+    setLimit(next)
+    await loadClosed(next, filter)
+  }
+
+  const statusName = status => status === 'lost' ? 'Perdido' : 'Sem interesse'
+
+  return (
+    <>
+      <header className="topbar">
+        <div>
+          <span className="eyebrow">HISTÓRICO COMERCIAL</span>
+          <h1>Encerrados</h1>
+          <p className="muted">Negócios Perdidos e Sem interesse que ultrapassaram os 50 mais recentes de cada coluna do Kanban.</p>
+        </div>
+        <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
+      </header>
+
+      {message && <div className="notice error">{message}</div>}
+
+      <section className="panel leads-toolbar">
+        <div className="search-box">
+          <Search size={17}/>
+          <input
+            value={filter.search}
+            onChange={e => setFilter({ ...filter, search: e.target.value })}
+            placeholder="Buscar empresa, cidade ou telefone"
+          />
+        </div>
+        <select value={filter.status} onChange={e => setFilter({ ...filter, status: e.target.value })}>
+          <option value="all">Todos os encerrados</option>
+          <option value="lost">Perdido</option>
+          <option value="not_interested">Sem interesse</option>
+        </select>
+        <select value={filter.segment} onChange={e => setFilter({ ...filter, segment: e.target.value })}>
+          <option value="all">Todos os públicos</option>
+          {targetSegments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+      </section>
+
+      <section className="panel">
+        <div className="field-grid three">
+          <label>
+            Campanha
+            <select value={filter.campaign} onChange={e => setFilter({ ...filter, campaign: e.target.value })}>
+              <option value="all">Todas as campanhas</option>
+              {campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+          <label>
+            Encerrado a partir de
+            <input type="date" value={filter.from} onChange={e => setFilter({ ...filter, from: e.target.value })} />
+          </label>
+          <label>
+            Encerrado até
+            <input type="date" value={filter.to} onChange={e => setFilter({ ...filter, to: e.target.value })} />
+          </label>
+        </div>
+      </section>
+
+      <section className="panel admin-search-panel compact-search-panel">
+        <span className="admin-result-count"><strong>{total}</strong> registro{total === 1 ? '' : 's'} encerrado{total === 1 ? '' : 's'}</span>
+      </section>
+
+      <section className="compact-admin-list">
+        {rows.length === 0 ? (
+          <article className="panel empty-state compact-empty">
+            <CheckCircle2 size={26}/>
+            <h2>Nenhum registro encerrado</h2>
+            <p>Enquanto houver até 50 Perdidos e 50 Sem interesse, eles permanecem somente no Kanban.</p>
+          </article>
+        ) : rows.map(item => {
+          const value = item.contract_value ?? item.renegotiated_value ?? item.proposal_value
+          return (
+            <article className="panel compact-admin-row" key={item.id}>
+              <div className="compact-admin-main">
+                <div className="compact-admin-title-line">
+                  <span className="compact-status inactive">{statusName(item.status)}</span>
+                  <strong>{item.business_name}</strong>
+                </div>
+                <p>
+                  {item.target_segments?.name || 'Sem público definido'}
+                  {item.city ? ` • ${item.city}${item.state ? `/${item.state}` : ''}` : ''}
+                  {item.contact_name ? ` • ${item.contact_name}` : ''}
+                </p>
+                <div className="compact-term-line">
+                  {item.campaigns?.name && <span>{item.campaigns.name}</span>}
+                  {item.phone && <span>{item.phone}</span>}
+                  {value != null && <em>{formatCurrency(value)}</em>}
+                  <em>Encerrado em {formatDateTime(item.status_changed_at)}</em>
+                </div>
+              </div>
+            </article>
+          )
+        })}
+      </section>
+
+      {rows.length < total && (
+        <div className="form-actions">
+          <button className="secondary" onClick={loadMore}>Carregar mais 100</button>
+        </div>
+      )}
+    </>
+  )
+}
+
 function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {
   const [section, setSection] = useState('leads')
   const [leadSection, setLeadSection] = useState('funnel')
@@ -4487,6 +4778,7 @@ function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {
       <div className="workspace-tabs">
         <button className={section === 'leads' ? 'active' : ''} onClick={() => setSection('leads')}>Leads</button>
         <button className={section === 'clients' ? 'active' : ''} onClick={() => setSection('clients')}>Clientes</button>
+        <button className={section === 'closed' ? 'active' : ''} onClick={() => setSection('closed')}>Encerrados</button>
       </div>
 
       {section === 'leads' && (
@@ -4503,6 +4795,7 @@ function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {
       )}
 
       {section === 'clients' && <Clients organization={organization} userEmail={userEmail} userId={userId} />}
+      {section === 'closed' && <ClosedLeads organization={organization} userEmail={userEmail} />}
     </>
   )
 }

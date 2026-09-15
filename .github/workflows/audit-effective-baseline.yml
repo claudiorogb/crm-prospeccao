@@ -1,0 +1,29 @@
+name: Audit effective baseline
+
+on:
+  push:
+    paths:
+      - '.github/workflows/audit-effective-baseline.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install
+        run: npm install
+      - name: Materialize historical build patches
+        run: npm run build
+      - name: Commit effective frontend
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx src/styles.css
+          git commit -m "audit: materialize effective frontend before 2026-09-15" || exit 0
+          git push

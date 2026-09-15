@@ -1,0 +1,39 @@
+name: Apply V80 true admin commercial area
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v80_true_admin_commercial_area.py'
+      - '.github/workflows/apply-v80-true-admin-commercial-area.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply V80 patch
+        run: python scripts/apply_v80_true_admin_commercial_area.py
+
+      - name: Validate current application
+        run: |
+          npm install
+          npm run build
+
+      - name: Commit generated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "V80: make admin commercial area a full isolated client workspace"
+            git push
+          fi

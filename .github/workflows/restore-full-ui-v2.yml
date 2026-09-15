@@ -1,4 +1,4 @@
-name: Publish audited CRM interface
+name: Hotfix funnel blank page
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  publish:
+  hotfix:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
@@ -18,34 +18,44 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Fetch audited restoration
-        run: git fetch origin restore-full-ui-v2-2026-09-15
+      - name: Remove stale funnel page dependency
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/App.jsx')
+          s=p.read_text(encoding='utf-8')
+          old="}, [organization.id, page, filter.search, filter.segment, filter.status])"
+          new="}, [organization.id, filter.search, filter.segment, filter.status])"
+          count=s.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly 1 stale page dependency, found {count}')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+          PY
 
-      - name: Publish audited interface only
-        run: git checkout origin/restore-full-ui-v2-2026-09-15 -- src/App.jsx src/styles.css
-
-      - name: Guardrails
+      - name: Runtime guardrail for Leads
         run: |
           python - <<'PY'
           from pathlib import Path
           s=Path('src/App.jsx').read_text(encoding='utf-8')
-          required=[
-            'function OverdueReturnsPage','function OverdueReturnsAlert','function OverdueReturnsNavItem',
-            'Total de propostas enviadas','Total em Negociação','function TeamPerformance','function SalesPage',
-            'function ManualLeadRegistration','Cadastro novo lead','function NotInterestedRepository',
-            'function LeadExportPanel','function ResetPasswordScreen','save_lead_journey_checkpoint',
-            'AdminCommercialArea','AdminIntegrations','CustomerImportPanel','function ClosedLeads',
-            'TERMINAL_VISIBLE_LIMIT = 50','async function loadAllLeads','E-mail marketing','Prospecção vendedor'
-          ]
-          missing=[x for x in required if x not in s]
-          if missing: raise SystemExit('Missing: '+', '.join(missing))
           a=s.index('function Leads({ organization, settings, userEmail }) {')
           b=s.index('\nfunction Clients({ organization, userEmail, userId }) {',a)
           leads=s[a:b]
-          forbidden=['Selecionar todos os filtrados','LEADS_PAGE_SIZE','const [page, setPage]']
+          forbidden=[
+            'organization.id, page, filter.search',
+            'LEADS_PAGE_SIZE',
+            'const [page, setPage]',
+            'goToPage(',
+            'loadLeadPage('
+          ]
           bad=[x for x in forbidden if x in leads]
-          if bad: raise SystemExit('Forbidden funnel remnants: '+', '.join(bad))
-          print('Publish guardrails OK')
+          if bad:
+              raise SystemExit('Stale pagination references remain in Leads: '+', '.join(bad))
+          required=['async function loadAllLeads','TERMINAL_VISIBLE_LIMIT = 50','function ClosedLeads']
+          missing=[x for x in required if x not in s]
+          if missing:
+              raise SystemExit('Required funnel features missing: '+', '.join(missing))
+          print('Funnel runtime guardrails OK')
           PY
 
       - name: Validate production build
@@ -54,14 +64,10 @@ jobs:
           npm audit --omit=dev --audit-level=high
           npm run build
 
-      - name: Commit to main
+      - name: Commit hotfix
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.jsx src/styles.css
-          if git diff --cached --quiet; then
-            echo "No source changes"
-          else
-            git commit -m "restore: publish audited complete CRM interface"
-            git push origin HEAD:main
-          fi
+          git add src/App.jsx
+          git commit -m "fix: remove stale page reference from funnel runtime"
+          git push origin HEAD:main

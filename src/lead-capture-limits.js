@@ -145,7 +145,11 @@ async function renderAdminPanel() {
       setTimeout(() => renderAdminPanel(), 300)
     })
   } catch (error) {
-    panel.innerHTML = `<div class="notice error">Não foi possível carregar o limite semanal: ${error?.message || error}</div>`
+    panel.replaceChildren()
+    const errorNotice = document.createElement('div')
+    errorNotice.className = 'notice error'
+    errorNotice.textContent = `Não foi possível carregar o limite semanal: ${error?.message || error}`
+    panel.appendChild(errorNotice)
   }
 }
 

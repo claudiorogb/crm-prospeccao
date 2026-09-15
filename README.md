@@ -1,3 +1,9 @@
+# AXIVA CRM V76
+
+**V76:** fundação multiempresa para integração com ERP e outras plataformas. Inclui conexões em modo de preparação, mapeamento de IDs externos, filas de entrada e saída idempotentes, eventos de venda, permissões restritas e correções adicionais de segurança. Nenhuma integração externa é ativada automaticamente.
+
+Detalhes técnicos e regras para o primeiro conector: [docs/integrations.md](docs/integrations.md).
+
 # CRM Prospecção V30
 
 **V30:** envio da fila movido para o backend. O navegador não precisa permanecer aberto para as mensagens agendadas serem processadas.

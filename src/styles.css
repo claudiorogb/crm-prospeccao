@@ -2241,3 +2241,35 @@ select:focus {
   .sending-row { grid-template-columns: 28px 1fr; }
   .sending-row > span { grid-column: 2; }
 }
+
+/* V76 - preparacao para integracoes externas */
+.integration-security-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.integration-security-note h2 { margin-bottom: 6px; }
+.integration-security-note p { margin-bottom: 0; max-width: 720px; }
+.integration-queue-summary { display: flex; flex: 0 0 auto; gap: 8px; }
+.integration-queue-summary span {
+  display: grid;
+  min-width: 92px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+.integration-queue-summary strong { color: #17212b; font-size: 18px; }
+.integration-queue-summary .has-error,
+.integration-queue-summary .has-error strong,
+.integration-error-text { color: #b42318; }
+.integration-row { min-height: 84px; }
+
+@media (max-width: 760px) {
+  .integration-security-note { align-items: stretch; flex-direction: column; }
+  .integration-queue-summary span { flex: 1; }
+}

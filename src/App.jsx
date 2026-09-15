@@ -6,6 +6,7 @@ import {
   Pause, Play, RefreshCw, XCircle, CheckCircle2, Activity, UserPlus,
   Save, ChevronDown, Menu, X
 } from 'lucide-react'
+import { Link2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
 const UF_OPTIONS = [
@@ -68,6 +69,23 @@ function currentBrazilDate() {
 function formatPhone(value) {
   if (!value) return '—'
   return String(value)
+}
+
+function safeExternalUrl(value) {
+  if (!value) return null
+  try {
+    const url = new URL(String(value))
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function ExternalWebsiteLink({ value }) {
+  const url = safeExternalUrl(value)
+  return url
+    ? <a className="lead-site-link" href={url} target="_blank" rel="noopener noreferrer">Abrir site</a>
+    : <span />
 }
 
 function formatCurrency(value) {
@@ -2016,7 +2034,7 @@ function Leads({ organization, settings, userEmail }) {
                         </label>
 
                         <div className="kanban-card-footer">
-                          {l.website ? <a className="lead-site-link" href={l.website} target="_blank" rel="noreferrer">Abrir site</a> : <span />}
+                          <ExternalWebsiteLink value={l.website} />
                           <button type="button" className="text-danger" onClick={()=>deleteLead(l.id,l.business_name)} title="Remove o registro definitivamente">
                             <Trash2 size={14}/> Excluir
                           </button>
@@ -4407,6 +4425,211 @@ function AdminMessages({ organizations, userEmail }) {
   )
 }
 
+const INTEGRATION_CATEGORY_LABELS = {
+  erp: 'ERP',
+  ecommerce: 'E-commerce',
+  finance: 'Financeiro',
+  invoicing: 'Emissão fiscal',
+  custom: 'Outro sistema'
+}
+
+const INTEGRATION_DIRECTION_LABELS = {
+  outbound: 'AXIVA → plataforma',
+  inbound: 'Plataforma → AXIVA',
+  bidirectional: 'Bidirecional'
+}
+
+function AdminIntegrations({ organizations }) {
+  const [organizationId, setOrganizationId] = useState(organizations[0]?.id || '')
+  const [connections, setConnections] = useState([])
+  const [queueStats, setQueueStats] = useState({ pending: 0, failed: 0 })
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState({
+    display_name: '',
+    category: 'erp',
+    sync_direction: 'outbound'
+  })
+
+  useEffect(() => {
+    if (!organizationId && organizations[0]?.id) setOrganizationId(organizations[0].id)
+  }, [organizations, organizationId])
+
+  async function load() {
+    if (!organizationId) {
+      setConnections([])
+      setQueueStats({ pending: 0, failed: 0 })
+      return
+    }
+
+    setLoading(true)
+    const [connectionsResult, pendingResult, failedResult] = await Promise.all([
+      supabase
+        .from('integration_connections')
+        .select('id,organization_id,category,provider_key,display_name,sync_direction,status,api_version,credentials_configured,last_sync_at,last_success_at,last_error_summary,created_at')
+        .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('integration_outbox')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .in('status', ['pending', 'processing']),
+      supabase
+        .from('integration_outbox')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .in('status', ['failed', 'dead_letter'])
+    ])
+
+    if (connectionsResult.error) {
+      setMessage(`Não foi possível carregar as integrações: ${connectionsResult.error.message}`)
+      setConnections([])
+    } else {
+      setConnections(connectionsResult.data || [])
+      setQueueStats({ pending: pendingResult.count || 0, failed: failedResult.count || 0 })
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [organizationId])
+
+  async function savePreparation(e) {
+    e.preventDefault()
+    const displayName = form.display_name.trim()
+    const providerKey = slugify(displayName).slice(0, 50)
+
+    if (displayName.length < 2 || providerKey.length < 2) {
+      setMessage('Informe o nome da plataforma com pelo menos dois caracteres.')
+      return
+    }
+
+    setLoading(true)
+    setMessage('')
+    const { error } = await supabase.from('integration_connections').insert({
+      organization_id: organizationId,
+      category: form.category,
+      provider_key: providerKey,
+      display_name: displayName,
+      sync_direction: form.sync_direction
+    })
+
+    if (error) {
+      setMessage(`Não foi possível preparar a integração: ${error.message}`)
+    } else {
+      setForm({ display_name: '', category: 'erp', sync_direction: 'outbound' })
+      setMessage('Integração preparada. Nenhuma conexão externa foi ativada.')
+      await load()
+    }
+    setLoading(false)
+  }
+
+  async function togglePreparation(connection) {
+    const nextStatus = connection.status === 'inactive' ? 'draft' : 'inactive'
+    setLoading(true)
+    setMessage('')
+    const { error } = await supabase
+      .from('integration_connections')
+      .update({ status: nextStatus })
+      .eq('id', connection.id)
+      .eq('organization_id', organizationId)
+
+    if (error) setMessage(`Não foi possível atualizar a preparação: ${error.message}`)
+    else await load()
+    setLoading(false)
+  }
+
+  return (
+    <>
+      <AdminSectionHeader
+        title="Integrações"
+        description="Prepare conexões com ERP e outras plataformas sem expor credenciais no navegador."
+        actions={<button className="secondary inline-btn" onClick={load} disabled={loading}><RefreshCw size={15}/> Atualizar</button>}
+      />
+
+      <label className="admin-org-select">
+        Organização
+        <select value={organizationId} onChange={e => setOrganizationId(e.target.value)}>
+          {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      </label>
+
+      {message && <div className="notice">{message}</div>}
+
+      <section className="panel integration-security-note">
+        <div>
+          <span className="eyebrow">PREPARAÇÃO SEGURA</span>
+          <h2>Cadastre a intenção de integração</h2>
+          <p className="muted">
+            Esta etapa não envia dados. Credenciais, testes e ativação serão feitos no servidor quando o primeiro conector for escolhido.
+          </p>
+        </div>
+        <div className="integration-queue-summary" aria-label="Situação da fila de integrações">
+          <span><strong>{queueStats.pending}</strong> aguardando</span>
+          <span className={queueStats.failed ? 'has-error' : ''}><strong>{queueStats.failed}</strong> com falha</span>
+        </div>
+      </section>
+
+      <section className="panel">
+        <form onSubmit={savePreparation} className="campaign-form">
+          <div className="field-grid three">
+            <label>
+              Tipo de plataforma
+              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                {Object.entries(INTEGRATION_CATEGORY_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+            </label>
+            <label>
+              Plataforma
+              <input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })} placeholder="Ex.: ERP atual ou sistema próprio" maxLength={80} required />
+            </label>
+            <label>
+              Fluxo previsto
+              <select value={form.sync_direction} onChange={e => setForm({ ...form, sync_direction: e.target.value })}>
+                {Object.entries(INTEGRATION_DIRECTION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+            </label>
+          </div>
+          <button className="primary inline-btn" disabled={loading || !organizationId}><Link2 size={16}/> Preparar integração</button>
+        </form>
+      </section>
+
+      <section className="compact-admin-list integration-list">
+        {connections.length === 0 ? (
+          <div className="panel compact-empty">
+            <h2>Nenhuma integração preparada</h2>
+            <p className="muted">O CRM continua funcionando normalmente sem conexão externa.</p>
+          </div>
+        ) : connections.map(connection => (
+          <article className="panel compact-admin-row integration-row" key={connection.id}>
+            <div className="compact-admin-main">
+              <div className="compact-admin-title-line">
+                <strong>{connection.display_name}</strong>
+                <span className={`compact-status ${connection.status === 'active' ? 'active' : 'inactive'}`}>
+                  {connection.status === 'active' ? 'Ativa' : connection.status === 'error' ? 'Com falha' : connection.status === 'inactive' ? 'Pausada' : 'Preparação'}
+                </span>
+              </div>
+              <p>{INTEGRATION_CATEGORY_LABELS[connection.category] || connection.category} • {INTEGRATION_DIRECTION_LABELS[connection.sync_direction] || connection.sync_direction}</p>
+              <div className="compact-term-line">
+                <span>{connection.credentials_configured ? 'Credenciais protegidas no servidor' : 'Sem credenciais cadastradas'}</span>
+                {connection.last_success_at && <em>Último sucesso: {formatDateTime(connection.last_success_at)}</em>}
+                {connection.last_error_summary && <em className="integration-error-text">Requer revisão</em>}
+              </div>
+            </div>
+            {['draft', 'inactive'].includes(connection.status) && (
+              <div className="row-actions compact-row-actions">
+                <button type="button" className="secondary mini" disabled={loading} onClick={() => togglePreparation(connection)}>
+                  {connection.status === 'inactive' ? 'Retomar preparação' : 'Pausar preparação'}
+                </button>
+              </div>
+            )}
+          </article>
+        ))}
+      </section>
+    </>
+  )
+}
+
 function AdminAudit({ organizations, userEmail }) {
   const [organizationId, setOrganizationId] = useState('')
   const [logs, setLogs] = useState([])
@@ -4485,6 +4708,7 @@ function Administration({ organizations, reloadOrganizations, userEmail }) {
     ['catalog', 'Catálogo CRM', Tags],
     ['clients', 'Organizações', Building2],
     ['google', 'Google Places', Database],
+    ['integrations', 'Integrações', Link2],
     ['defaults', 'Padrões', SlidersHorizontal],
     ['messages', 'Mensagens', MessageSquareText],
     ['audit', 'Auditoria', History]
@@ -4523,6 +4747,7 @@ function Administration({ organizations, reloadOrganizations, userEmail }) {
           {section === 'catalog' && <CatalogAdmin userEmail={userEmail} />}
           {section === 'clients' && <AdminClients organizations={organizations} reloadOrganizations={reloadOrganizations} />}
           {section === 'google' && <AdminGooglePlaces organizations={organizations} />}
+          {section === 'integrations' && <AdminIntegrations organizations={organizations} />}
           {section === 'defaults' && <AdminDefaults organizations={organizations} />}
           {section === 'messages' && <AdminMessages organizations={organizations} userEmail={userEmail} />}
           {section === 'audit' && <AdminAudit organizations={organizations} userEmail={userEmail} />}

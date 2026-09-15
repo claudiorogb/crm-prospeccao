@@ -9,6 +9,7 @@ import {
 import { Link2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import CustomerImportPanel from './customer-import'
+import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
@@ -4275,6 +4276,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['capture','Captação'],
     ['sending','Enviar mensagem'],
     ['messages','Mensagens'],
+    ['email','E-mail marketing'],
     ['whatsapp','WhatsApp']
   ]
 
@@ -4292,6 +4294,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
       {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
+      {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} />}
       {section === 'whatsapp' && <AdminWhatsApp organizations={[organization]} userEmail={userEmail} userMode={true} />}
     </>
   )
@@ -7299,6 +7302,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
     ['overview', 'Visão geral', Shield],
     ['users', 'Usuários', Users],
     ['whatsapp', 'WhatsApp', Phone],
+    ['email', 'E-mail', Send],
     ['queue', 'Fila', ListChecks],
     ['catalog', 'Catálogo CRM', Tags],
     ['clients', 'Organizações', Building2],
@@ -7338,6 +7342,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
           {section === 'overview' && <AdminOverview organizations={productionOrganizations} />}
           {section === 'users' && <AdminUsers organizations={productionOrganizations} userEmail={userEmail} />}
           {section === 'whatsapp' && <AdminWhatsApp organizations={productionOrganizations} userEmail={userEmail} />}
+          {section === 'email' && <AdminEmailMarketing organizations={productionOrganizations} userEmail={userEmail} />}
           {section === 'queue' && <AdminQueue organizations={productionOrganizations} />}
           {section === 'catalog' && <CatalogAdmin userEmail={userEmail} />}
           {section === 'clients' && <AdminClients organizations={productionOrganizations} reloadOrganizations={reloadOrganizations} />}

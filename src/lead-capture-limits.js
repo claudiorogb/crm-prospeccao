@@ -37,7 +37,7 @@ async function loadSettings(organizationId) {
   if (!organizationId) return null
   const { data, error } = await supabase
     .from('organization_settings')
-    .select('organization_id,lead_capture_weekly_limit,lead_capture_weekly_usage,lead_capture_week_start')
+    .select('organization_id,lead_capture_weekly_limit,lead_capture_weekly_usage,lead_capture_week_start,google_places_leads_per_capture')
     .eq('organization_id', organizationId)
     .single()
 
@@ -50,23 +50,31 @@ function fieldMarkup(settings) {
   const limit = settings?.lead_capture_weekly_limit
   const value = limit == null ? '' : String(limit)
   const displayLimit = limit == null ? 'Ilimitado' : limit
+  const leadsPerCapture = Number(settings?.google_places_leads_per_capture || 40)
 
   return `
-    <span class="eyebrow">LIMITE SEMANAL</span>
+    <span class="eyebrow">PLANO DE CAPTAÇÃO</span>
     <h2>Captações automáticas</h2>
-    <p class="muted">Defina quantas vezes esta empresa pode iniciar a captação automática por semana. O contador reinicia na segunda-feira.</p>
+    <p class="muted">Defina quantas captações esta empresa pode iniciar por semana e quantos leads cada captação pode buscar.</p>
     <div class="campaign-form">
-      <label>
-        Captações permitidas por semana
-        <input id="axiva-weekly-capture-input" type="number" min="0" step="1" value="${value}" placeholder="Sem limite" />
-      </label>
+      <div class="field-grid">
+        <label>
+          Captações permitidas por semana
+          <input id="axiva-weekly-capture-input" type="number" min="0" step="1" value="${value}" placeholder="Sem limite" />
+        </label>
+        <label>
+          Leads por captação
+          <input id="axiva-leads-per-capture-input" type="number" min="1" max="60" step="1" value="${leadsPerCapture}" />
+        </label>
+      </div>
       <div class="settings-preview">
         <div><strong>Uso nesta semana:</strong> ${usage} / ${displayLimit}</div>
         <div><strong>Disponível:</strong> ${remainingText(settings)}</div>
+        <div><strong>Consumo Google por captação:</strong> até ${Math.ceil(leadsPerCapture / 20)} chamada${Math.ceil(leadsPerCapture / 20) === 1 ? '' : 's'} Enterprise</div>
       </div>
-      <small class="muted">Deixe o campo vazio para não aplicar limite. O valor 0 bloqueia novas captações.</small>
+      <small class="muted">Até 20 leads = 1 chamada; 21 a 40 = até 2; 41 a 60 = até 3. O contador semanal reinicia na segunda-feira.</small>
       <div class="form-actions">
-        <button id="axiva-weekly-capture-save" class="primary inline-btn" type="button">Salvar limite semanal</button>
+        <button id="axiva-weekly-capture-save" class="primary inline-btn" type="button">Salvar plano de captação</button>
       </div>
       <div id="axiva-weekly-capture-notice"></div>
     </div>
@@ -101,7 +109,7 @@ async function renderAdminPanel() {
 
   panel.dataset.organizationId = organizationId
   panel.dataset.loaded = 'false'
-  panel.innerHTML = '<p class="muted">Carregando limite semanal...</p>'
+  panel.innerHTML = '<p class="muted">Carregando plano de captação...</p>'
 
   try {
     const settings = await loadSettings(organizationId)
@@ -110,16 +118,24 @@ async function renderAdminPanel() {
     panel.dataset.loaded = 'true'
 
     const saveButton = panel.querySelector('#axiva-weekly-capture-save')
-    const input = panel.querySelector('#axiva-weekly-capture-input')
+    const weeklyInput = panel.querySelector('#axiva-weekly-capture-input')
+    const leadsInput = panel.querySelector('#axiva-leads-per-capture-input')
     const notice = panel.querySelector('#axiva-weekly-capture-notice')
 
     saveButton?.addEventListener('click', async () => {
-      const raw = input.value.trim()
-      const weeklyLimit = raw === '' ? null : Number(raw)
+      const rawWeekly = weeklyInput.value.trim()
+      const weeklyLimit = rawWeekly === '' ? null : Number(rawWeekly)
+      const leadsPerCapture = Number(leadsInput.value)
 
       if (weeklyLimit !== null && (!Number.isInteger(weeklyLimit) || weeklyLimit < 0)) {
         notice.className = 'notice error'
-        notice.textContent = 'Informe um número inteiro igual ou maior que zero.'
+        notice.textContent = 'Informe um número inteiro igual ou maior que zero para o limite semanal.'
+        return
+      }
+
+      if (!Number.isInteger(leadsPerCapture) || leadsPerCapture < 1 || leadsPerCapture > 60) {
+        notice.className = 'notice error'
+        notice.textContent = 'Leads por captação deve estar entre 1 e 60.'
         return
       }
 
@@ -127,28 +143,29 @@ async function renderAdminPanel() {
       notice.className = ''
       notice.textContent = ''
 
-      const { error } = await supabase
-        .from('organization_settings')
-        .update({ lead_capture_weekly_limit: weeklyLimit })
-        .eq('organization_id', organizationId)
+      const { data, error } = await supabase.rpc('admin_set_lead_capture_settings', {
+        p_organization_id: organizationId,
+        p_weekly_limit: weeklyLimit,
+        p_leads_per_capture: leadsPerCapture
+      })
 
-      if (error) {
+      if (error || !data?.length) {
         notice.className = 'notice error'
-        notice.textContent = error.message
+        notice.textContent = error?.message || 'Não foi possível confirmar a gravação.'
         saveButton.disabled = false
         return
       }
 
       notice.className = 'notice'
-      notice.textContent = 'Limite semanal salvo.'
+      notice.textContent = 'Plano de captação salvo.'
       panel.dataset.loaded = 'false'
-      setTimeout(() => renderAdminPanel(), 300)
+      setTimeout(() => renderAdminPanel(), 250)
     })
   } catch (error) {
     panel.replaceChildren()
     const errorNotice = document.createElement('div')
     errorNotice.className = 'notice error'
-    errorNotice.textContent = `Não foi possível carregar o limite semanal: ${error?.message || error}`
+    errorNotice.textContent = `Não foi possível carregar o plano de captação: ${error?.message || error}`
     panel.appendChild(errorNotice)
   }
 }
@@ -205,9 +222,10 @@ async function renderCaptureStatus(force = false) {
     const settings = await loadSettings(organizationId)
     const usage = normalizedUsage(settings)
     const limit = settings?.lead_capture_weekly_limit
+    const leadsPerCapture = Number(settings?.google_places_leads_per_capture || 40)
     const limitText = limit == null ? 'Sem limite' : `${usage} de ${limit} utilizadas`
 
-    box.innerHTML = `<strong>Captações desta semana:</strong> ${limitText}${limit == null ? '' : ` • ${remainingText(settings)}`}`
+    box.innerHTML = `<strong>Captações desta semana:</strong> ${limitText}${limit == null ? '' : ` • ${remainingText(settings)}`}<br><strong>Leads por captação:</strong> até ${leadsPerCapture}`
     box.dataset.loadedAt = String(Date.now())
 
     const button = panel.querySelector('.capture-button')

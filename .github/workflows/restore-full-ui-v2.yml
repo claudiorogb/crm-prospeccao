@@ -36,16 +36,13 @@ jobs:
           p.write_text(s.replace(old,new,1),encoding='utf-8')
           PY
 
-      - name: Reapply V78-V83 deliberately
+      - name: Reapply V78-V80
         run: |
           python scripts/apply_v78_admin_commercial_area.py
           python scripts/apply_v79_sandbox_isolation.py
           python scripts/apply_v80_true_admin_commercial_area.py
-          python scripts/apply_v81_remove_funnel_bulk_selection.py
-          python scripts/apply_v82_continuous_funnel.py
-          python scripts/apply_v83_terminal_visibility_and_closed.py
 
-      - name: Validate feature preservation
+      - name: Validate historical and current features
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -66,14 +63,10 @@ jobs:
             'Arquivamento seguro': 'archive_record',
             'Área comercial': 'AdminCommercialArea',
             'Integrações': 'AdminIntegrations',
-            'Encerrados': 'function ClosedLeads',
-            'Limite terminal': 'TERMINAL_VISIBLE_LIMIT = 50',
           }
           missing = [name for name, marker in required.items() if marker not in s]
           if missing:
             raise SystemExit('Missing features: ' + ', '.join(missing))
-          if 'Selecionar todos os filtrados' in s:
-            raise SystemExit('Removed funnel bulk selector returned')
           print('Feature preservation checks OK')
           PY
 
@@ -83,7 +76,7 @@ jobs:
           npm audit --omit=dev --audit-level=high
           npm run build
 
-      - name: Commit restored frontend
+      - name: Commit restored frontend through V80
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -91,6 +84,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "restore: consolidate full CRM UI and preserve requested changes"
+            git commit -m "restore: consolidate complete CRM UI through V80"
             git push origin HEAD:restore-full-ui-v2-2026-09-15
           fi

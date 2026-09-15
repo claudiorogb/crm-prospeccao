@@ -1,0 +1,41 @@
+name: Apply V82 continuous funnel
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v82_continuous_funnel.py'
+      - '.github/workflows/apply-v82-continuous-funnel.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply V82 patch
+        run: python scripts/apply_v82_continuous_funnel.py
+
+      - name: Validate application
+        run: |
+          npm install
+          npm run build
+
+      - name: Commit generated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "V82: make sales funnel continuous without pagination"
+            git push
+          fi
+
+# Trigger V82 patch.

@@ -1908,24 +1908,6 @@ function Leads({ organization, settings, userEmail }) {
           {Object.entries(statusLabel).map(([value,label])=><option key={value} value={value}>{label}</option>)}
         </select>
       </section>
-
-      <section className="bulk-toolbar">
-        <label className="select-all">
-          <input
-            type="checkbox"
-            checked={bulkVisibleSelected}
-            onChange={toggleAllVisible}
-          />
-          Selecionar todos os filtrados
-        </label>
-        <div className="bulk-actions">
-          <span>{selected.size} selecionado{selected.size === 1 ? '' : 's'}</span>
-          <button className="primary inline-btn" onClick={sendSelectedMessages} disabled={!selected.size}>
-            <Send size={16}/> {loading ? 'Enviando...' : 'Enviar mensagem'}
-          </button>
-        </div>
-      </section>
-
       <section className="sales-kanban-wrap">
         <div className="sales-kanban">
           {Object.entries(statusLabel)
@@ -1945,12 +1927,6 @@ function Leads({ organization, settings, userEmail }) {
                     ) : columnLeads.map(l => (
                       <article className="panel kanban-lead-card" key={l.id}>
                         <div className="kanban-card-top">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(l.id)}
-                            onChange={()=>toggleSelected(l.id)}
-                            aria-label={`Selecionar ${l.business_name}`}
-                          />
                           <div>
                             <span className="eyebrow">{l.target_segments?.name || l.segment}</span>
                             <h3>{l.business_name}</h3>

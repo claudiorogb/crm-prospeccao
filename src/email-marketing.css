@@ -33,3 +33,6 @@
   .email-recipient-head>div{gap:4px 10px!important;}
   .email-attachments-box .email-file-button{width:max-content!important;}
 }
+
+/* V89 — campanha em rascunho antes da seleção de destinatários */
+.email-draft-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.email-draft-actions .primary,.email-draft-actions .secondary{width:auto!important}.email-campaign-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}@media(max-width:700px){.email-draft-actions .primary,.email-draft-actions .secondary{width:100%!important}.email-campaign-actions{justify-content:flex-start}}

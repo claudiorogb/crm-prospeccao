@@ -4703,7 +4703,7 @@ function AdminCommercialArea({ organizations, userEmail, userId }) {
   const [notice, setNotice] = useState('')
 
   const sandboxOrganization = organizations.find(
-    org => org.name === 'Área Comercial - Testes e Apresentações' && org.is_active
+    org => org.is_sandbox === true && org.is_active
   )
 
   useEffect(() => {
@@ -4816,6 +4816,10 @@ function AdminCommercialArea({ organizations, userEmail, userId }) {
 
 function Administration({ organizations, reloadOrganizations, userEmail, userId }) {
   const [section, setSection] = useState('overview')
+  const productionOrganizations = useMemo(
+    () => organizations.filter(org => org.is_sandbox !== true),
+    [organizations]
+  )
 
   const items = [
     ['overview', 'Visão geral', Shield],
@@ -4858,7 +4862,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
         </aside>
 
         <div className="admin-content">
-          {section === 'overview' && <AdminOverview organizations={organizations} />}
+          {section === 'overview' && <AdminOverview organizations={productionOrganizations} />}
           {section === 'commercial' && (
             <AdminCommercialArea
               organizations={organizations}
@@ -4866,16 +4870,16 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
               userId={userId}
             />
           )}
-          {section === 'users' && <AdminUsers organizations={organizations} userEmail={userEmail} />}
-          {section === 'whatsapp' && <AdminWhatsApp organizations={organizations} userEmail={userEmail} />}
-          {section === 'queue' && <AdminQueue organizations={organizations} />}
+          {section === 'users' && <AdminUsers organizations={productionOrganizations} userEmail={userEmail} />}
+          {section === 'whatsapp' && <AdminWhatsApp organizations={productionOrganizations} userEmail={userEmail} />}
+          {section === 'queue' && <AdminQueue organizations={productionOrganizations} />}
           {section === 'catalog' && <CatalogAdmin userEmail={userEmail} />}
-          {section === 'clients' && <AdminClients organizations={organizations} reloadOrganizations={reloadOrganizations} />}
-          {section === 'google' && <AdminGooglePlaces organizations={organizations} />}
-          {section === 'integrations' && <AdminIntegrations organizations={organizations} />}
-          {section === 'defaults' && <AdminDefaults organizations={organizations} />}
-          {section === 'messages' && <AdminMessages organizations={organizations} userEmail={userEmail} />}
-          {section === 'audit' && <AdminAudit organizations={organizations} userEmail={userEmail} />}
+          {section === 'clients' && <AdminClients organizations={productionOrganizations} reloadOrganizations={reloadOrganizations} />}
+          {section === 'google' && <AdminGooglePlaces organizations={productionOrganizations} />}
+          {section === 'integrations' && <AdminIntegrations organizations={productionOrganizations} />}
+          {section === 'defaults' && <AdminDefaults organizations={productionOrganizations} />}
+          {section === 'messages' && <AdminMessages organizations={productionOrganizations} userEmail={userEmail} />}
+          {section === 'audit' && <AdminAudit organizations={productionOrganizations} userEmail={userEmail} />}
         </div>
       </div>
     </>
@@ -4982,7 +4986,7 @@ export default function App() {
 
     const { data } = await supabase
       .from('organizations')
-      .select('id,name,is_active,created_at,created_by')
+      .select('id,name,is_active,is_sandbox,created_at,created_by')
       .order('created_at', { ascending: true })
 
     setAdminOrganizations(data || [])

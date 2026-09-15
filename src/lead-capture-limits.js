@@ -51,6 +51,7 @@ function fieldMarkup(settings) {
   const value = limit == null ? '' : String(limit)
   const displayLimit = limit == null ? 'Ilimitado' : limit
   const leadsPerCapture = Number(settings?.google_places_leads_per_capture || 40)
+  const estimatedCalls = Math.ceil(leadsPerCapture / 20)
 
   return `
     <span class="eyebrow">PLANO DE CAPTAÇÃO</span>
@@ -64,15 +65,15 @@ function fieldMarkup(settings) {
         </label>
         <label>
           Leads por captação
-          <input id="axiva-leads-per-capture-input" type="number" min="1" max="60" step="1" value="${leadsPerCapture}" />
+          <input id="axiva-leads-per-capture-input" type="number" min="1" step="1" value="${leadsPerCapture}" />
         </label>
       </div>
       <div class="settings-preview">
         <div><strong>Uso nesta semana:</strong> ${usage} / ${displayLimit}</div>
         <div><strong>Disponível:</strong> ${remainingText(settings)}</div>
-        <div><strong>Consumo Google por captação:</strong> até ${Math.ceil(leadsPerCapture / 20)} chamada${Math.ceil(leadsPerCapture / 20) === 1 ? '' : 's'} Enterprise</div>
+        <div><strong>Consumo estimado:</strong> a partir de ${estimatedCalls} chamada${estimatedCalls === 1 ? '' : 's'} Enterprise, conforme resultados e termos de busca</div>
       </div>
-      <small class="muted">Até 20 leads = 1 chamada; 21 a 40 = até 2; 41 a 60 = até 3. O contador semanal reinicia na segunda-feira.</small>
+      <small class="muted">Não há teto comercial fixo para leads por captação. O sistema distribui buscas entre os termos cadastrados e sempre respeita os limites mensais da empresa e o limite global AXIVA. Deixe o limite semanal vazio para não limitar a quantidade de captações.</small>
       <div class="form-actions">
         <button id="axiva-weekly-capture-save" class="primary inline-btn" type="button">Salvar plano de captação</button>
       </div>
@@ -133,9 +134,9 @@ async function renderAdminPanel() {
         return
       }
 
-      if (!Number.isInteger(leadsPerCapture) || leadsPerCapture < 1 || leadsPerCapture > 60) {
+      if (!Number.isInteger(leadsPerCapture) || leadsPerCapture < 1) {
         notice.className = 'notice error'
-        notice.textContent = 'Leads por captação deve estar entre 1 e 60.'
+        notice.textContent = 'Leads por captação deve ser um número inteiro igual ou maior que 1.'
         return
       }
 

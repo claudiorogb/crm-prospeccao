@@ -175,7 +175,6 @@ export default function MarketingListImport({ organization, onImported, onManual
         <div className="email-marketing-import-head">
           <div>
             <strong>Adicionar destinatário manualmente</strong>
-            <span>Inclua um endereço individual sem precisar importar uma planilha.</span>
           </div>
         </div>
         <div className="email-manual-recipient-grid">
@@ -209,7 +208,7 @@ export default function MarketingListImport({ organization, onImported, onManual
       <div className="email-marketing-import-head">
         <div>
           <strong>Lista de E-mail Marketing</strong>
-          <span>Importe uma lista própria em Excel ou CSV. Ela fica separada do Funil e da base de Clientes.</span>
+          <span>Importe uma lista própria em Excel ou CSV.</span>
         </div>
         <button type="button" className="secondary" onClick={downloadTemplate}>Baixar modelo</button>
       </div>

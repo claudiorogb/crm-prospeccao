@@ -457,7 +457,6 @@ export function EmailMarketing({ organization, userEmail }) {
             </div>
           </div>
 
-          <p className="muted email-compliance-note">Leads do Funil continuam excluídos. Descadastros valem para as duas bases. Se o mesmo e-mail estiver nas duas, ele recebe apenas uma mensagem por campanha.</p>
         </div>
 
         <div className="form-actions">

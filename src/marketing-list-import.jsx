@@ -62,13 +62,18 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
-export default function MarketingListImport({ organization, onImported }) {
+export default function MarketingListImport({ organization, onImported, onManualAdded }) {
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
   const [source, setSource] = useState('Lista própria importada')
   const [confirmed, setConfirmed] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [manualEmail, setManualEmail] = useState('')
+  const [manualName, setManualName] = useState('')
+  const [manualCompany, setManualCompany] = useState('')
+  const [manualConfirmed, setManualConfirmed] = useState(false)
+  const [manualMessage, setManualMessage] = useState('')
 
   const validCount = useMemo(() => rows.filter(row => validEmail(row.email)).length, [rows])
   const invalidCount = rows.length - validCount
@@ -116,8 +121,91 @@ export default function MarketingListImport({ organization, onImported }) {
     }
   }
 
+  async function addManualRecipient() {
+    const normalizedEmail = manualEmail.trim().toLowerCase()
+    if (!validEmail(normalizedEmail)) return setManualMessage('Informe um e-mail válido.')
+    if (!manualConfirmed) return setManualMessage('Confirme que este contato pode receber comunicações de e-mail marketing.')
+    setLoading(true)
+    setManualMessage('')
+    try {
+      const { error } = await supabase.rpc('import_email_marketing_contacts', {
+        p_organization_id: organization.id,
+        p_contacts: [{
+          email: normalizedEmail,
+          contact_name: manualName.trim(),
+          company_name: manualCompany.trim(),
+          source: 'Inserido manualmente'
+        }],
+        p_source: 'Inserido manualmente',
+        p_confirmed: true
+      })
+      if (error) throw error
+
+      const { data: contact, error: contactError } = await supabase
+        .from('email_marketing_contacts')
+        .select('id,email,contact_name,company_name,source,status,consent_confirmed,unsubscribed_at')
+        .eq('organization_id', organization.id)
+        .eq('email_normalized', normalizedEmail)
+        .maybeSingle()
+      if (contactError) throw contactError
+      if (!contact) throw new Error('O destinatário foi salvo, mas não pôde ser carregado novamente.')
+      if (contact.status !== 'active' || contact.unsubscribed_at) {
+        setManualMessage('Este endereço está descadastrado e não pode ser usado em campanhas.')
+        if (onImported) await onImported()
+        return
+      }
+
+      setManualEmail('')
+      setManualName('')
+      setManualCompany('')
+      setManualConfirmed(false)
+      setManualMessage('Destinatário adicionado e selecionado para a campanha.')
+      if (onManualAdded) await onManualAdded(contact)
+      else if (onImported) await onImported()
+    } catch (error) {
+      setManualMessage(error.message || 'Não foi possível adicionar o destinatário.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="email-marketing-import-box">
+      <div className="email-manual-recipient-box">
+        <div className="email-marketing-import-head">
+          <div>
+            <strong>Adicionar destinatário manualmente</strong>
+            <span>Inclua um endereço individual sem precisar importar uma planilha.</span>
+          </div>
+        </div>
+        <div className="email-manual-recipient-grid">
+          <label>
+            E-mail *
+            <input type="email" value={manualEmail} onChange={e => setManualEmail(e.target.value)} placeholder="contato@empresa.com.br" />
+          </label>
+          <label>
+            Nome
+            <input value={manualName} onChange={e => setManualName(e.target.value)} placeholder="Nome do contato" />
+          </label>
+          <label>
+            Empresa
+            <input value={manualCompany} onChange={e => setManualCompany(e.target.value)} placeholder="Empresa" />
+          </label>
+        </div>
+        <label className="email-marketing-confirm">
+          <input type="checkbox" checked={manualConfirmed} onChange={e => setManualConfirmed(e.target.checked)} />
+          <span>Confirmo que este contato pertence à base própria da empresa e pode receber comunicações de e-mail marketing. Não é um contato de prospecção fria.</span>
+        </label>
+        <div className="form-actions">
+          <button type="button" className="secondary" disabled={loading || !validEmail(manualEmail) || !manualConfirmed} onClick={addManualRecipient}>
+            {loading ? 'Adicionando...' : 'Adicionar e selecionar'}
+          </button>
+        </div>
+        {manualMessage && <div className="notice">{manualMessage}</div>}
+      </div>
+
+      <div className="email-marketing-import-divider"><span>ou importe uma lista</span></div>
+
       <div className="email-marketing-import-head">
         <div>
           <strong>Lista de E-mail Marketing</strong>

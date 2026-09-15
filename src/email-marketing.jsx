@@ -247,6 +247,17 @@ export function EmailMarketing({ organization, userEmail }) {
     }
   }
 
+  async function handleManualRecipientAdded(contact) {
+    if (contact?.id) {
+      setSelectedMarketing(old => {
+        const next = new Set(old)
+        next.add(contact.id)
+        return next
+      })
+    }
+    await loadData()
+  }
+
   async function createCampaign(event) {
     event.preventDefault()
     if (connection?.status !== 'connected') return setMessage('Conecte uma conta Gmail ou Resend antes de enviar uma campanha.')
@@ -410,7 +421,7 @@ export function EmailMarketing({ organization, userEmail }) {
             <strong>{selectedTotal} selecionado{selectedTotal === 1 ? '' : 's'}</strong>
           </div>
 
-          <MarketingListImport organization={organization} onImported={loadData} />
+          <MarketingListImport organization={organization} onImported={loadData} onManualAdded={handleManualRecipientAdded} />
 
           <div className="email-recipient-tools">
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar cliente, contato, empresa, origem ou e-mail" />

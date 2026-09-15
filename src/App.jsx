@@ -1445,8 +1445,6 @@ function Leads({ organization, settings, userEmail }) {
   const [selected, setSelected] = useState(new Set())
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState({ search: '', segment: 'all', status: 'all' })
-  const LEADS_PAGE_SIZE = 50
-  const [page, setPage] = useState(0)
   const [totalLeads, setTotalLeads] = useState(0)
   const [statusCounts, setStatusCounts] = useState({})
   const [message, setMessage] = useState('')
@@ -1488,32 +1486,46 @@ function Leads({ organization, settings, userEmail }) {
     }
   }
 
-  async function loadLeadPage(pageToLoad = page, currentFilter = filter) {
-    const { data, error } = await supabase.rpc('get_leads_page', {
-      p_organization_id: organization.id,
-      p_search: currentFilter.search.trim() || null,
-      p_target_segment_id: currentFilter.segment === 'all' ? null : currentFilter.segment,
-      p_status: currentFilter.status === 'all' ? null : currentFilter.status,
-      p_limit: LEADS_PAGE_SIZE,
-      p_offset: pageToLoad * LEADS_PAGE_SIZE
-    })
+  async function loadAllLeads(currentFilter = filter) {
+    const batchSize = 100
+    let offset = 0
+    let rows = []
+    let summary = null
 
-    if (error) {
-      setMessage(`Não foi possível carregar os leads: ${error.message}`)
-      return
+    while (true) {
+      const { data, error } = await supabase.rpc('get_leads_page', {
+        p_organization_id: organization.id,
+        p_search: currentFilter.search.trim() || null,
+        p_target_segment_id: currentFilter.segment === 'all' ? null : currentFilter.segment,
+        p_status: currentFilter.status === 'all' ? null : currentFilter.status,
+        p_limit: batchSize,
+        p_offset: offset
+      })
+
+      if (error) {
+        setMessage(`Não foi possível carregar os leads: ${error.message}`)
+        return
+      }
+
+      const payload = data || {}
+      if (!summary) summary = payload
+      const batchRows = Array.isArray(payload.rows) ? payload.rows : []
+      rows = [...rows, ...batchRows]
+
+      const total = Number(payload.total || 0)
+      if (!batchRows.length || rows.length >= total) break
+      offset += batchRows.length
     }
 
-    const payload = data || {}
-    setLeads(Array.isArray(payload.rows) ? payload.rows : [])
-    setTotalLeads(Number(payload.total || 0))
-    setStatusCounts(payload.status_counts || {})
-    setPage(pageToLoad)
+    setLeads(rows)
+    setTotalLeads(Number(summary?.total || 0))
+    setStatusCounts(summary?.status_counts || {})
   }
 
   async function loadData() {
     await Promise.all([
       loadLookups(),
-      loadLeadPage(page, filter)
+      loadAllLeads(filter)
     ])
   }
 
@@ -1526,7 +1538,7 @@ function Leads({ organization, settings, userEmail }) {
     const timer = setTimeout(async () => {
       if (!active) return
       setSelected(new Set())
-      await loadLeadPage(0, filter)
+      await loadAllLeads(filter)
     }, 250)
 
     return () => {
@@ -1540,10 +1552,8 @@ function Leads({ organization, settings, userEmail }) {
 
     async function refreshVisibleLeads() {
       if (!active) return
-      await loadLeadPage(page, filter)
+      await loadAllLeads(filter)
     }
-
-    const timer = setInterval(refreshVisibleLeads, 10000)
 
     function handleFocus() {
       refreshVisibleLeads()
@@ -1553,10 +1563,9 @@ function Leads({ organization, settings, userEmail }) {
 
     return () => {
       active = false
-      clearInterval(timer)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [organization.id, page, filter.search, filter.segment, filter.status])
+  }, [organization.id, filter.search, filter.segment, filter.status])
 
   async function saveLead(e) {
     e.preventDefault()
@@ -1664,14 +1673,6 @@ function Leads({ organization, settings, userEmail }) {
 
 
   const visibleLeads = leads
-  const totalPages = Math.max(1, Math.ceil(totalLeads / LEADS_PAGE_SIZE))
-
-  async function goToPage(nextPage) {
-    const safePage = Math.min(Math.max(nextPage, 0), totalPages - 1)
-    if (safePage === page) return
-    setSelected(new Set())
-    await loadLeadPage(safePage, filter)
-  }
 
   const eligibleVisibleLeads = visibleLeads.filter(l => l.status !== 'discarded')
 
@@ -1802,7 +1803,7 @@ function Leads({ organization, settings, userEmail }) {
         <div>
           <span className="eyebrow">BASE COMERCIAL</span>
           <h1>Leads</h1>
-          <p className="muted">Selecione as empresas que devem receber a mensagem definida para o público-alvo.</p>
+          <p className="muted">Acompanhe continuamente os leads e mova cada oportunidade pelas etapas do funil.</p>
         </div>
         <div className="topbar-actions">
           <div className="user-badge">{userEmail}</div>
@@ -2024,17 +2025,6 @@ function Leads({ organization, settings, userEmail }) {
         </div>
       </section>
 
-
-      <section className="bulk-toolbar">
-        <div>
-          <strong>{totalLeads}</strong> lead{totalLeads === 1 ? '' : 's'} encontrado{totalLeads === 1 ? '' : 's'}
-          <span className="muted"> • Página {page + 1} de {totalPages} • até {LEADS_PAGE_SIZE} por página</span>
-        </div>
-        <div className="bulk-actions">
-          <button className="secondary inline-btn" onClick={() => goToPage(page - 1)} disabled={page <= 0}>Anterior</button>
-          <button className="secondary inline-btn" onClick={() => goToPage(page + 1)} disabled={page >= totalPages - 1}>Próxima</button>
-        </div>
-      </section>
     </>
   )
 }

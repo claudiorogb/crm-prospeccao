@@ -9,6 +9,8 @@ import {
 import { Link2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import CustomerImportPanel from './customer-import'
+import AdminTestUsers from './admin-test-users'
+import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
 
 const UF_OPTIONS = [
@@ -5080,6 +5082,11 @@ function AdminOverview({ organizations }) {
 
   useEffect(() => {
     async function load() {
+      const productionOrgIds = organizations.filter(org => org.is_sandbox !== true).map(org => org.id)
+      if (!productionOrgIds.length) {
+        setStats({ organizations: 0, activeOrganizations: 0, leads: 0, campaigns: 0, queued: 0, failed: 0, sent: 0, whatsappNumbers: 0 })
+        return
+      }
       const [
         { count: leadsCount },
         { count: campaignsCount },
@@ -5088,12 +5095,12 @@ function AdminOverview({ organizations }) {
         { count: sentCount },
         { count: numbersCount }
       ] = await Promise.all([
-        supabase.from('leads').select('id', { count: 'exact', head: true }),
-        supabase.from('campaigns').select('id', { count: 'exact', head: true }),
-        supabase.from('outbound_messages').select('id', { count: 'exact', head: true }).in('status', ['queued', 'ready', 'pending']),
-        supabase.from('outbound_messages').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
-        supabase.from('outbound_messages').select('id', { count: 'exact', head: true }).eq('status', 'sent'),
-        supabase.from('whatsapp_numbers').select('id', { count: 'exact', head: true })
+        supabase.from('leads').select('id', { count: 'exact', head: true }).in('organization_id', productionOrgIds),
+        supabase.from('campaigns').select('id', { count: 'exact', head: true }).in('organization_id', productionOrgIds),
+        supabase.from('outbound_messages').select('id', { count: 'exact', head: true }).in('organization_id', productionOrgIds).in('status', ['queued', 'ready', 'pending']),
+        supabase.from('outbound_messages').select('id', { count: 'exact', head: true }).in('organization_id', productionOrgIds).eq('status', 'failed'),
+        supabase.from('outbound_messages').select('id', { count: 'exact', head: true }).in('organization_id', productionOrgIds).eq('status', 'sent'),
+        supabase.from('whatsapp_numbers').select('id', { count: 'exact', head: true }).in('organization_id', productionOrgIds)
       ])
 
       setStats({
@@ -7291,6 +7298,36 @@ function AdminCommercialArea({ organizations, userEmail, userId }) {
 }
 
 
+function AdminTestSettings({ organization, userEmail, userId }) {
+  const [tab, setTab] = useState('whatsapp')
+  const onlyTest = useMemo(() => organization?.is_sandbox === true ? [organization] : [], [organization?.id, organization?.is_sandbox])
+  if (!onlyTest.length) return <div className="notice error">Ambiente Teste indisponível.</div>
+
+  const tabs = [
+    ['whatsapp', 'WhatsApp'], ['queue', 'Fila'], ['users', 'Usuários'],
+    ['capture', 'Captação'], ['defaults', 'Padrões'], ['messages', 'Mensagens'],
+    ['email', 'E-mail'], ['integrations', 'Integrações']
+  ]
+  return <>
+    <AdminSectionHeader title="Teste · Administração" description="Gerencie apenas a organização de teste. Os parâmetros das empresas reais permanecem independentes." />
+    <div className="notice">As alterações realizadas aqui se aplicam somente à empresa Teste. Enviar WhatsApp ou captar leads de verdade ainda consome os serviços e as franquias correspondentes.</div>
+    <section className="panel"><div className="row-actions">
+      {tabs.map(([key, label]) => <button key={key} type="button"
+        className={tab === key ? 'primary mini' : 'secondary mini'}
+        onClick={() => setTab(key)}>{label}</button>)}
+    </div></section>
+    {tab === 'whatsapp' && <AdminWhatsApp organizations={onlyTest} userEmail={userEmail} />}
+    {tab === 'queue' && <AdminQueue organizations={onlyTest} />}
+    {tab === 'users' && <AdminTestUsers organization={organization} adminUserId={userId} />}
+    {tab === 'capture' && <><AdminTestLimits organization={organization} /><AdminGooglePlaces organizations={onlyTest} /></>}
+    {tab === 'defaults' && <AdminDefaults organizations={onlyTest} />}
+    {tab === 'messages' && <AdminMessages organizations={onlyTest} userEmail={userEmail} />}
+    {tab === 'email' && <AdminEmailMarketing organizations={onlyTest} userEmail={userEmail} />}
+    {tab === 'integrations' && <AdminIntegrations organizations={onlyTest} />}
+  </>
+}
+
+
 function Administration({ organizations, reloadOrganizations, userEmail, userId }) {
   const [section, setSection] = useState('overview')
   const productionOrganizations = useMemo(
@@ -7501,7 +7538,7 @@ export default function App() {
       })
 
     return () => { active = false }
-  }, [isSystemAdmin, accountStatus, sandboxOrganization?.id])
+  }, [isSystemAdmin, accountStatus, sandboxOrganization?.id, adminCommercialPage])
 
   useEffect(() => {
     if (!organization?.id || accountStatus !== 'active') {
@@ -7607,6 +7644,19 @@ export default function App() {
                   <Users size={18}/> Funil de vendas
                 </button>
                 <button
+                  className={`nav-item ${adminCommercialPage === 'sales' ? 'active' : ''}`}
+                  onClick={() => { setAdminCommercialPage('sales'); setMobileMenuOpen(false) }}
+                ><Activity size={18}/> Vendas</button>
+                {sandboxOrganization && <OverdueReturnsNavItem
+                  organization={sandboxOrganization}
+                  active={adminCommercialPage === 'overdue-returns'}
+                  onOpen={() => { setAdminCommercialPage('overdue-returns'); setMobileMenuOpen(false) }}
+                />}
+                <button
+                  className={`nav-item ${adminCommercialPage === 'test-settings' ? 'active' : ''}`}
+                  onClick={() => { setAdminCommercialPage('test-settings'); setMobileMenuOpen(false) }}
+                ><Settings size={18}/> Configurações do Teste</button>
+                <button
                   className="nav-item"
                   onClick={() => { setSystemAdminView('administration'); setMobileMenuOpen(false) }}
                 >
@@ -7619,7 +7669,7 @@ export default function App() {
                   className="nav-item"
                   onClick={() => { setSystemAdminView('commercial'); setAdminCommercialPage('dashboard'); setMobileMenuOpen(false) }}
                 >
-                  <Building2 size={18}/> Área comercial
+                  <Building2 size={18}/> Teste
                 </button>
                 <button className="nav-item active">
                   <Shield size={18}/> Administração
@@ -7684,6 +7734,19 @@ export default function App() {
               userEmail={userEmail}
               userId={session.user.id}
             />
+          )}
+          {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'sales' && (
+            <SalesPage organization={sandboxOrganization} userEmail={userEmail} />
+          )}
+          {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'overdue-returns' && (
+            <OverdueReturnsPage organization={sandboxOrganization} userEmail={userEmail}
+              onOpenLead={lead => {
+                sessionStorage.setItem('crm_focus_lead', JSON.stringify({ id: lead.id, business_name: lead.business_name }))
+                setAdminCommercialPage('sales-funnel')
+              }} />
+          )}
+          {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'test-settings' && (
+            <AdminTestSettings organization={sandboxOrganization} userEmail={userEmail} userId={session.user.id} />
           )}
         </main>
       </div>

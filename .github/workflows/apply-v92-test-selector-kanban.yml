@@ -1,0 +1,42 @@
+name: Apply V92 Teste selectors and Kanban drafts
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v92_test_selector_kanban_drafts.py'
+      - '.github/workflows/apply-v92-test-selector-kanban.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v92-test-selector-kanban
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply guarded App changes
+        run: python scripts/apply_v92_test_selector_kanban_drafts.py
+      - name: Test Kanban draft merge
+        run: node --test tests/kanban-draft-merge.test.mjs
+      - name: Validate production build
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Commit validated App changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'V92: show Teste in admin settings and protect Kanban drafts'
+            git push
+          fi

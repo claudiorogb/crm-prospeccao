@@ -9,6 +9,7 @@ import {
 import { Link2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import CustomerImportPanel from './customer-import'
+import { mergeLeadsWithLocalDrafts } from './kanban-draft-merge.js'
 import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
@@ -2247,7 +2248,7 @@ function Leads({ organization, settings, userEmail }) {
         overdue[group.status] = group.overdue
       })
 
-      setLeads(rows)
+      setLeads(previous => mergeLeadsWithLocalDrafts(rows, previous, dirtyLeadFieldsRef.current))
       setTotalLeads(rows.length)
       setStatusCounts(counts)
       setStatusValueTotals(values)
@@ -7378,15 +7379,15 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
         <div className="admin-content">
           {section === 'overview' && <AdminOverview organizations={productionOrganizations} />}
           {section === 'users' && <AdminUsers organizations={productionOrganizations} userEmail={userEmail} />}
-          {section === 'whatsapp' && <AdminWhatsApp organizations={productionOrganizations} userEmail={userEmail} />}
-          {section === 'email' && <AdminEmailMarketing organizations={productionOrganizations} userEmail={userEmail} />}
-          {section === 'queue' && <AdminQueue organizations={productionOrganizations} />}
+          {section === 'whatsapp' && <AdminWhatsApp organizations={organizations} userEmail={userEmail} />}
+          {section === 'email' && <AdminEmailMarketing organizations={organizations} userEmail={userEmail} />}
+          {section === 'queue' && <AdminQueue organizations={organizations} />}
           {section === 'catalog' && <CatalogAdmin userEmail={userEmail} />}
           {section === 'clients' && <AdminClients organizations={productionOrganizations} reloadOrganizations={reloadOrganizations} />}
-          {section === 'google' && <AdminGooglePlaces organizations={productionOrganizations} />}
-          {section === 'integrations' && <AdminIntegrations organizations={productionOrganizations} />}
-          {section === 'defaults' && <AdminDefaults organizations={productionOrganizations} />}
-          {section === 'messages' && <AdminMessages organizations={productionOrganizations} userEmail={userEmail} />}
+          {section === 'google' && <AdminGooglePlaces organizations={organizations} />}
+          {section === 'integrations' && <AdminIntegrations organizations={organizations} />}
+          {section === 'defaults' && <AdminDefaults organizations={organizations} />}
+          {section === 'messages' && <AdminMessages organizations={organizations} userEmail={userEmail} />}
           {section === 'audit' && <AdminAudit organizations={productionOrganizations} userEmail={userEmail} />}
         </div>
       </div>

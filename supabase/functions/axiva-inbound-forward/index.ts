@@ -1,12 +1,15 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { Resend } from "npm:resend@latest";
+import { Resend } from "npm:resend@6.28.1";
+import PostalMime from "npm:postal-mime@latest";
 
-// Forward AXIVA corporate mail only. Not an organization-wide CRM email handler.
+// AXIVA company mailbox only. Authenticated From stays on our verified domain.
+// Gmail displays the original correspondent and replies go to their real address.
 const DESTINATION = "axivainvest@gmail.com";
 const INBOUND = "contato@axiva.com.br";
 const FORWARD_FROM = "encaminhamento@axiva.com.br";
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+const validAddress = (address: unknown): address is string => typeof address === "string" && address.length <= 254 && /^[^\s<>@\r\n]+@[^\s<>@\r\n]+\.[^\s<>@\r\n]+$/.test(address);
 
 Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -39,11 +42,34 @@ Deno.serve(async (request: Request) => {
   if (!claimed) return json({ ok: true, duplicate: true });
 
   try {
-    const { data, error } = await resend.emails.receiving.forward({ emailId: receivedId, to: DESTINATION, from: FORWARD_FROM });
-    if (error) throw new Error(`Resend forward failed: ${error.name || "provider error"}`);
-    const { error: saveError } = await admin.from("axiva_inbound_forwarding").update({
-      status: "forwarded", forwarded_email_id: data?.id || null, updated_at: new Date().toISOString(), last_error: null,
-    }).eq("received_email_id", receivedId);
+    const { data: received, error: receivingError } = await resend.emails.receiving.get(receivedId);
+    if (receivingError || !received?.raw?.download_url) throw new Error("Unable to retrieve original email");
+    const raw = await fetch(received.raw.download_url);
+    if (!raw.ok) throw new Error("Unable to download original email");
+    const original = await PostalMime.parse(await raw.arrayBuffer(), { attachmentEncoding: "base64" });
+    const sender = original.from && "address" in original.from ? original.from.address : undefined;
+    if (!validAddress(sender)) throw new Error("Original sender address is missing or invalid");
+    const preferredReply = original.replyTo?.find((address) => "address" in address && validAddress(address.address));
+    const replyAddress = preferredReply && "address" in preferredReply ? preferredReply.address : sender;
+    const display = sender.replace(/["\\\r\n<>]/g, "").slice(0, 200);
+    const attachments = original.attachments.map((attachment) => ({
+      filename: attachment.filename || "anexo",
+      content: String(attachment.content),
+      content_type: attachment.mimeType,
+      content_id: attachment.contentId?.replace(/^<|>$/g, "") || undefined,
+    }));
+    const { data, error } = await resend.emails.send({
+      from: `"${display} via AXIVA" <${FORWARD_FROM}>`,
+      to: [DESTINATION],
+      replyTo: replyAddress,
+      subject: original.subject || received.subject || "(sem assunto)",
+      text: original.text || undefined,
+      html: original.html || undefined,
+      attachments: attachments.length ? attachments : undefined,
+      headers: { "X-AXIVA-Original-From": sender },
+    });
+    if (error || !data?.id) throw new Error(`Resend forward failed: ${error?.name || "provider error"}`);
+    const { error: saveError } = await admin.from("axiva_inbound_forwarding").update({ status: "forwarded", forwarded_email_id: data.id, updated_at: new Date().toISOString(), last_error: null }).eq("received_email_id", receivedId);
     if (saveError) throw new Error("Unable to record successful forwarding");
     return json({ ok: true });
   } catch (error) {

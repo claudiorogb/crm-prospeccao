@@ -368,6 +368,32 @@ export function EmailMarketing({ organization, userEmail }) {
     }
   }
 
+  async function resendCampaign(campaign) {
+    if (draftCampaignId) {
+      setMessage('Finalize o rascunho atualmente aberto antes de preparar outro reenvio.')
+      return
+    }
+    if (!window.confirm('Criar um novo rascunho desta campanha para revisar os destinatários antes de reenviar?')) return
+    setLoading(true); setMessage('')
+    try {
+      const { data: newCampaignId, error } = await supabase.rpc('clone_email_campaign_for_resend', { p_campaign_id: campaign.id })
+      if (error) throw error
+      const { data: draft, error: draftError } = await supabase
+        .from('email_campaigns')
+        .select('id,name,subject,body_text,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at,source_campaign_id')
+        .eq('id', newCampaignId)
+        .single()
+      if (draftError) throw draftError
+      await continueDraft(draft)
+      await loadData()
+      setMessage('Reenvio preparado como rascunho. Revise os destinatários e clique em Iniciar envio quando estiver pronto. Os anexos da campanha original serão mantidos.')
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível preparar o reenvio desta campanha.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function cancelCampaign(id) {
     if (!window.confirm('Cancelar os envios ainda pendentes desta campanha?')) return
     setLoading(true); setMessage('')
@@ -542,6 +568,8 @@ export function EmailMarketing({ organization, userEmail }) {
                     <button type="button" className="secondary" disabled={loading} onClick={() => continueDraft(campaign)}>Continuar</button>
                     <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>
                   </div>
+                ) : campaign.status === 'completed' ? (
+                  <button type="button" className="secondary" disabled={loading} onClick={() => resendCampaign(campaign)}>Reenviar</button>
                 ) : ['queued','sending','paused','failed'].includes(campaign.status) ? (
                   <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>
                 ) : null}

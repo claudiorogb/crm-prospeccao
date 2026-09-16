@@ -1,0 +1,42 @@
+name: Apply V93 Kanban stage-arrival order
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v93_kanban_stage_arrival.py'
+      - '.github/workflows/apply-v93-kanban-stage-arrival.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v93-kanban-stage-arrival
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply guarded Kanban patch
+        run: python scripts/apply_v93_kanban_stage_arrival.py
+      - name: Run Kanban regression tests
+        run: node --test tests/kanban-order.test.mjs tests/kanban-draft-merge.test.mjs
+      - name: Validate production build
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Commit validated frontend change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'V93: keep moved leads last in destination Kanban column'
+            git push
+          fi

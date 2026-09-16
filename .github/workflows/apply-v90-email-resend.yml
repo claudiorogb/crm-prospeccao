@@ -1,0 +1,48 @@
+name: Apply V90 Email Resend
+
+on:
+  push:
+    branches:
+      - feature/email-resend-v90
+    paths:
+      - scripts/apply_v90_email_resend.py
+      - .github/workflows/apply-v90-email-resend.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/email-resend-v90
+          fetch-depth: 0
+      - name: Apply V90 patch
+        run: python scripts/apply_v90_email_resend.py
+      - name: Guardrails
+        run: |
+          grep -q "clone_email_campaign_for_resend" src/email-marketing.jsx
+          grep -q "Reenviar" src/email-marketing.jsx
+          grep -q "resendCampaign" src/email-marketing.jsx
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Validate production build
+        run: npm run build
+      - name: Commit generated V90 UI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/email-marketing.jsx
+          if ! git diff --cached --quiet; then
+            git commit -m "V90: add resend action for completed email campaigns"
+            git push origin HEAD:feature/email-resend-v90
+          fi

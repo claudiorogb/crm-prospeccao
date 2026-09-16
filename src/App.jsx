@@ -10,6 +10,7 @@ import { Link2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import CustomerImportPanel from './customer-import'
 import { mergeLeadsWithLocalDrafts } from './kanban-draft-merge.js'
+import { sortKanbanColumn } from './kanban-order.js'
 import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
@@ -2484,18 +2485,20 @@ function Leads({ organization, settings, userEmail }) {
     if (status === 'lost' && currentStatus !== 'lost') payload.lost_from_status = currentStatus
     if (repositoryNote !== null && repositoryNote.trim()) payload.commercial_notes = repositoryNote.trim()
 
-    const { error } = await supabase
+    const { data: stageChange, error } = await supabase
       .from('leads')
       .update(payload)
       .eq('id', id)
       .eq('organization_id', organization.id)
+      .select('status_changed_at')
+      .single()
 
     if (error) {
       setMessage(error.message)
       return
     }
 
-    const localPayload = { ...payload }
+    const localPayload = { ...payload, status_changed_at: stageChange.status_changed_at }
     if (Object.prototype.hasOwnProperty.call(localPayload, 'contract_value')) {
       localPayload.contract_value = formatMoneyField(localPayload.contract_value)
     }
@@ -2572,15 +2575,17 @@ function Leads({ organization, settings, userEmail }) {
 
     if (!window.confirm(`Recuperar "${lead.business_name}" para ${statusLabel[fallback]}? Todo o histórico e os valores serão preservados.`)) return
 
-    const { error } = await supabase
+    const { data: stageChange, error } = await supabase
       .from('leads')
       .update({ status: fallback, lost_from_status: null, updated_at: new Date().toISOString() })
       .eq('id', lead.id)
       .eq('organization_id', organization.id)
+      .select('status_changed_at')
+      .single()
 
     if (error) setMessage(error.message)
     else {
-      setLeads(old => old.map(item => item.id === lead.id ? { ...item, status: fallback, lost_from_status: null } : item))
+      setLeads(old => old.map(item => item.id === lead.id ? { ...item, status: fallback, lost_from_status: null, status_changed_at: stageChange.status_changed_at } : item))
       setMessage(`${lead.business_name} voltou para ${statusLabel[fallback]} com todo o histórico preservado.`)
     }
   }
@@ -2918,7 +2923,7 @@ function Leads({ organization, settings, userEmail }) {
           {['new','contacted','replied','interested','proposal','negotiation','won','lost']
             .map(status => {
               const label = statusLabel[status]
-              const columnLeads = visibleLeads.filter(l => l.status === status)
+              const columnLeads = sortKanbanColumn(visibleLeads.filter(l => l.status === status))
               const columnTotal = Number(statusValueTotals?.[status] || 0)
               const overdueCount = Number(statusOverdueCounts?.[status] || 0)
               return (

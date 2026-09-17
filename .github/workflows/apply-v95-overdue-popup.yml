@@ -1,0 +1,45 @@
+name: V95 sandbox overdue popup regression
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v95_overdue_popup.py'
+      - 'tests/overdue-popup-v95.test.mjs'
+      - '.github/workflows/apply-v95-overdue-popup.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v95-sandbox-overdue-popup
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply guarded one-component change
+        run: python scripts/apply_v95_overdue_popup.py
+      - name: Check only App.jsx changed
+        run: |
+          git diff --name-only | grep -x 'src/App.jsx'
+          test "$(git diff --name-only | wc -l)" -eq 1
+      - name: Run popup regression tests
+        run: node --test tests/overdue-popup-v95.test.mjs tests/customer-import-v94.test.mjs tests/kanban-order.test.mjs tests/kanban-draft-merge.test.mjs
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify production build
+        run: npm run build
+      - name: Commit verified App.jsx correction
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          if ! git diff --cached --quiet; then
+            git commit -m 'V95: show overdue popup in isolated admin test workspace'
+            git push
+          fi

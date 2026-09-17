@@ -28,10 +28,10 @@ jobs:
         run: |
           git diff --name-only | grep -x 'src/App.jsx'
           test "$(git diff --name-only | wc -l)" -eq 1
-      - name: Run popup regression tests
-        run: node --test tests/overdue-popup-v95.test.mjs tests/customer-import-v94.test.mjs tests/kanban-order.test.mjs tests/kanban-draft-merge.test.mjs
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Run popup regression tests
+        run: node --test tests/overdue-popup-v95.test.mjs tests/customer-import-v94.test.mjs tests/kanban-order.test.mjs tests/kanban-draft-merge.test.mjs
       - name: Verify production build
         run: npm run build
       - name: Commit verified App.jsx correction
@@ -42,4 +42,3 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m 'V95: show overdue popup in isolated admin test workspace'
             git push
-          fi

@@ -1,0 +1,43 @@
+name: V97 CRM visual adjustments
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v97_campaign_kanban_clients_ui.py'
+      - 'tests/ui-campaign-kanban-clients-v97.test.mjs'
+      - '.github/workflows/apply-v97-ui-polish.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v97-crm-ui-only
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply guarded four-part UI patch
+        run: python scripts/apply_v97_campaign_kanban_clients_ui.py
+      - name: Verify only App.jsx and styles.css changed
+        run: |
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' src/App.jsx src/styles.css | sort)"
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run UI, tenant and existing regression tests
+        run: node --test tests/ui-campaign-kanban-clients-v97.test.mjs tests/overdue-popup-per-login-v96.test.mjs tests/overdue-popup-v95.test.mjs tests/customer-import-v94.test.mjs tests/kanban-order.test.mjs tests/kanban-draft-merge.test.mjs
+      - name: Verify production build
+        run: npm run build
+      - name: Commit only validated interface files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx src/styles.css
+          git diff --cached --quiet && exit 0
+          git commit -m 'V97: reorder campaigns, align filters, hide zero cards and simplify clients'
+          git push

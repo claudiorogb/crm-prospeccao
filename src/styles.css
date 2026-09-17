@@ -3735,3 +3735,43 @@ button:not(:disabled):active,
 .customer-import-errors th, .customer-import-errors td { padding: 8px 12px; border-bottom: 1px solid #fecaca; vertical-align: top; }
 .customer-import-errors th { position: sticky; top: 0; background: #fff7f7; }
 @media (max-width: 760px) { .customer-import-head-buttons { width: 100%; flex-direction: column; align-items: stretch; } .customer-import-head-buttons .inline-btn { justify-content: center; width: 100%; } }
+
+
+/* V97: lead search icon and all filters share a single 48px row. */
+.leads-toolbar .search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 48px;
+  padding: 0 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+}
+.leads-toolbar .search-box svg {
+  flex: 0 0 auto;
+}
+.leads-toolbar .search-box input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+}
+.leads-toolbar .search-box input:focus {
+  border: 0;
+  box-shadow: none;
+}
+.leads-toolbar .search-box:focus-within {
+  border-color: #00a88f;
+  box-shadow: 0 0 0 3px rgba(0,168,143,.10);
+}
+.leads-toolbar > select {
+  min-width: 0;
+  height: 48px;
+}

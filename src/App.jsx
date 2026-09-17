@@ -2999,7 +2999,9 @@ function Leads({ organization, settings, userEmail }) {
                               <span><UserRound size={14}/>{l.seller_name || 'Não atribuído'}</span>
                             </div>
 
-                            <strong className="kanban-value-v70">{formatCurrency(currentLeadValue(l))}</strong>
+                            {(!['new', 'contacted', 'replied', 'interested'].includes(status) || currentLeadValue(l) !== 0) && (
+                              <strong className="kanban-value-v70">{formatCurrency(currentLeadValue(l))}</strong>
+                            )}
 
                             <div className={`kanban-due-v70${overdue ? ' overdue' : withinDueDate ? ' on-time' : ''}`}>
                               {overdue ? (
@@ -3580,7 +3582,6 @@ function Clients({ organization, userEmail, userId }) {
             </button>
             <span className="eyebrow">CLIENTE</span>
             <h1>{selectedClient.business_name}</h1>
-            <p className="muted">Cadastro, relacionamento e histórico comercial em um único lugar.</p>
           </div>
           <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
         </header>
@@ -3642,7 +3643,6 @@ function Clients({ organization, userEmail, userId }) {
                 placeholder="Informações registradas enquanto este cliente ainda era um lead interessado."
               />
             </label>
-            <p className="field-help">Estas anotações acompanham o mesmo registro do lead e não são perdidas na conversão para cliente.</p>
             <div className="form-actions"><button className="primary inline-btn" disabled={loading}><Save size={16}/> Salvar dados</button></div>
           </form>
         </section>
@@ -3759,7 +3759,6 @@ function Clients({ organization, userEmail, userId }) {
           return (
             <button className="panel client-list-row" key={client.id} onClick={() => { setSelectedId(client.id); setMessage(''); resetSaleForm() }}>
               <div className="client-list-main">
-                <span className="eyebrow">{client.segment || 'Cliente'}</span>
                 <strong>{client.business_name}</strong>
                 <span>{client.contact_name || 'Contato não informado'}{client.city ? ` • ${client.city}${client.state ? `/${client.state}` : ''}` : ''}</span>
               </div>
@@ -4294,8 +4293,8 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['targets','Público-alvo'],
     ['campaigns','Campanha'],
     ['capture','Captação'],
-    ['sending','Enviar mensagem'],
     ['messages','Mensagens'],
+    ['sending','Enviar Mensagens'],
     ['email','E-mail marketing'],
     ['whatsapp','WhatsApp']
   ]

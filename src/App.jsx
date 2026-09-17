@@ -72,6 +72,16 @@ function currentBrazilDate() {
   return `${get('year')}-${get('month')}-${get('day')}`
 }
 
+function resetOverdueLoginAlerts() {
+  // These flags are UI-only; never store tokens or other credentials here.
+  for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+    const key = sessionStorage.key(index)
+    if (key?.startsWith('crm_overdue_login_alert_') || key?.startsWith('crm_overdue_alert_')) {
+      sessionStorage.removeItem(key)
+    }
+  }
+}
+
 function formatPhone(value) {
   if (!value) return '—'
   return String(value)
@@ -229,6 +239,8 @@ function AuthScreen() {
         if (error) throw error
         setMessage('Cadastro criado. Se a confirmação de e-mail estiver ativa, confirme pelo link recebido.')
       } else {
+        // Reset before auth emits SIGNED_IN, so a fresh login can show its notice.
+        resetOverdueLoginAlerts()
         const { error } = await supabase.auth.signInWithPassword({
           email: form.email,
           password: form.password
@@ -4856,14 +4868,15 @@ function OverdueReturnsNavItem({ organization, active, onOpen }) {
   )
 }
 
-function OverdueReturnsAlert({ organization, onOpen }) {
+function OverdueReturnsAlert({ organization, onOpen, userId }) {
   const [count, setCount] = useState(0)
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
     let mounted = true
     async function check() {
-      const key = `crm_overdue_alert_${organization.id}_${currentBrazilDate()}`
+      if (!userId) return
+      const key = `crm_overdue_login_alert_${userId}_${organization.id}`
       if (sessionStorage.getItem(key)) return
       const { data } = await supabase
         .from('leads')
@@ -4878,7 +4891,7 @@ function OverdueReturnsAlert({ organization, onOpen }) {
     }
     check()
     return () => { mounted = false }
-  }, [organization.id])
+  }, [organization.id, userId])
 
   if (!visible) return null
 
@@ -7431,6 +7444,7 @@ export default function App() {
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'SIGNED_OUT') resetOverdueLoginAlerts()
       setSession(newSession)
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
     })
@@ -7693,6 +7707,7 @@ export default function App() {
           {commercialMode && sandboxOrganization && adminSandboxSettings && (
             <OverdueReturnsAlert
               organization={sandboxOrganization}
+              userId={session.user.id}
               onOpen={() => { setAdminCommercialPage('overdue-returns'); setMobileMenuOpen(false) }}
             />
           )}
@@ -7849,7 +7864,7 @@ export default function App() {
       </aside>
 
       <main className="content">
-        <OverdueReturnsAlert organization={organization} onOpen={() => setPage('overdue-returns')} />
+        <OverdueReturnsAlert organization={organization} userId={session.user.id} onOpen={() => setPage('overdue-returns')} />
         {page === 'dashboard' && (
           <Dashboard
             organization={organization}

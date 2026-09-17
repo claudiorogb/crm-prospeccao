@@ -13,7 +13,7 @@ test('admin sandbox uses popup only in commercial test mode and only for the san
 })
 
 test('regular client organizations retain their original organization-scoped popup', () => {
-  assert.match(customerMode, /<OverdueReturnsAlert organization=\{organization\} onOpen=\{\(\) => setPage\('overdue-returns'\)\} \/>/)
+  assert.match(customerMode, /<OverdueReturnsAlert organization=\{organization\} userId=\{session\.user\.id\} onOpen=\{\(\) => setPage\('overdue-returns'\)\} \/>/)
   assert.equal((customerMode.match(/<OverdueReturnsAlert/g) || []).length, 1)
 })
 
@@ -22,5 +22,5 @@ test('popup queries only current organization and retains existing overdue crite
   assert.match(popup, /\.eq\('organization_id', organization\.id\)/)
   assert.match(popup, /\.lt\('next_contact_date', currentBrazilDate\(\)\)/)
   assert.match(popup, /filter\(isOverdueReturn\)/)
-  assert.match(popup, /crm_overdue_alert_\$\{organization\.id\}_\$\{currentBrazilDate\(\)\}/)
+  assert.match(popup, /crm_overdue_login_alert_\$\{userId\}_\$\{organization\.id\}/)
 })

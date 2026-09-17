@@ -1,0 +1,49 @@
+name: V99 email consent confirmation
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v99-email-consent.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply consent UI patch
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/email-marketing.jsx')
+          s = p.read_text()
+          changes = [
+            ("  const [draftCampaignId, setDraftCampaignId] = useState(null)\n", "  const [draftCampaignId, setDraftCampaignId] = useState(null)\n  const [commercialConsentConfirmed, setCommercialConsentConfirmed] = useState(false)\n"),
+            ("    if (!selectedTotal) return setMessage('Selecione pelo menos um destinatário.')\n", "    if (!selectedTotal) return setMessage('Selecione pelo menos um destinatário.')\n    if (startSending && !commercialConsentConfirmed) return setMessage('Confirme a autorização dos destinatários antes de iniciar o envio.')\n"),
+            ("      if (startSending) {\n        const { error: queueError } = await supabase.rpc('queue_email_campaign', { p_campaign_id: draftCampaignId })\n", "      if (startSending) {\n        const { error: consentError } = await supabase.rpc('confirm_email_campaign_compliance', { p_campaign_id: draftCampaignId })\n        if (consentError) throw consentError\n        const { error: queueError } = await supabase.rpc('queue_email_campaign', { p_campaign_id: draftCampaignId })\n"),
+            ("        setSelectedMarketing(new Set())\n      } else {", "        setSelectedMarketing(new Set())\n        setCommercialConsentConfirmed(false)\n      } else {"),
+            ("      } else {\n        setMessage(`${savedCount}", "      } else {\n        setCommercialConsentConfirmed(false)\n        setMessage(`${savedCount}"),
+            ("      setSelectedMarketing(new Set((data || []).map(r => r.marketing_contact_id).filter(Boolean)))\n      setFiles([])", "      setSelectedMarketing(new Set((data || []).map(r => r.marketing_contact_id).filter(Boolean)))\n      setCommercialConsentConfirmed(false)\n      setFiles([])"),
+            ("        <div className=\"form-actions email-draft-actions\">", "        {draftCampaignId && (\n          <label className=\"email-recipient-row\">\n            <input type=\"checkbox\" checked={commercialConsentConfirmed} onChange={e => setCommercialConsentConfirmed(e.target.checked)} />\n            <span><strong>Confirmação obrigatória antes do envio</strong><small>Confirmo que este envio não é para prospecção não solicitada e que os destinatários selecionados já fazem parte da base autorizada da empresa para receber comunicações comerciais.</small></span>\n          </label>\n        )}\n\n        <div className=\"form-actions email-draft-actions\">"),
+            ("disabled={loading || selectedTotal === 0} onClick={() => saveRecipients(true)}", "disabled={loading || selectedTotal === 0 || !commercialConsentConfirmed} onClick={() => saveRecipients(true)}")
+          ]
+          for old, new in changes:
+              if s.count(old) != 1:
+                  raise SystemExit(f'Âncora inválida: {old[:80]}')
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - name: Commit validated change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/email-marketing.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'V99: require commercial email consent confirmation'
+          git push

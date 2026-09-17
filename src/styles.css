@@ -3725,3 +3725,13 @@ button:not(:disabled):active,
   .customer-import-analysis > .primary { grid-column: 1 / -1; justify-self: stretch; }
   .customer-import-actions .inline-btn, .customer-import-file-button { width: 100%; justify-content: center; }
 }
+
+/* V94 CUSTOMER IMPORT DIAGNOSTICS */
+.customer-import-head-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.customer-import-errors { margin-top: 16px; border: 1px solid #fecaca; background: #fff7f7; border-radius: 10px; padding: 12px; }
+.customer-import-errors > strong { color: #991b1b; display: block; margin-bottom: 10px; }
+.customer-import-errors-scroll { overflow-x: auto; max-height: 380px; overflow-y: auto; }
+.customer-import-errors table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.customer-import-errors th, .customer-import-errors td { padding: 8px 12px; border-bottom: 1px solid #fecaca; vertical-align: top; }
+.customer-import-errors th { position: sticky; top: 0; background: #fff7f7; }
+@media (max-width: 760px) { .customer-import-head-buttons { width: 100%; flex-direction: column; align-items: stretch; } .customer-import-head-buttons .inline-btn { justify-content: center; width: 100%; } }

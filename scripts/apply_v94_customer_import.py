@@ -15,8 +15,10 @@ def replace_once(old, new):
 
 replace_once("import { FileSpreadsheet, Upload, CheckCircle2, AlertTriangle, RefreshCw }", "import { FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, RefreshCw }")
 replace_once("business_name: ['empresa / cliente','empresa','cliente','nome fantasia','nome']", "business_name: ['empresa / cliente','empresa','cliente','nome fantasia','nome','nome do cliente']")
-replace_once("keyName: ['empresa / cliente','empresa','cliente']", "keyName: ['empresa / cliente','empresa','cliente','nome do cliente']")
-replace_once("keyName: ['empresa / cliente','empresa','cliente']", "keyName: ['empresa / cliente','empresa','cliente','nome do cliente']")
+key_anchor = "keyName: ['empresa / cliente','empresa','cliente']"
+if text.count(key_anchor) != 2:
+    raise SystemExit('V94 halted: activity and sale alias anchors changed')
+text = text.replace(key_anchor, "keyName: ['empresa / cliente','empresa','cliente','nome do cliente']", 2)
 
 start = text.index('function rowsFromSheet(sheet) {')
 end = text.index('\nasync function sha256(file) {', start)

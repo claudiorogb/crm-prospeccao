@@ -1,0 +1,43 @@
+name: V94 customer import validation and template
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v94_customer_import.py'
+      - 'tests/customer-import-v94.test.mjs'
+      - '.github/workflows/apply-v94-customer-import.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v94-customer-import
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guarded import-only patch
+        run: python scripts/apply_v94_customer_import.py
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify template and import validation
+        run: node --test tests/customer-import-v94.test.mjs tests/kanban-order.test.mjs tests/kanban-draft-merge.test.mjs
+      - name: Verify production build
+        run: npm run build
+      - name: Commit only the validated import changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/customer-import.jsx src/styles.css
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'V94: import template, detailed errors and strict organization checks'
+            git push
+          fi

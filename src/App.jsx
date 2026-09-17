@@ -7690,6 +7690,12 @@ export default function App() {
         </aside>
 
         <main className="content">
+          {commercialMode && sandboxOrganization && adminSandboxSettings && (
+            <OverdueReturnsAlert
+              organization={sandboxOrganization}
+              onOpen={() => { setAdminCommercialPage('overdue-returns'); setMobileMenuOpen(false) }}
+            />
+          )}
           {!commercialMode && (
             <Administration
               organizations={adminOrganizations}

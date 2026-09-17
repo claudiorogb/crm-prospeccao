@@ -1,0 +1,43 @@
+name: V98 imported clients outside funnel
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v98_imported_clients_outside_funnel.py'
+      - 'tests/imported-customers-outside-funnel-v98.test.mjs'
+      - 'supabase/migrations/20260917140000_v98_imported_customers_outside_pipeline.sql'
+      - '.github/workflows/apply-v98-imported-customers.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v98-imported-customers
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply guarded Kanban and Clientes display patch
+        run: python scripts/apply_v98_imported_clients_outside_funnel.py
+      - name: Verify only App.jsx changed
+        run: test "$(git diff --name-only)" = 'src/App.jsx'
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run imported customer and previous regression tests
+        run: node --test tests/*.test.mjs
+      - name: Verify production build
+        run: npm run build
+      - name: Commit only validated interface file
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'V98: keep imported clients out of won Kanban'
+          git push

@@ -15,7 +15,7 @@ const popup = part('function OverdueReturnsAlert(', 'function OverdueReturnsPage
 const auth = part('function AuthScreen()', 'function ResetPasswordScreen(')
 const lifecycle = part('supabase.auth.getSession()', 'return () => listener.subscription.unsubscribe()')
 const admin = part('if (isSystemAdmin && !organization) {', 'if (!organization) {')
-const tenants = app.slice(app.indexOf('if (!organization) {', app.indexOf('if (isSystemAdmin && !organization) {'))
+const tenants = app.slice(app.indexOf('if (!organization) {', app.indexOf('if (isSystemAdmin && !organization) {')))
 
 test('each explicit successful password login resets alerts before SIGNED_IN can render', () => {
   assert.match(auth, /resetOverdueLoginAlerts\(\)\s*const \{ error \} = await supabase\.auth\.signInWithPassword\(/)

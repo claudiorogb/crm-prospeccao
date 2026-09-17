@@ -82,6 +82,7 @@ export function EmailMarketing({ organization, userEmail }) {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [draftCampaignId, setDraftCampaignId] = useState(null)
+  const [commercialConsentConfirmed, setCommercialConsentConfirmed] = useState(false)
 
   async function loadData() {
     if (!organization?.id) return
@@ -318,6 +319,7 @@ export function EmailMarketing({ organization, userEmail }) {
   async function saveRecipients(startSending = false) {
     if (!draftCampaignId) return setMessage('Salve a campanha antes de escolher os destinatários.')
     if (!selectedTotal) return setMessage('Selecione pelo menos um destinatário.')
+    if (startSending && !commercialConsentConfirmed) return setMessage('Confirme a autorização dos destinatários antes de iniciar o envio.')
     setLoading(true); setMessage('')
     try {
       const { data, error } = await supabase.rpc('set_email_campaign_recipients', {
@@ -328,6 +330,8 @@ export function EmailMarketing({ organization, userEmail }) {
       if (error) throw error
       const savedCount = Number(data || 0)
       if (startSending) {
+        const { error: consentError } = await supabase.rpc('confirm_email_campaign_compliance', { p_campaign_id: draftCampaignId })
+        if (consentError) throw consentError
         const { error: queueError } = await supabase.rpc('queue_email_campaign', { p_campaign_id: draftCampaignId })
         if (queueError) throw queueError
         setMessage(`Campanha iniciada com ${savedCount} destinatário${savedCount === 1 ? '' : 's'}.`)
@@ -335,7 +339,9 @@ export function EmailMarketing({ organization, userEmail }) {
         setForm({ name: '', subject: '', body: '' })
         setSelected(new Set())
         setSelectedMarketing(new Set())
+        setCommercialConsentConfirmed(false)
       } else {
+        setCommercialConsentConfirmed(false)
         setMessage(`${savedCount} destinatário${savedCount === 1 ? '' : 's'} salvo${savedCount === 1 ? '' : 's'} no rascunho.`)
       }
       await loadData()
@@ -358,6 +364,7 @@ export function EmailMarketing({ organization, userEmail }) {
       setForm({ name: campaign.name || '', subject: campaign.subject || '', body: campaign.body_text || '' })
       setSelected(new Set((data || []).map(r => r.lead_id).filter(Boolean)))
       setSelectedMarketing(new Set((data || []).map(r => r.marketing_contact_id).filter(Boolean)))
+      setCommercialConsentConfirmed(false)
       setFiles([])
       setMessage('Rascunho aberto. Revise ou escolha os destinatários e inicie o envio quando estiver pronto.')
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -539,6 +546,13 @@ export function EmailMarketing({ organization, userEmail }) {
 
         )}
 
+        {draftCampaignId && (
+          <label className="email-recipient-row">
+            <input type="checkbox" checked={commercialConsentConfirmed} onChange={e => setCommercialConsentConfirmed(e.target.checked)} />
+            <span><strong>Confirmação obrigatória antes do envio</strong><small>Confirmo que este envio não é para prospecção não solicitada e que os destinatários selecionados já fazem parte da base autorizada da empresa para receber comunicações comerciais.</small></span>
+          </label>
+        )}
+
         <div className="form-actions email-draft-actions">
           {!draftCampaignId ? (
             <>
@@ -548,7 +562,7 @@ export function EmailMarketing({ organization, userEmail }) {
           ) : (
             <>
               <button type="button" className="secondary" disabled={loading || selectedTotal === 0} onClick={() => saveRecipients(false)}>Salvar destinatários</button>
-              <button type="button" className="primary" disabled={loading || selectedTotal === 0} onClick={() => saveRecipients(true)}>{loading ? 'Processando...' : 'Iniciar envio'}</button>
+              <button type="button" className="primary" disabled={loading || selectedTotal === 0 || !commercialConsentConfirmed} onClick={() => saveRecipients(true)}>{loading ? 'Processando...' : 'Iniciar envio'}</button>
               <span className="muted">{selectedTotal} destinatário{selectedTotal === 1 ? '' : 's'} selecionado{selectedTotal === 1 ? '' : 's'}.</span>
             </>
           )}

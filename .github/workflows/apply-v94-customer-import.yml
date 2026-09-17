@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'scripts/apply_v94_customer_import.py'
+      - 'scripts/repair_v94_anchor.py'
       - 'tests/customer-import-v94.test.mjs'
       - '.github/workflows/apply-v94-customer-import.yml'
 
@@ -23,7 +24,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Guarded import-only patch
-        run: python scripts/apply_v94_customer_import.py
+        run: |
+          python scripts/repair_v94_anchor.py
+          python scripts/apply_v94_customer_import.py
       - name: Install existing dependencies
         run: npm install --no-audit --no-fund
       - name: Verify template and import validation
@@ -34,7 +37,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/customer-import.jsx src/styles.css
+          git add src/customer-import.jsx src/styles.css scripts/apply_v94_customer_import.py
           if git diff --cached --quiet; then
             echo 'No changes to commit'
           else

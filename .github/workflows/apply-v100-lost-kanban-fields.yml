@@ -1,0 +1,42 @@
+name: V100 Lost Kanban fields
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v100_lost_kanban_fields.py'
+      - 'tests/lost-kanban-fields-v100.test.mjs'
+      - '.github/workflows/apply-v100-lost-kanban-fields.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v100-lost-kanban-only
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified, Lost-only UI patch
+        run: python scripts/apply_v100_lost_kanban_fields.py
+      - name: Ensure no unrelated source, database or policy changes
+        run: test "$(git diff --name-only)" = 'src/App.jsx'
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Test Lost fields and all existing regressions
+        run: node --test tests/*.test.mjs
+      - name: Validate production build
+        run: npm run build
+      - name: Commit only validated interface change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'V100: show decline date and hide contract and return fields only in Lost'
+          git push

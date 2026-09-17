@@ -2204,6 +2204,9 @@ function Leads({ organization, settings, userEmail }) {
       .eq('status', status)
       .is('deleted_at', null)
 
+    // Imported customers are in the customer portfolio, not sales-funnel wins.
+    if (status === 'won') query = query.neq('source', 'import')
+
     if (currentFilter.segment !== 'all') query = query.eq('target_segment_id', currentFilter.segment)
     const safeSearch = currentFilter.search.trim().replace(/[,%()]/g, ' ')
     if (safeSearch) {
@@ -3737,7 +3740,7 @@ function Clients({ organization, userEmail, userId }) {
         <div>
           <span className="eyebrow">CARTEIRA COMERCIAL</span>
           <h1>Clientes</h1>
-          <p className="muted">Leads marcados como Ganho aparecem aqui automaticamente.</p>
+          <p className="muted">Clientes conquistados no funil ou adicionados por importação aparecem aqui.</p>
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>

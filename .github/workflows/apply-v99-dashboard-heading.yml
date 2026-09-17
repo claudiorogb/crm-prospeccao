@@ -1,0 +1,45 @@
+name: V99 remove duplicate dashboard heading
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v99_dashboard_duplicate_funnel_heading.py'
+      - 'tests/dashboard-funnel-heading-v99.test.mjs'
+      - '.github/workflows/apply-v99-dashboard-heading.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v99-dashboard-heading-only
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove only the exact redundant dashboard heading
+        run: python scripts/apply_v99_dashboard_duplicate_funnel_heading.py
+      - name: Verify only App.jsx changed and diff is clean
+        run: |
+          test "$(git diff --name-only)" = 'src/App.jsx'
+          git diff --check
+          git diff -- src/App.jsx
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run focused and existing regression tests
+        run: node --test tests/*.test.mjs
+      - name: Verify production build
+        run: npm run build
+      - name: Commit only validated interface file
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'V99: remove redundant heading above ongoing deals on dashboard'
+          git push

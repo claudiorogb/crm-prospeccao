@@ -1,0 +1,43 @@
+name: V96 overdue alert every login
+
+on:
+  push:
+    paths:
+      - 'scripts/apply_v96_overdue_every_login.py'
+      - 'tests/overdue-popup-per-login-v96.test.mjs'
+      - '.github/workflows/apply-v96-overdue-per-login.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v96-overdue-per-login
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply guarded UI-only patch
+        run: python scripts/apply_v96_overdue_every_login.py
+      - name: Ensure only popup UI and existing popup test changed
+        run: |
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' src/App.jsx tests/overdue-popup-v95.test.mjs | sort)"
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Test login lifecycle, tenant isolation and existing features
+        run: node --test tests/overdue-popup-per-login-v96.test.mjs tests/overdue-popup-v95.test.mjs tests/customer-import-v94.test.mjs tests/kanban-order.test.mjs tests/kanban-draft-merge.test.mjs
+      - name: Validate production build
+        run: npm run build
+      - name: Commit only validated popup changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx tests/overdue-popup-v95.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'V96: display overdue alert on every login per user and organization'
+          git push

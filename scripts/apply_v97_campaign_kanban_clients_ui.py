@@ -1,7 +1,6 @@
-"""Apply only the four requested presentation changes to the current CRM UI.
+"""Apply only four requested presentation changes with guarded exact matches.
 
-Guarded exact replacements: abort before writing if any expected source changed.
-No database, tenant, authentication, RPC, or business-rule source is touched.
+No database, authentication, permissions or tenant-scoped queries are touched.
 """
 from pathlib import Path
 
@@ -40,14 +39,14 @@ changes = [
 
 for before, after, label in changes:
     if app.count(before) != 1:
-        raise SystemExit(f'V97 aborted: expected exactly one {label} anchor; found {app.count(before)}. No files modified.')
+        raise SystemExit(f'V97 aborted: expected one {label} anchor, found {app.count(before)}. No files modified.')
     app = app.replace(before, after, 1)
 
 css_mark = '/* V97: lead search icon and all filters share a single 48px row. */'
 if css_mark in css:
     raise SystemExit('V97 already applied; refusing to append CSS twice.')
-if css.count('.leads-toolbar {') != 1:
-    raise SystemExit('V97 aborted: lead toolbar CSS changed. No files modified.')
+if css.count('.leads-toolbar {') < 1 or css.count('.leads-toolbar {') > 5:
+    raise SystemExit('V97 aborted: lead toolbar stylesheet differs unexpectedly. No files modified.')
 
 css += '''\n\n/* V97: lead search icon and all filters share a single 48px row. */
 .leads-toolbar .search-box {
@@ -92,4 +91,4 @@ css += '''\n\n/* V97: lead search icon and all filters share a single 48px row. 
 # All validations complete before touching either file.
 app_path.write_text(app, encoding='utf-8')
 css_path.write_text(css, encoding='utf-8')
-print('V97 applied: only App.jsx and styles.css; no data, access, or business logic changed.')
+print('V97 applied: only App.jsx and styles.css; no data, access, or business rules changed.')

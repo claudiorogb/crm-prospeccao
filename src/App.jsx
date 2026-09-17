@@ -693,14 +693,6 @@ function Dashboard({ organization, userEmail, onGoCampaigns }) {
       {message && <div className="notice error">{message}</div>}
 
       <section className="panel dashboard-block-v61 dashboard-funnel-v61">
-        <div className="dashboard-block-head-v61">
-          <div>
-            <span className="eyebrow">FUNIL ATIVO</span>
-            <h2>Negócios em andamento</h2>
-            <p className="muted">Somente oportunidades que já chegaram a Interessado e ainda não foram encerradas.</p>
-          </div>
-        </div>
-
         <div className="dashboard-hero-v61">
           <StatCard
             label="Negócios em andamento"

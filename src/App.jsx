@@ -2758,6 +2758,19 @@ function Leads({ organization, settings, userEmail }) {
     return new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR')
   }
 
+  // The date when the lead entered Lost, in the CRM's São Paulo business timezone.
+  // Never use contract_signed_at for a proposal that was declined.
+  function formatLostDeclineDate(value) {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(date)
+    const get = type => parts.find(part => part.type === type)?.value || ''
+    return `${get('year')}-${get('month')}-${get('day')}`
+  }
+
   function toggleLeadExpanded(leadId) {
     setExpandedLeadIds(current => {
       const next = new Set(current)
@@ -2998,15 +3011,17 @@ function Leads({ organization, settings, userEmail }) {
                               <strong className="kanban-value-v70">{formatCurrency(currentLeadValue(l))}</strong>
                             )}
 
-                            <div className={`kanban-due-v70${overdue ? ' overdue' : withinDueDate ? ' on-time' : ''}`}>
-                              {overdue ? (
-                                <strong>ATRASADO</strong>
-                              ) : l.next_contact_date ? (
-                                <span><Clock size={14}/>{formatKanbanDate(l.next_contact_date)}</span>
-                              ) : (
-                                <span>Sem retorno previsto</span>
-                              )}
-                            </div>
+                            {status !== 'lost' && (
+                              <div className={`kanban-due-v70${overdue ? ' overdue' : withinDueDate ? ' on-time' : ''}`}>
+                                {overdue ? (
+                                  <strong>ATRASADO</strong>
+                                ) : l.next_contact_date ? (
+                                  <span><Clock size={14}/>{formatKanbanDate(l.next_contact_date)}</span>
+                                ) : (
+                                  <span>Sem retorno previsto</span>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {expanded && (
@@ -3087,7 +3102,7 @@ function Leads({ organization, settings, userEmail }) {
                             </>
                           )}
 
-                          {closedStage && (
+                          {status === 'won' && (
                             <div className="kanban-two-fields">
                               <label>
                                 <span>Valor do contrato</span>
@@ -3112,6 +3127,18 @@ function Leads({ organization, settings, userEmail }) {
                                 />
                               </label>
                             </div>
+                          )}
+
+                          {status === 'lost' && (
+                            <label>
+                              <span>Data de declínio da proposta</span>
+                              <input
+                                type="date"
+                                value={formatLostDeclineDate(l.status_changed_at)}
+                                readOnly
+                                className="readonly-field-v54"
+                              />
+                            </label>
                           )}
 
                           {(repliedStage || interestedStage || proposalStage || negotiationStage) && (

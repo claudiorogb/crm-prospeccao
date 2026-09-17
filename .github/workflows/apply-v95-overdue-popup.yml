@@ -42,3 +42,4 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m 'V95: show overdue popup in isolated admin test workspace'
             git push
+          fi

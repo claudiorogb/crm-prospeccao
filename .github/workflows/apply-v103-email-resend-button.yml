@@ -34,7 +34,7 @@ jobs:
           print('Escopo e função de reenvio preservados')
           PY
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
       - name: All existing regression tests
         run: node --test tests/*.test.mjs
       - name: Production build

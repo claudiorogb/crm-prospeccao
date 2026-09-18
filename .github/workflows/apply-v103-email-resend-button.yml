@@ -1,0 +1,49 @@
+name: V103 Fix email campaign resend button
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v103-email-resend-button.yml'
+permissions:
+  contents: write
+concurrency:
+  group: v103-email-resend-button
+  cancel-in-progress: false
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply exact scoped change
+        run: python scripts/fix_email_campaign_resend_button_v103.py
+      - name: Guard against unrelated changes
+        run: |
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          changed=set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
+          assert changed=={'src/email-marketing.jsx','src/email-marketing.css'},changed
+          s=Path('src/email-marketing.jsx').read_text()
+          assert 'Reenviar campanha</button>' in s
+          assert "supabase.rpc('clone_email_campaign_for_resend'" in s
+          assert 'await continueDraft(draft)' in s
+          assert 'onClick={() => resendCampaign(campaign)}' in s
+          assert "<NewsletterMailingPanel organization={organization} onChanged={loadData} />" in s
+          print('Escopo e função de reenvio preservados')
+          PY
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: All existing regression tests
+        run: node --test tests/*.test.mjs
+      - name: Production build
+        run: npm run build
+      - name: Commit validated UI change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/email-marketing.jsx src/email-marketing.css
+          git diff --cached --quiet && exit 0
+          git commit -m 'V103: restore clear campaign resend action in history'
+          git push

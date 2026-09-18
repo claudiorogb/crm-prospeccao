@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
 import MarketingListImport from './marketing-list-import'
+import NewsletterMailingPanel from './newsletter-mailing-panel'
 import './email-marketing.css'
 
 const BUCKET = 'email-campaign-attachments'
@@ -129,7 +130,7 @@ export function EmailMarketing({ organization, userEmail }) {
   const eligibleClients = useMemo(() => clients.filter(c => validEmail(c.email) && !c.email_marketing_opt_out), [clients])
   const unavailableCount = clients.length - eligibleClients.length
   const eligibleMarketingContacts = useMemo(
-    () => marketingContacts.filter(c => validEmail(c.email) && c.status === 'active' && c.consent_confirmed),
+    () => marketingContacts.filter(c => validEmail(c.email) && c.status === 'active' && c.consent_confirmed && !c.unsubscribed_at),
     [marketingContacts]
   )
   const unavailableMarketingCount = marketingContacts.length - eligibleMarketingContacts.length
@@ -185,6 +186,29 @@ export function EmailMarketing({ organization, userEmail }) {
       filteredMarketingContacts.forEach(c => allSelected ? next.delete(c.id) : next.add(c.id))
       return next
     })
+  }
+
+  async function includeMarketingList() {
+    if (!draftCampaignId) return setMessage('Salve a campanha antes de incluir a lista.')
+    if (!eligibleMarketingContacts.length) return setMessage('Não há e-mails autorizados disponíveis para incluir.')
+    setLoading(true)
+    setMessage('')
+    try {
+      const { data, error } = await supabase.rpc('set_email_campaign_recipients', {
+        p_campaign_id: draftCampaignId,
+        p_client_ids: selectedClients.map(c => c.id),
+        p_marketing_contact_ids: eligibleMarketingContacts.map(c => c.id)
+      })
+      if (error) throw error
+      setSelectedMarketing(new Set(eligibleMarketingContacts.map(c => c.id)))
+      setCommercialConsentConfirmed(false)
+      setMessage(`${Number(data || 0)} destinatário(s) salvo(s) no rascunho. A lista foi incluída, mas o envio ainda não foi iniciado.`)
+      await loadData()
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível incluir a lista de e-mail marketing.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   function chooseFiles(event) {
@@ -471,6 +495,8 @@ export function EmailMarketing({ organization, userEmail }) {
         {connection?.status === 'error' && <div className="notice error">A conexão precisa de atenção: {connection.last_error || 'reconecte a conta.'}</div>}
       </section>
 
+      <NewsletterMailingPanel organization={organization} onChanged={loadData} />
+
       <form className="panel email-compose-panel" onSubmit={createCampaign}>
         <div className="email-section-title">
           <div><span className="eyebrow">NOVA CAMPANHA</span><h2>Criar e-mail</h2></div>
@@ -530,7 +556,10 @@ export function EmailMarketing({ organization, userEmail }) {
           <div className="email-recipient-source">
             <div className="email-recipient-source-head">
               <div><strong>Lista de E-mail Marketing</strong><span>{eligibleMarketingContacts.length} disponível{eligibleMarketingContacts.length === 1 ? '' : 'is'} • {unavailableMarketingCount} indisponível{unavailableMarketingCount === 1 ? '' : 'is'}</span></div>
-              <button type="button" className="secondary" onClick={toggleAllFilteredMarketing}>{filteredMarketingContacts.length && filteredMarketingContacts.every(c => selectedMarketing.has(c.id)) ? 'Desmarcar exibidos' : 'Selecionar exibidos'}</button>
+              <div className="mailing-source-actions">
+                <button type="button" className="primary" disabled={loading || eligibleMarketingContacts.length === 0} onClick={includeMarketingList}>Incluir lista de e-mail mkt</button>
+                <button type="button" className="secondary" onClick={toggleAllFilteredMarketing}>{filteredMarketingContacts.length && filteredMarketingContacts.every(c => selectedMarketing.has(c.id)) ? 'Desmarcar exibidos' : 'Selecionar exibidos'}</button>
+              </div>
             </div>
             <div className="email-recipient-list">
               {filteredMarketingContacts.length === 0 ? <p className="muted email-empty-list">Nenhum contato de lista elegível encontrado.</p> : filteredMarketingContacts.map(contact => (

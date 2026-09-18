@@ -99,7 +99,6 @@ export default function CrmFullExport({ organization, userId }) {
         <div>
           <h2>Exportação completa</h2>
           <p className="muted">Baixe um único Excel com Leads, Clientes, Contatos, Tarefas e Vendas da sua empresa, incluindo registros comerciais arquivados.</p>
-          <p className="muted">Tarefas correspondem às datas de próximo contato registradas no CRM. Este arquivo não substitui um backup técnico do banco.</p>
         </div>
         <button type="button" className="secondary inline-btn" onClick={downloadFullExport} disabled={exporting}>
           <Download size={17}/>{exporting ? 'Preparando Excel...' : 'Exportar dados completos'}

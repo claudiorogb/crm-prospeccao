@@ -1,0 +1,45 @@
+name: V101 complete CRM Excel export
+
+on:
+  push:
+    paths:
+      - 'src/crm-full-export-core.js'
+      - 'src/crm-full-export.jsx'
+      - 'supabase/migrations/20260918153000_v101_secure_full_crm_export.sql'
+      - 'scripts/apply_v101_full_crm_export.py'
+      - 'tests/crm-full-export-v101.test.mjs'
+      - '.github/workflows/apply-v101-full-crm-export.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v101-secure-crm-export
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Add export only to the existing customer-list screen
+        run: python scripts/apply_v101_full_crm_export.py
+      - name: Ensure the only existing source modified is App.jsx
+        run: test "$(git diff --name-only)" = 'src/App.jsx'
+      - name: Install existing dependencies without adding new packages
+        run: npm install --no-audit --no-fund
+      - name: Run workbook, tenant authorization and all existing regression tests
+        run: node --test tests/*.test.mjs
+      - name: Validate production build
+        run: npm run build
+      - name: Commit only validated UI wiring
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'V101: expose safe complete Excel export in Clients'
+          git push

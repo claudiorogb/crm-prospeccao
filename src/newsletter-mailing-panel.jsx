@@ -105,7 +105,7 @@ export default function NewsletterMailingPanel({ organization, onChanged }) {
           <div className="mailing-management-import">
             <h3>Incluir novos e-mails</h3>
             <p className="muted">Adicione e-mails individualmente ou importe uma lista autorizada do seu site. Endereços descadastrados não são reativados pela inclusão manual.</p>
-            <MarketingListImport organization={organization} onImported={handleImported} onManualAdded={handleImported} />
+            <MarketingListImport organization={organization} standalone onImported={handleImported} onManualAdded={handleImported} />
           </div>
         </div>
       )}

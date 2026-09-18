@@ -62,7 +62,7 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
-export default function MarketingListImport({ organization, onImported, onManualAdded }) {
+export default function MarketingListImport({ organization, onImported, onManualAdded, standalone = false }) {
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
   const [source, setSource] = useState('Lista própria importada')
@@ -159,7 +159,7 @@ export default function MarketingListImport({ organization, onImported, onManual
       setManualName('')
       setManualCompany('')
       setManualConfirmed(false)
-      setManualMessage('Destinatário adicionado e selecionado para a campanha.')
+      setManualMessage(standalone ? 'E-mail incluído na lista.' : 'Destinatário adicionado e selecionado para a campanha.')
       if (onManualAdded) await onManualAdded(contact)
       else if (onImported) await onImported()
     } catch (error) {
@@ -197,7 +197,7 @@ export default function MarketingListImport({ organization, onImported, onManual
         </label>
         <div className="form-actions">
           <button type="button" className="secondary" disabled={loading || !validEmail(manualEmail) || !manualConfirmed} onClick={addManualRecipient}>
-            {loading ? 'Adicionando...' : 'Adicionar e selecionar'}
+            {loading ? 'Adicionando...' : standalone ? 'Adicionar à lista' : 'Adicionar e selecionar'}
           </button>
         </div>
         {manualMessage && <div className="notice">{manualMessage}</div>}

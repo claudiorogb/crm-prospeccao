@@ -1,0 +1,36 @@
+name: V102 Standalone mailing labels
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v102-mailing-copy.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply scoped copy patch
+        run: python scripts/apply_v102_mailing_standalone_copy.py
+      - name: Verify file scope
+        run: |
+          test "$(git diff --name-only | sort)" = "$(printf 'src/marketing-list-import.jsx\nsrc/newsletter-mailing-panel.jsx')"
+      - name: Setup existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Regression tests
+        run: node --test tests/*.test.mjs
+      - name: Production build
+        run: npm run build
+      - name: Commit validated changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/marketing-list-import.jsx src/newsletter-mailing-panel.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'V102: distinguish list imports from campaign recipient selection'
+          git push

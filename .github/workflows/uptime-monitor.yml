@@ -1,0 +1,25 @@
+name: AXIVA CRM - monitor externo de disponibilidade
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Iniciar fora dos minutos 00/30 reduz atrasos em horários de pico.
+    - cron: '3-58/5 * * * *'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: axiva-crm-external-uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Baixar o código do verificador
+        uses: actions/checkout@v4
+      - name: Verificar site e banco sem credenciais persistentes
+        run: python3 scripts/uptime_monitor.py

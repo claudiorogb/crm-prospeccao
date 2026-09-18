@@ -1,0 +1,54 @@
+name: V101 Newsletter mailing management
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v101-newsletter-mailing.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v101-newsletter-mailing
+  cancel-in-progress: false
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply targeted mailing UI patch
+        run: python scripts/apply_v101_newsletter_mailing.py
+      - name: Check changes are restricted to Email Marketing
+        run: |
+          test "$(git diff --name-only)" = 'src/email-marketing.jsx'
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/email-marketing.jsx').read_text(encoding='utf8')
+          c=Path('src/newsletter-mailing-panel.jsx').read_text(encoding='utf8')
+          assert "<NewsletterMailingPanel organization={organization} onChanged={loadData} />" in s
+          assert "onClick={includeMarketingList}" in s
+          assert "p_marketing_contact_ids: eligibleMarketingContacts.map(c => c.id)" in s
+          assert "!c.unsubscribed_at" in s
+          assert "eq('organization_id', organization.id)" in c
+          assert "created_at" in c
+          assert 'MarketingListImport' in c
+          print('V101 UI integrity checks passed')
+          PY
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Existing regression tests
+        run: node --test tests/*.test.mjs
+      - name: Production build
+        run: npm run build
+      - name: Commit validated UI only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/email-marketing.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'V101: manage organization mailing and include eligible list in draft'
+          git push

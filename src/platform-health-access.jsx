@@ -9,6 +9,8 @@ export default function PlatformHealthAccess() {
   const [authorized, setAuthorized] = useState(false)
   const [navigation, setNavigation] = useState(null)
   const [open, setOpen] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState('')
 
   useEffect(() => {
     let active = true
@@ -43,17 +45,34 @@ export default function PlatformHealthAccess() {
     return () => watcher.disconnect()
   }, [authorized])
 
+  async function testAlerts() {
+    setTesting(true)
+    setTestResult('')
+    const { data, error } = await supabase.functions.invoke('axiva-monitor-ingest', { body: { action: 'test_alert' } })
+    if (error || !data?.ok) {
+      setTestResult(`Falha no teste: ${data?.error || error?.message || 'Não foi possível iniciar o teste.'}`)
+    } else {
+      const channel = status => status === 'sent' ? 'aceito pelo provedor' : status === 'failed' ? 'falhou (consulte o histórico abaixo)' : 'não configurado'
+      setTestResult(`Teste concluído. E-mail: ${channel(data.email)}. WhatsApp: ${channel(data.whatsapp)}. Consulte o recebimento no destino.`)
+    }
+    setTesting(false)
+  }
+
   if (!authorized) return null
   return <>
     {navigation && createPortal(
-      <button type="button" className={`admin-subnav-item ${open ? 'active' : ''}`} onClick={() => setOpen(true)}>
+      <button type="button" className={`admin-subnav-item ${open ? 'active' : ''}`} onClick={() => { setOpen(true); setTestResult('') }}>
         Saúde do sistema
       </button>, navigation
     )}
     {open && navigation && createPortal(
       <div role="dialog" aria-modal="true" aria-label="Saúde do sistema" style={{ position:'fixed', inset:0, zIndex:10000, background:'rgba(11,25,44,.78)', overflowY:'auto', padding:'24px' }}>
         <div style={{ maxWidth:'1100px', margin:'0 auto', background:'var(--axiva-light, #f8fafc)', color:'var(--axiva-navy, #0b192c)', borderRadius:12, padding:20 }}>
-          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:12 }}><button type="button" className="secondary" onClick={() => setOpen(false)}>Fechar monitoramento</button></div>
+          <div style={{ display:'flex', justifyContent:'flex-end', flexWrap:'wrap', gap:10, marginBottom:12 }}>
+            <button type="button" className="secondary" disabled={testing} onClick={testAlerts}>{testing ? 'Testando canais...' : 'Enviar alerta de teste'}</button>
+            <button type="button" className="secondary" onClick={() => setOpen(false)}>Fechar monitoramento</button>
+          </div>
+          {testResult && <div className="notice" role="status">{testResult}</div>}
           <AdminHealthMonitor />
         </div>
       </div>, document.body

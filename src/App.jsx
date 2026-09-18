@@ -9,6 +9,7 @@ import {
 import { Link2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import CustomerImportPanel from './customer-import'
+import CrmFullExport from './crm-full-export'
 import { mergeLeadsWithLocalDrafts } from './kanban-draft-merge.js'
 import { sortKanbanColumn } from './kanban-order.js'
 import AdminTestUsers from './admin-test-users'
@@ -3765,6 +3766,7 @@ function Clients({ organization, userEmail, userId }) {
       </header>
 
       <CustomerImportPanel organization={organization} userId={userId} onImported={() => loadData(null)} />
+      <CrmFullExport organization={organization} userId={userId} />
 
       {message && <div className="notice">{message}</div>}
 

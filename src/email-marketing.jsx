@@ -612,7 +612,9 @@ export function EmailMarketing({ organization, userEmail }) {
                     <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>
                   </div>
                 ) : campaign.status === 'completed' ? (
-                  <button type="button" className="secondary" disabled={loading} onClick={() => resendCampaign(campaign)}>Reenviar</button>
+                  <div className="email-campaign-actions">
+                    <button type="button" className="secondary email-resend-campaign-button" disabled={loading} onClick={() => resendCampaign(campaign)}>Reenviar campanha</button>
+                  </div>
                 ) : ['queued','sending','paused','failed'].includes(campaign.status) ? (
                   <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>
                 ) : null}

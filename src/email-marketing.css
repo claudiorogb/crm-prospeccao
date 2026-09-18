@@ -36,3 +36,27 @@
 
 /* V89 — campanha em rascunho antes da seleção de destinatários */
 .email-draft-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.email-draft-actions .primary,.email-draft-actions .secondary{width:auto!important}.email-campaign-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}@media(max-width:700px){.email-draft-actions .primary,.email-draft-actions .secondary{width:100%!important}.email-campaign-actions{justify-content:flex-start}}
+
+/* V103: ação de reenvio identificável e alinhada ao histórico, sem alterar a lógica. */
+.email-history-panel .email-campaign-row > .email-campaign-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: max-content;
+}
+.email-history-panel .email-campaign-actions .email-resend-campaign-button {
+  display: inline-flex !important;
+  visibility: visible !important;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  min-width: 145px;
+}
+@media (max-width: 700px) {
+  .email-history-panel .email-campaign-row > .email-campaign-actions {
+    justify-self: start;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+}

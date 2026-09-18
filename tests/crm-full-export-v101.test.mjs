@@ -104,7 +104,8 @@ test('server enforces auth, active owner/admin and exact organization; no other 
   for (const table of ['leads', 'activities', 'lead_journey_entries', 'sales']) {
     assert.match(sql, new RegExp(`FROM public\\.${table} AS`))
   }
-  assert.equal((sql.match(/WHERE [a-z]\.organization_id = p_organization_id/g) || []).length, 5)
+  // One tenant predicate for authorization, plus one for each of the five query branches.
+  assert.equal((sql.match(/WHERE [a-z]\.organization_id = p_organization_id/g) || []).length, 6)
   assert.doesNotMatch(sql, /\b(?:UPDATE|DELETE|INSERT|ALTER TABLE|DROP TABLE|CREATE POLICY)\b/i)
 })
 

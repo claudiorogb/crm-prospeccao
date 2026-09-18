@@ -3,10 +3,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { Resend } from "npm:resend@6.28.1";
 import PostalMime from "npm:postal-mime@latest";
 
-// AXIVA company mailbox only. Authenticated From stays on our verified domain.
+// AXIVA company mailboxes only. Authenticated From stays on our verified domain.
 // Gmail displays the original correspondent and replies go to their real address.
 const DESTINATION = "axivainvest@gmail.com";
-const INBOUND = "contato@axiva.com.br";
+const INBOUND_ADDRESSES = new Set(["contato@axiva.com.br", "axiva@auth.axiva.com.br"]);
 const FORWARD_FROM = "encaminhamento@axiva.com.br";
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 const validAddress = (address: unknown): address is string => typeof address === "string" && address.length <= 254 && /^[^\s<>@\r\n]+@[^\s<>@\r\n]+\.[^\s<>@\r\n]+$/.test(address);
@@ -34,7 +34,7 @@ Deno.serve(async (request: Request) => {
   const receivedId = event?.data?.email_id;
   if (typeof receivedId !== "string" || !/^[a-zA-Z0-9-]{10,128}$/.test(receivedId)) return json({ error: "Invalid email ID" }, 400);
   const recipients = Array.isArray(event?.data?.to) ? event.data.to : [];
-  if (!recipients.some((value: unknown) => typeof value === "string" && value.trim().toLowerCase() === INBOUND)) return json({ ok: true, ignored: true });
+  if (!recipients.some((value: unknown) => typeof value === "string" && INBOUND_ADDRESSES.has(value.trim().toLowerCase()))) return json({ ok: true, ignored: true });
 
   const admin = createClient(dbUrl, dbKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: claimed, error: claimError } = await admin.rpc("axiva_claim_inbound_forward", { p_email_id: receivedId });

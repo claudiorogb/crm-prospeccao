@@ -25,8 +25,8 @@ jobs:
         run: |
           test "$(git diff --name-only | sort)" = "$(printf 'src/App.jsx\nsrc/dashboard-visual.jsx')"
           git diff --check
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install dependencies without generating a lockfile
+        run: npm install --no-save --package-lock=false --no-audit --no-fund
       - name: Run all regression tests
         run: node --test tests/*.test.mjs
       - name: Validate production build

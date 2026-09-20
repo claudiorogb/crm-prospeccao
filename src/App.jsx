@@ -558,7 +558,6 @@ function TeamPerformance({ organization }) {
           <div>
             <span className="eyebrow">EQUIPE</span>
             <h2>Desempenho por vendedor</h2>
-            <p className="muted">Conversão, propostas e vendas atribuídas a cada usuário da empresa.</p>
           </div>
         </div>
 
@@ -729,7 +728,6 @@ function Dashboard({ organization, userEmail, onGoCampaigns }) {
           <div>
             <span className="eyebrow">BASE COMERCIAL</span>
             <h2>Leads e contatos</h2>
-            <p className="muted">Origem dos leads e avanço inicial da prospecção.</p>
           </div>
         </div>
         <div className="dashboard-metric-grid-v61 dashboard-metric-grid-four-v61">

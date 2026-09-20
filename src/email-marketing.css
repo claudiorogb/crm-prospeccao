@@ -60,3 +60,8 @@
     justify-content: flex-start;
   }
 }
+
+/* Pagination only for the campaign history. */
+.email-history-pages{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:16px}
+.email-history-pages button[aria-current="page"]{background:#0b192c!important;border-color:#0b192c!important;color:#fff!important}
+.email-history-count{margin:12px 0 0;font-size:12px;text-align:right}

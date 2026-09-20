@@ -1,3 +1,4 @@
+# Dashboard-specific regression replaces assertions tied to the superseded V99 markup.
 name: Validate AXIVA dashboard visual
 on:
   push:

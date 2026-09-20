@@ -15,6 +15,7 @@ import { sortKanbanColumn } from './kanban-order.js'
 import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
+import DashboardVisual from './dashboard-visual'
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
@@ -629,119 +630,7 @@ function TeamPerformance({ organization }) {
 }
 
 function Dashboard({ organization, userEmail, onGoCampaigns }) {
-  const [stats, setStats] = useState({
-    ongoing: 0,
-    negotiation: 0,
-    proposalsSent: 0,
-    interested: 0,
-    won: 0,
-    lost: 0,
-    captured: 0,
-    registered: 0,
-    contacted: 0,
-    responded: 0
-  })
-  const [message, setMessage] = useState('')
-
-  useEffect(() => {
-    let active = true
-
-    async function loadStats() {
-      const { data, error } = await supabase
-        .rpc('get_dashboard_stats', { p_organization_id: organization.id })
-
-      if (!active) return
-
-      if (error) {
-        setMessage(`Não foi possível atualizar o Dashboard: ${error.message}`)
-        return
-      }
-
-      setMessage('')
-      setStats({
-        ongoing: Number(data?.ongoing || 0),
-        negotiation: Number(data?.negotiation || 0),
-        proposalsSent: Number(data?.proposals_sent || 0),
-        interested: Number(data?.interested || 0),
-        won: Number(data?.won || 0),
-        lost: Number(data?.lost || 0),
-        captured: Number(data?.captured || 0),
-        registered: Number(data?.registered || 0),
-        contacted: Number(data?.contacted || 0),
-        responded: Number(data?.responded || 0)
-      })
-    }
-
-    loadStats()
-    const timer = setInterval(loadStats, 15000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
-  }, [organization.id])
-
-  return (
-    <>
-      <header className="topbar">
-        <div>
-          <span className="eyebrow">PAINEL</span>
-          <h1>Dashboard</h1>
-          <p className="muted">Visão resumida do funil, resultados e atividade comercial.</p>
-        </div>
-        <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
-      </header>
-
-      {message && <div className="notice error">{message}</div>}
-
-      <section className="panel dashboard-block-v61 dashboard-funnel-v61">
-        <div className="dashboard-hero-v61">
-          <StatCard
-            label="Negócios em andamento"
-            value={stats.ongoing}
-            detail="Interessado + Proposta + Negociação"
-          />
-        </div>
-
-        <div className="dashboard-metric-grid-v61 dashboard-metric-grid-three-v61">
-          <StatCard label="Total em Negociação" value={stats.negotiation} detail="Oportunidades na etapa Negociação" />
-          <StatCard label="Total de propostas enviadas" value={stats.proposalsSent} detail="Leads que já tiveram proposta registrada" />
-          <StatCard label="Total Interessados" value={stats.interested} detail="Oportunidades atualmente em Interessado" />
-        </div>
-      </section>
-
-      <section className="panel dashboard-block-v61">
-        <div className="dashboard-block-head-v61">
-          <div>
-            <span className="eyebrow">RESULTADOS</span>
-            <h2>Fechamentos</h2>
-            <p className="muted">Resultado das oportunidades que saíram do funil ativo.</p>
-          </div>
-        </div>
-        <div className="dashboard-metric-grid-v61 dashboard-metric-grid-two-v61">
-          <StatCard label="Ganhos" value={stats.won} detail="Negócios convertidos em clientes" />
-          <StatCard label="Perdidos" value={stats.lost} detail="Negócios encerrados como perdidos" />
-        </div>
-      </section>
-
-      <section className="panel dashboard-block-v61">
-        <div className="dashboard-block-head-v61">
-          <div>
-            <span className="eyebrow">BASE COMERCIAL</span>
-            <h2>Leads e contatos</h2>
-            <p className="muted">Origem dos leads e avanço inicial da prospecção.</p>
-          </div>
-        </div>
-        <div className="dashboard-metric-grid-v61 dashboard-metric-grid-four-v61">
-          <StatCard label="Total de leads captados" value={stats.captured} detail="Captados pela busca de empresas" />
-          <StatCard label="Total de leads cadastrados" value={stats.registered} detail="Cadastrados manualmente" />
-          <StatCard label="Total Leads contatados" value={stats.contacted} detail="Leads que já receberam contato" />
-          <StatCard label="Total que respondeu" value={stats.responded} detail="Responderam ou avançaram após a resposta" />
-        </div>
-      </section>
-
-      <TeamPerformance organization={organization} />
-    </>
-  )
+  return <DashboardVisual organization={organization} userEmail={userEmail} onGoCampaigns={onGoCampaigns} />
 }
 
 

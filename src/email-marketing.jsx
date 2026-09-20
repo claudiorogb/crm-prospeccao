@@ -629,7 +629,7 @@ export function EmailMarketing({ organization, userEmail }) {
       </form>
 
       <section className="panel email-history-panel">
-        <div className="email-section-title"><div><span className="eyebrow">HISTÓRICO</span><h2>Campanhas de e-mail</h2></div><button type="button" className="secondary" onClick={loadData}>Atualizar</button></div>
+        <div className="email-section-title"><div><span className="eyebrow">HISTÓRICO</span><h2>Campanhas de e-mail</h2></div><button type="button" className="secondary" onClick={() => loadData()}>Atualizar</button></div>
         {campaigns.length === 0 ? <p className="muted">Nenhuma campanha de e-mail criada.</p> : (
           <div className="email-campaign-list">
             {campaigns.map(campaign => (

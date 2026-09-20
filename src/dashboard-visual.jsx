@@ -23,6 +23,7 @@ function shiftDay(date, change) {
 }
 function periodDates(period, from, to) {
   const now = todayInBrazil()
+  if (period === 'all') return [null, null]
   if (period === 'today') return [now, now]
   if (period === 'week') {
     const weekday = new Date(`${now}T12:00:00Z`).getUTCDay()
@@ -90,7 +91,7 @@ export default function DashboardVisual({ organization, userEmail, onGoCampaigns
 
   useEffect(() => {
     if (!organization?.id) return undefined
-    if (!start || !end || start > end) {
+    if (period !== 'all' && (!start || !end || start > end)) {
       setState(old => ({ ...old, loading: false, error: 'Informe um período válido, com data inicial anterior ou igual à final.' }))
       return undefined
     }
@@ -98,12 +99,14 @@ export default function DashboardVisual({ organization, userEmail, onGoCampaigns
     const load = async () => {
       setState(old => ({ ...old, loading: true, error: '' }))
       try {
-        const startTime = `${start}T00:00:00-03:00`
-        const endTime = `${shiftDay(end, 1)}T00:00:00-03:00`
+        const startTime = start ? `${start}T00:00:00-03:00` : null
+        const endTime = end ? `${shiftDay(end, 1)}T00:00:00-03:00` : null
+        const createdAtRange = query => startTime && endTime ? query.gte('created_at', startTime).lt('created_at', endTime) : query
+        const saleDateRange = query => start && end ? query.gte('sale_date', start).lte('sale_date', end) : query
         const [leads, sales, messages, weekly, clientsResult, contactsResult] = await Promise.all([
-          allRows(() => supabase.from('leads').select('id,business_name,contact_name,city,state,status,source,created_at,next_contact_date,last_contact_date,target_segments(name)').eq('organization_id', organization.id).is('deleted_at', null).gte('created_at', startTime).lt('created_at', endTime).order('created_at', { ascending: false })),
-          allRows(() => supabase.from('sales').select('id,amount,sale_date').eq('organization_id', organization.id).is('deleted_at', null).gte('sale_date', start).lte('sale_date', end).order('sale_date', { ascending: false })),
-          allRows(() => supabase.from('outbound_messages').select('id,status,created_at').eq('organization_id', organization.id).gte('created_at', startTime).lt('created_at', endTime).order('created_at', { ascending: false })),
+          allRows(() => createdAtRange(supabase.from('leads').select('id,business_name,contact_name,city,state,status,source,created_at,next_contact_date,last_contact_date,target_segments(name)').eq('organization_id', organization.id).is('deleted_at', null)).order('created_at', { ascending: false })),
+          allRows(() => saleDateRange(supabase.from('sales').select('id,amount,sale_date').eq('organization_id', organization.id).is('deleted_at', null)).order('sale_date', { ascending: false })),
+          allRows(() => createdAtRange(supabase.from('outbound_messages').select('id,status,created_at').eq('organization_id', organization.id)).order('created_at', { ascending: false })),
           allRows(() => supabase.from('leads').select('id,created_at,source,status').eq('organization_id', organization.id).is('deleted_at', null).gte('created_at', `${shiftDay(todayInBrazil(), -(Number(weeklyRange) * 7 - 1))}T00:00:00-03:00`).order('created_at', { ascending: false })),
           supabase.from('leads').select('id', { head: true, count: 'exact' }).eq('organization_id', organization.id).eq('status', 'won').is('deleted_at', null),
           allRows(() => supabase.from('leads').select('id,business_name,contact_name,next_contact_date,status,last_contact_date').eq('organization_id', organization.id).is('deleted_at', null).not('next_contact_date', 'is', null).in('status', [...ACTIVE]).order('next_contact_date', { ascending: true }))
@@ -118,7 +121,7 @@ export default function DashboardVisual({ organization, userEmail, onGoCampaigns
     load()
     const timer = setInterval(load, 60000)
     return () => { active = false; clearInterval(timer) }
-  }, [organization?.id, start, end, refresh, weeklyRange])
+  }, [organization?.id, period, start, end, refresh, weeklyRange])
 
   const leads = useMemo(() => state.leads.filter(lead => !(lead.source === 'import' && lead.status === 'won')), [state.leads])
   const contacted = leads.filter(lead => lead.last_contact_date || CONTACTED.has(lead.status)).length
@@ -147,11 +150,11 @@ export default function DashboardVisual({ organization, userEmail, onGoCampaigns
 
   return <div className="axd-root">
     <header className="axd-heading"><div><h1>Dashboard CRM</h1><p>Visão geral do funil de vendas e desempenho comercial.</p></div><div className="axd-heading-actions">
-      <label className="axd-select"><CalendarDays size={16}/><span className="axd-sr">Período</span><select aria-label="Período do dashboard" value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="week">Esta semana</option><option value="month">Este mês</option><option value="year">Este ano</option><option value="custom">Personalizado</option></select></label>
+      <label className="axd-select"><CalendarDays size={16}/><span className="axd-sr">Período</span><select aria-label="Período do dashboard" value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="week">Esta semana</option><option value="month">Este mês</option><option value="year">Este ano</option><option value="all">Todo o período</option><option value="custom">Personalizado</option></select></label>
       <button className="axd-refresh" type="button" onClick={() => setRefresh(value => value + 1)} aria-label="Atualizar dashboard"><RefreshCw size={17}/></button>
     </div></header>
     {period === 'custom' && <div className="axd-period"><label>De<input type="date" value={from} onChange={event => setFrom(event.target.value)}/></label><label>Até<input type="date" value={to} onChange={event => setTo(event.target.value)}/></label></div>}
-    <p className="axd-context">{organization?.name} · {displayDate(start)} a {displayDate(end)} · {userEmail}</p>
+    <p className="axd-context">{organization?.name} · {period === 'all' ? 'Todo o período' : `${displayDate(start)} a ${displayDate(end)}`} · {userEmail}</p>
     {state.error && <p className="axd-error" role="alert">{state.error}</p>}
     {state.loading && <p className="axd-loading" role="status">Atualizando indicadores…</p>}
     {!state.error && <><div className="axd-metrics">{metricSet.map(([title, value, detail, icon], index) => <Metric key={title} title={title} value={value} detail={detail} icon={icon} tone={index === 2 ? 'amber' : 'green'} />)}</div>

@@ -1,0 +1,48 @@
+name: Fix email campaign history refresh callback
+on:
+  push:
+    branches:
+      - feature/email-marketing-document-layout-20260920
+    paths:
+      - .github/workflows/fix-email-history-refresh-20260920.yml
+permissions:
+  contents: write
+jobs:
+  fix-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch exact callback and validate scope
+        run: |
+          test "$(git hash-object src/email-marketing.jsx)" = 82732c6f679e008f2ba7607739ee12fcbf342e3e
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          path = Path('src/email-marketing.jsx')
+          content = path.read_text()
+          old = 'onClick={loadData}>Atualizar'
+          assert content.count(old) == 1, 'Refresh callback anchor changed'
+          content = content.replace(old, 'onClick={() => loadData()}>Atualizar', 1)
+          assert '.eq(\'organization_id\', organization.id)' in content
+          assert 'confirm_email_campaign_compliance' in content
+          path.write_text(content)
+          paths = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          assert paths == {'src/email-marketing.jsx'}, paths
+          PY
+          git diff --check
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: All regression tests
+        run: node --test tests/*.test.mjs
+      - name: Build
+        run: npm run build
+      - name: Commit validated callback
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/email-marketing.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'Prevent click event from corrupting campaign pagination'
+          git push origin HEAD:feature/email-marketing-document-layout-20260920

@@ -5,6 +5,7 @@ on:
       - feature/dashboard-compact-all-period-20260920
     paths:
       - .github/workflows/apply-dashboard-compact-all-period.yml
+      - scripts/apply_dashboard_compact_all_period.py
 permissions:
   contents: write
 concurrency:

@@ -1,0 +1,65 @@
+name: Restore historical CRM dashboard with two charts
+on:
+  push:
+    branches:
+      - feature/restore-dashboard-with-funnel-origin-20260920
+    paths:
+      - .github/workflows/restore-dashboard-with-insights-20260920.yml
+      - scripts/restore_dashboard_with_insights_20260920.py
+permissions:
+  contents: write
+concurrency:
+  group: restore-dashboard-with-insights-20260920
+  cancel-in-progress: false
+jobs:
+  restore-test-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated branch with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refuse to change a modified dashboard baseline
+        run: |
+          test "$(git hash-object src/App.jsx)" = c8db48acccf04947c7d363ccb9c800bd6b3aa90c
+          test "$(git hash-object src/dashboard-visual.jsx)" = 1a234efc77568c94af0e80695d6047e8b27eeecc
+          test "$(git hash-object src/dashboard-visual.css)" = b357858f0743601b91946dcb7fe084120db1ad75
+          test "$(git hash-object tests/dashboard-funnel-heading-v99.test.mjs)" = 57dc5fe7626d14336039f0bb4e63f3a8cb40b06c
+      - name: Restore historical dashboard and retain requested charts
+        run: python scripts/restore_dashboard_with_insights_20260920.py
+      - name: Verify original dashboard content, scope and changed files
+        run: |
+          git diff --check
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          app = Path('src/App.jsx').read_text()
+          old = subprocess.check_output(['git', 'show', 'ced1270735284167dca8217a1bfbf643e47e1add:src/App.jsx'], text=True)
+          start = 'function Dashboard({ organization, userEmail, onGoCampaigns }) {'
+          end = '\n\nfunction CatalogAdmin({ userEmail }) {'
+          def section(content):
+              return content[content.index(start):content.index(end, content.index(start))]
+          assert section(app).replace('      <DashboardVisual organization={organization} />\n\n', '') == section(old)
+          paths = set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
+          assert paths == {'src/App.jsx','src/dashboard-visual.jsx','src/dashboard-visual.css','tests/dashboard-funnel-heading-v99.test.mjs'}, paths
+          visual = Path('src/dashboard-visual.jsx').read_text()
+          assert "eq('organization_id', organizationId)" in visual
+          assert "state.organizationId !== organizationId" in visual
+          assert 'service_role' not in visual and '.insert(' not in visual and '.update(' not in visual
+          assert app.count('<DashboardVisual organization={organization} />') == 1
+          print('Historical dashboard matches exact baseline; only two tenant-scoped read-only charts added.')
+          PY
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run all existing and restored dashboard tests
+        run: node --test tests/*.test.mjs
+      - name: Production build
+        run: npm run build
+      - name: Commit only validated dashboard and test changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx src/dashboard-visual.jsx src/dashboard-visual.css tests/dashboard-funnel-heading-v99.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Restore detailed dashboard and retain funnel and lead origin charts'
+          git push origin HEAD:feature/restore-dashboard-with-funnel-origin-20260920

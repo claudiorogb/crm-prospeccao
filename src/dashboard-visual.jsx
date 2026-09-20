@@ -21,9 +21,9 @@ async function allRows(makeQuery) {
   return rows
 }
 
-function Panel({ title, subtitle, icon: Icon, children }) {
+function Panel({ title, icon: Icon, children }) {
   return <article className="axh-card">
-    <div className="axh-heading"><Icon size={27} aria-hidden="true"/><div><h2>{title}</h2><p>{subtitle}</p></div></div>
+    <div className="axh-heading"><Icon size={27} aria-hidden="true"/><div><h2>{title}</h2></div></div>
     {children}
   </article>
 }
@@ -77,7 +77,7 @@ export default function DashboardVisual({ organization }) {
   }).join(', ') : '#e2e8f0 0% 100%'
 
   return <section className="axh-insights" aria-label="Funil de vendas e origem dos leads">
-    <Panel title="Funil de vendas" subtitle="Etapa atual dos leads cadastrados" icon={Filter}>
+    <Panel title="Funil de vendas" icon={Filter}>
       <div className="axh-funnel" role="img" aria-label={`Leads por etapa: ${stages.map(stage => `${stage.name} ${stage.count}`).join(', ')}`}>
         {stages.map((stage, index) => <div className="axh-stage" key={stage.name}>
           <strong>{integer(stage.count)}</strong>
@@ -86,7 +86,7 @@ export default function DashboardVisual({ organization }) {
         </div>)}
       </div>
     </Panel>
-    <Panel title="Origem dos leads" subtitle="Como os leads chegaram" icon={ChartNoAxesCombined}>
+    <Panel title="Origem dos leads" icon={ChartNoAxesCombined}>
       <div className="axh-origin">
         <div className="axh-donut" style={{ background: `conic-gradient(${gradient})` }} role="img" aria-label={`Total de ${integer(leads.length)} leads por origem`}><div><strong>{integer(leads.length)}</strong><span>leads</span></div></div>
         <div className="axh-legend">

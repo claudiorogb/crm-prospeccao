@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
 import MarketingListImport from './marketing-list-import'
 import NewsletterMailingPanel from './newsletter-mailing-panel'
@@ -7,6 +7,7 @@ import './email-marketing.css'
 const BUCKET = 'email-campaign-attachments'
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 const MAX_TOTAL_BYTES = 15 * 1024 * 1024
+const CAMPAIGN_PAGE_SIZE = 20
 
 function providerLabel(provider) {
   if (provider === 'gmail') return 'Gmail'
@@ -72,6 +73,10 @@ export function EmailMarketing({ organization, userEmail }) {
   const [clients, setClients] = useState([])
   const [marketingContacts, setMarketingContacts] = useState([])
   const [campaigns, setCampaigns] = useState([])
+  const [campaignPage, setCampaignPage] = useState(0)
+  const [campaignTotal, setCampaignTotal] = useState(0)
+  const [campaignListLoading, setCampaignListLoading] = useState(false)
+  const loadSequence = useRef(0)
   const [selected, setSelected] = useState(() => new Set())
   const [selectedMarketing, setSelectedMarketing] = useState(() => new Set())
   const [search, setSearch] = useState('')
@@ -85,15 +90,19 @@ export function EmailMarketing({ organization, userEmail }) {
   const [draftCampaignId, setDraftCampaignId] = useState(null)
   const [commercialConsentConfirmed, setCommercialConsentConfirmed] = useState(false)
 
-  async function loadData() {
+  async function loadData(nextCampaignPage = campaignPage) {
     if (!organization?.id) return
+    const sequence = ++loadSequence.current
+    setCampaignListLoading(true)
     const [connectionResult, limitResult, clientsResult, marketingResult, campaignResult] = await Promise.all([
       supabase.from('email_connections').select('organization_id,provider,email_address,sender_email,sender_name,status,last_error,connected_at').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('organization_email_limits').select('*').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('leads').select('id,business_name,contact_name,email,city,state,email_marketing_opt_out').eq('organization_id', organization.id).eq('status', 'won').is('deleted_at', null).order('business_name'),
       supabase.from('email_marketing_contacts').select('id,email,contact_name,company_name,source,status,consent_confirmed,unsubscribed_at').eq('organization_id', organization.id).order('email'),
-      supabase.from('email_campaigns').select('id,name,subject,body_text,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at').eq('organization_id', organization.id).order('created_at', { ascending: false }).limit(30)
+      supabase.from('email_campaigns').select('id,name,subject,body_text,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at', { count: 'exact' }).eq('organization_id', organization.id).order('created_at', { ascending: false }).order('id', { ascending: false }).range(nextCampaignPage * CAMPAIGN_PAGE_SIZE, (nextCampaignPage + 1) * CAMPAIGN_PAGE_SIZE - 1)
     ])
+    if (sequence !== loadSequence.current) return
+    setCampaignListLoading(false)
 
     if (connectionResult.error) setMessage(`Não foi possível carregar a conta de e-mail: ${connectionResult.error.message}`)
     if (limitResult.error) setMessage(`Não foi possível carregar o limite de envio: ${limitResult.error.message}`)
@@ -105,13 +114,24 @@ export function EmailMarketing({ organization, userEmail }) {
     setLimits(limitResult.data || null)
     setClients(clientsResult.data || [])
     setMarketingContacts(marketingResult.data || [])
-    setCampaigns(campaignResult.data || [])
+    if (!campaignResult.error) {
+      setCampaigns(campaignResult.data || [])
+      setCampaignTotal(campaignResult.count || 0)
+    }
     if (connectionResult.data?.sender_email) setSenderEmail(connectionResult.data.sender_email)
     if (connectionResult.data?.sender_name) setSenderName(connectionResult.data.sender_name)
   }
 
   useEffect(() => {
-    loadData()
+    setCampaignPage(0)
+    setCampaigns([])
+    setCampaignTotal(0)
+    setSelected(new Set())
+    setSelectedMarketing(new Set())
+    setDraftCampaignId(null)
+    setCommercialConsentConfirmed(false)
+    loadData(0)
+    return () => { loadSequence.current += 1 }
   }, [organization?.id])
 
   useEffect(() => {
@@ -148,6 +168,15 @@ export function EmailMarketing({ organization, userEmail }) {
   const selectedClients = useMemo(() => eligibleClients.filter(c => selected.has(c.id)), [eligibleClients, selected])
   const selectedMarketingContacts = useMemo(() => eligibleMarketingContacts.filter(c => selectedMarketing.has(c.id)), [eligibleMarketingContacts, selectedMarketing])
   const selectedTotal = selectedClients.length + selectedMarketingContacts.length
+  const campaignPageCount = Math.ceil(campaignTotal / CAMPAIGN_PAGE_SIZE)
+  const campaignPageNumbers = [...new Set([0, campaignPageCount - 1, ...Array.from({ length: 5 }, (_, i) => campaignPage + i - 2)])]
+    .filter(page => page >= 0 && page < campaignPageCount).sort((a, b) => a - b)
+
+  async function changeCampaignPage(nextPage) {
+    if (nextPage < 0 || nextPage >= campaignPageCount || nextPage === campaignPage || campaignListLoading) return
+    setCampaignPage(nextPage)
+    await loadData(nextPage)
+  }
   const filesTotal = files.reduce((sum, file) => sum + Number(file.size || 0), 0)
   const todayUsage = limits?.usage_date === currentBrazilDate() ? Number(limits?.sent_today || 0) : 0
   const dailyLimit = Number(limits?.daily_send_limit || 0)
@@ -326,7 +355,8 @@ export function EmailMarketing({ organization, userEmail }) {
       setSelectedMarketing(new Set())
       setFiles([])
       setMessage('Campanha salva como rascunho. Agora escolha os destinatários e, quando estiver pronto, inicie o envio.')
-      await loadData()
+      setCampaignPage(0)
+      await loadData(0)
     } catch (error) {
       if (campaignId) {
         try { await supabase.rpc('cancel_email_campaign', { p_campaign_id: campaignId }) } catch {}
@@ -532,25 +562,10 @@ export function EmailMarketing({ organization, userEmail }) {
             <strong>{selectedTotal} selecionado{selectedTotal === 1 ? '' : 's'}</strong>
           </div>
 
-          <MarketingListImport organization={organization} onImported={loadData} onManualAdded={handleManualRecipientAdded} />
+          <MarketingListImport organization={organization} mode="manual" onManualAdded={handleManualRecipientAdded} />
 
           <div className="email-recipient-tools">
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar cliente, contato, empresa, origem ou e-mail" />
-          </div>
-
-          <div className="email-recipient-source">
-            <div className="email-recipient-source-head">
-              <div><strong>Clientes do CRM</strong><span>{eligibleClients.length} disponível{eligibleClients.length === 1 ? '' : 'is'} • {unavailableCount} indisponível{unavailableCount === 1 ? '' : 'is'}</span></div>
-              <button type="button" className="secondary" onClick={toggleAllFiltered}>{filteredClients.length && filteredClients.every(c => selected.has(c.id)) ? 'Desmarcar exibidos' : 'Selecionar exibidos'}</button>
-            </div>
-            <div className="email-recipient-list">
-              {filteredClients.length === 0 ? <p className="muted email-empty-list">Nenhum cliente elegível encontrado.</p> : filteredClients.map(client => (
-                <label className="email-recipient-row" key={client.id}>
-                  <input type="checkbox" checked={selected.has(client.id)} onChange={() => toggleClient(client.id)} />
-                  <span><strong>{client.business_name}</strong><small>{client.contact_name || 'Contato não informado'} • {client.email}{client.city ? ` • ${client.city}${client.state ? `/${client.state}` : ''}` : ''}</small></span>
-                </label>
-              ))}
-            </div>
           </div>
 
           <div className="email-recipient-source">
@@ -566,6 +581,21 @@ export function EmailMarketing({ organization, userEmail }) {
                 <label className="email-recipient-row" key={contact.id}>
                   <input type="checkbox" checked={selectedMarketing.has(contact.id)} onChange={() => toggleMarketingContact(contact.id)} />
                   <span><strong>{contact.company_name || contact.contact_name || contact.email}</strong><small>{contact.contact_name && contact.company_name ? `${contact.contact_name} • ` : ''}{contact.email}{contact.source ? ` • ${contact.source}` : ''}</small></span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="email-recipient-source">
+            <div className="email-recipient-source-head">
+              <div><strong>Clientes do CRM</strong><span>{eligibleClients.length} disponível{eligibleClients.length === 1 ? '' : 'is'} • {unavailableCount} indisponível{unavailableCount === 1 ? '' : 'is'}</span></div>
+              <button type="button" className="secondary" onClick={toggleAllFiltered}>{filteredClients.length && filteredClients.every(c => selected.has(c.id)) ? 'Desmarcar exibidos' : 'Selecionar exibidos'}</button>
+            </div>
+            <div className="email-recipient-list">
+              {filteredClients.length === 0 ? <p className="muted email-empty-list">Nenhum cliente elegível encontrado.</p> : filteredClients.map(client => (
+                <label className="email-recipient-row" key={client.id}>
+                  <input type="checkbox" checked={selected.has(client.id)} onChange={() => toggleClient(client.id)} />
+                  <span><strong>{client.business_name}</strong><small>{client.contact_name || 'Contato não informado'} • {client.email}{client.city ? ` • ${client.city}${client.state ? `/${client.state}` : ''}` : ''}</small></span>
                 </label>
               ))}
             </div>
@@ -621,6 +651,17 @@ export function EmailMarketing({ organization, userEmail }) {
               </article>
             ))}
           </div>
+        )}
+        {campaignTotal > 0 && <p className="muted email-history-count">Exibindo {campaigns.length} de {campaignTotal} campanha{campaignTotal === 1 ? '' : 's'}.</p>}
+        {campaignPageCount > 1 && (
+          <nav className="email-history-pages" aria-label="Páginas do histórico de campanhas">
+            <button type="button" className="secondary" disabled={campaignListLoading || campaignPage === 0} onClick={() => changeCampaignPage(campaignPage - 1)}>Anterior</button>
+            {campaignPageNumbers.map((page, index) => <React.Fragment key={page}>
+              {index > 0 && page - campaignPageNumbers[index - 1] > 1 && <span aria-hidden="true">…</span>}
+              <button type="button" className="secondary" aria-label={`Página ${page + 1}`} aria-current={page === campaignPage ? 'page' : undefined} disabled={campaignListLoading} onClick={() => changeCampaignPage(page)}>{page + 1}</button>
+            </React.Fragment>)}
+            <button type="button" className="secondary" disabled={campaignListLoading || campaignPage >= campaignPageCount - 1} onClick={() => changeCampaignPage(campaignPage + 1)}>Próxima</button>
+          </nav>
         )}
       </section>
     </>

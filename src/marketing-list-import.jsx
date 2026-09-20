@@ -62,7 +62,7 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
-export default function MarketingListImport({ organization, onImported, onManualAdded, standalone = false }) {
+export default function MarketingListImport({ organization, onImported, onManualAdded, standalone = false, mode = 'both' }) {
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
   const [source, setSource] = useState('Lista própria importada')
@@ -171,7 +171,7 @@ export default function MarketingListImport({ organization, onImported, onManual
 
   return (
     <div className="email-marketing-import-box">
-      <div className="email-manual-recipient-box">
+      {mode !== 'import' && <div className="email-manual-recipient-box">
         <div className="email-marketing-import-head">
           <div>
             <strong>Adicionar destinatário manualmente</strong>
@@ -201,9 +201,11 @@ export default function MarketingListImport({ organization, onImported, onManual
           </button>
         </div>
         {manualMessage && <div className="notice">{manualMessage}</div>}
-      </div>
+      </div>}
 
-      <div className="email-marketing-import-divider"><span>ou importe uma lista</span></div>
+      {mode === 'both' && <div className="email-marketing-import-divider"><span>ou importe uma lista</span></div>}
+
+      {mode !== 'manual' && <>
 
       <div className="email-marketing-import-head">
         <div>
@@ -243,6 +245,7 @@ export default function MarketingListImport({ organization, onImported, onManual
         <span className="muted">Colunas aceitas: E-mail (obrigatória), Nome, Empresa e Origem.</span>
       </div>
       {message && <div className="notice">{message}</div>}
+      </>}
     </div>
   )
 }

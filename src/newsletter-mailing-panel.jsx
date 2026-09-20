@@ -75,6 +75,12 @@ export default function NewsletterMailingPanel({ organization, onChanged }) {
         }}>{open ? 'Fechar lista de e-mails' : 'Ver lista de e-mails cadastrados'}</button>
       </div>
 
+      <div className="mailing-management-import">
+        <h3>Importar lista de e-mail marketing</h3>
+        <p className="muted">Importe uma lista própria autorizada. O modelo, a origem e as regras de importação ficam nesta área.</p>
+        <MarketingListImport organization={organization} mode="import" onImported={handleImported} />
+      </div>
+
       {open && (
         <div className="mailing-management-content">
           <div className="mailing-management-list-head">
@@ -102,11 +108,6 @@ export default function NewsletterMailingPanel({ organization, onChanged }) {
             <span>Página {page + 1} de {Math.ceil(total / PAGE_SIZE)}</span>
             <button type="button" className="secondary" disabled={loading || (page + 1) * PAGE_SIZE >= total} onClick={() => refresh(page + 1)}>Próxima</button>
           </div>}
-          <div className="mailing-management-import">
-            <h3>Incluir novos e-mails</h3>
-            <p className="muted">Adicione e-mails individualmente ou importe uma lista autorizada do seu site. Endereços descadastrados não são reativados pela inclusão manual.</p>
-            <MarketingListImport organization={organization} standalone onImported={handleImported} onManualAdded={handleImported} />
-          </div>
         </div>
       )}
     </section>

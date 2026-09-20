@@ -22,7 +22,7 @@ def change(old, new, count=1):
 change("  if (period === 'today') return [now, now]", "  if (period === 'all') return [null, null]\n  if (period === 'today') return [now, now]")
 change("    if (!start || !end || start > end) {", "    if (period !== 'all' && (!start || !end || start > end)) {")
 change("        const startTime = `${start}T00:00:00-03:00`\n        const endTime = `${shiftDay(end, 1)}T00:00:00-03:00`", "        const startTime = start ? `${start}T00:00:00-03:00` : null\n        const endTime = end ? `${shiftDay(end, 1)}T00:00:00-03:00` : null\n        const createdAtRange = query => startTime && endTime ? query.gte('created_at', startTime).lt('created_at', endTime) : query\n        const saleDateRange = query => start && end ? query.gte('sale_date', start).lte('sale_date', end) : query")
-change("allRows(() => supabase.from('leads').select('id,business_name", "allRows(() => createdAtRange(supabase.from('leads').select('id,business_name")
+change("allRows(() => supabase.from('leads').select('id,business_name,contact_name,city,state", "allRows(() => createdAtRange(supabase.from('leads').select('id,business_name,contact_name,city,state")
 change("allRows(() => supabase.from('sales').select('id,amount,sale_date')", "allRows(() => saleDateRange(supabase.from('sales').select('id,amount,sale_date')")
 change("allRows(() => supabase.from('outbound_messages').select('id,status,created_at')", "allRows(() => createdAtRange(supabase.from('outbound_messages').select('id,status,created_at')")
 change(".gte('created_at', startTime).lt('created_at', endTime).order('created_at', { ascending: false })", ").order('created_at', { ascending: false })", count=2)

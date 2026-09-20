@@ -42,4 +42,6 @@ test('campaign history uses server-side pages of twenty with full total and numb
   assert.match(campaign, /campaignPageNumbers\.map/)
   assert.match(campaign, /setCampaignPage\(0\)/)
   assert.doesNotMatch(campaign, /email_campaigns[^\n]*\.limit\(30\)/)
+  assert.match(campaign, /onClick=\{\(\) => loadData\(\)\}>Atualizar/)
+  assert.doesNotMatch(campaign, /onClick=\{loadData\}/)
 })

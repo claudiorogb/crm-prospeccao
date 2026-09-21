@@ -30,8 +30,8 @@ jobs:
           grep -Fq "overlay.querySelector('[data-delete-message]').textContent" src/App.jsx
           if grep -Fq '<p>${customMessage' src/App.jsx; then exit 1; fi
           git diff -- src/App.jsx
-      - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
       - name: Run regression tests
         run: node --test tests/*.test.mjs
       - name: Build production frontend

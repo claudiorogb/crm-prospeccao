@@ -1,0 +1,45 @@
+name: Security preserve email draft recipient history
+
+on:
+  push:
+    paths:
+      - 'scripts/security_filter_current_email_draft_recipients.py'
+      - '.github/workflows/security-filter-email-draft-recipients.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: security-filter-email-draft-recipients
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Filter only active draft recipients
+        run: python scripts/security_filter_current_email_draft_recipients.py
+      - name: Verify narrowly scoped change
+        run: |
+          test "$(git diff --name-only)" = 'src/email-marketing.jsx'
+          git diff --check
+          grep -Fq ".eq('status', 'draft')" src/email-marketing.jsx
+          git diff -- src/email-marketing.jsx
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run regression tests
+        run: node --test tests/*.test.mjs
+      - name: Build production frontend
+        run: npm run build
+      - name: Commit only validated UI change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/email-marketing.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'security: show only selected recipients when reopening email draft'
+          git push

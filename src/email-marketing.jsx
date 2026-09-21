@@ -413,6 +413,7 @@ export function EmailMarketing({ organization, userEmail }) {
         .from('email_campaign_recipients')
         .select('lead_id,marketing_contact_id')
         .eq('campaign_id', campaign.id)
+        .eq('status', 'draft')
       if (error) throw error
       setDraftCampaignId(campaign.id)
       setForm({ name: campaign.name || '', subject: campaign.subject || '', body: campaign.body_text || '' })

@@ -1,0 +1,46 @@
+name: Security fix global deletion confirmation XSS
+
+on:
+  push:
+    paths:
+      - 'scripts/fix_global_delete_confirmation_xss.py'
+      - '.github/workflows/security-fix-global-delete-xss.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: security-fix-global-delete-xss
+  cancel-in-progress: false
+
+jobs:
+  validate-and-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply narrowly scoped fix
+        run: python scripts/fix_global_delete_confirmation_xss.py
+      - name: Verify the only functional file changed and text remains escaped
+        run: |
+          test "$(git diff --name-only)" = 'src/App.jsx'
+          git diff --check
+          grep -Fq "overlay.querySelector('[data-delete-message]').textContent" src/App.jsx
+          if grep -Fq '<p>${customMessage' src/App.jsx; then exit 1; fi
+          git diff -- src/App.jsx
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run regression tests
+        run: node --test tests/*.test.mjs
+      - name: Build production frontend
+        run: npm run build
+      - name: Commit validated fix only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'security: render deletion confirmation with textContent'
+          git push

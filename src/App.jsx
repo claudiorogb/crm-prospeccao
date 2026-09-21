@@ -158,12 +158,16 @@ function installGlobalDeleteConfirmation() {
     overlay.innerHTML = `
       <div class="delete-confirm-banner" role="dialog" aria-modal="true" aria-label="Confirmar exclusão">
         <h3>Confirmar arquivamento</h3>
-        <p>${customMessage || `Tem certeza que deseja excluir${itemName ? ` “${itemName}”` : ' este registro'}? O registro será ocultado das telas normais, mas permanecerá preservado no banco.`}</p>
+        <p data-delete-message></p>
         <div class="delete-confirm-actions">
           <button type="button" class="secondary" data-delete-action="cancel">Cancelar</button>
           <button type="button" class="delete-confirm-danger" data-delete-action="confirm">Sim, arquivar</button>
         </div>
       </div>`
+
+    // Treat names and custom messages as text, never as HTML.
+    overlay.querySelector('[data-delete-message]').textContent =
+      customMessage || `Tem certeza que deseja excluir${itemName ? ` “${itemName}”` : ' este registro'}? O registro será ocultado das telas normais, mas permanecerá preservado no banco.`
 
     const close = () => overlay.remove()
     overlay.addEventListener('click', e => {

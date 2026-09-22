@@ -21,6 +21,7 @@ Deno.serve(async (request: Request) => {
 
   const resend = new Resend(apiKey);
   let event: any;
+  let verifiedEventId = "";
   try {
     const body = await request.text();
     const id = request.headers.get("svix-id");
@@ -28,9 +29,30 @@ Deno.serve(async (request: Request) => {
     const signature = request.headers.get("svix-signature");
     if (!id || !timestamp || !signature) return json({ error: "Missing webhook signature" }, 401);
     event = resend.webhooks.verify({ payload: body, headers: { id, timestamp, signature }, webhookSecret });
+    verifiedEventId = id;
   } catch { return json({ error: "Invalid webhook signature" }, 401); }
 
-  if (event?.type !== "email.received") return json({ ok: true, ignored: true });
+  if (event?.type !== "email.received") {
+    const permitted = new Set(["email.sent", "email.delivered", "email.delivery_delayed", "email.opened", "email.clicked", "email.bounced", "email.complained", "email.failed", "email.suppressed"]);
+    if (!permitted.has(String(event?.type || ""))) return json({ ok: true, ignored: true });
+    const providerMessageId = event?.data?.email_id;
+    const recipients = event?.data?.to;
+    const recipientEmail = Array.isArray(recipients) && recipients.length === 1 ? recipients[0] : null;
+    const fromRaw = String(event?.data?.from || "").trim();
+    const senderEmail = fromRaw.match(/<([^<>]+)>\s*$/)?.[1] || fromRaw;
+    if (typeof providerMessageId !== "string" || !/^[a-zA-Z0-9_-]{10,255}$/.test(providerMessageId) || !validAddress(recipientEmail) || !validAddress(senderEmail)) return json({ ok: true, ignored: true });
+    const eventAt = new Date(String(event?.created_at || ""));
+    if (!Number.isFinite(eventAt.getTime())) return json({ ok: true, ignored: true });
+    const reason = event?.data?.bounce?.message || event?.data?.error?.message || event?.data?.reason || null;
+    const admin = createClient(dbUrl, dbKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await admin.rpc("email_ingest_resend_event", {
+      p_event_id: verifiedEventId, p_provider_message_id: providerMessageId, p_event_type: event.type,
+      p_recipient_email: recipientEmail, p_sender_email: senderEmail,
+      p_event_at: eventAt.toISOString(), p_reason: typeof reason === "string" ? reason.slice(0, 1000) : null,
+    });
+    return error ? json({ error: "Unable to record campaign event" }, 503) : json({ ok: true });
+  }
+
   const receivedId = event?.data?.email_id;
   if (typeof receivedId !== "string" || !/^[a-zA-Z0-9-]{10,128}$/.test(receivedId)) return json({ error: "Invalid email ID" }, 400);
   const recipients = Array.isArray(event?.data?.to) ? event.data.to : [];

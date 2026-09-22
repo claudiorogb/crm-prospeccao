@@ -49,7 +49,7 @@ export default function EmailCampaignHistory({ campaign, organizationId, busy, o
     }
   }, [rows])
   const engagementValue = value => stats.tracked ? number(value) : 'Não disponível'
-  const deliveryValue = value => campaign.provider === 'resend' && (stats.tracked || stats.providerEvents) ? number(value) : 'Não disponível'
+  const deliveryValue = value => campaign.provider === 'resend' && stats.providerEvents ? number(value) : 'Não disponível'
 
   return <details className="email-campaign-history-item" onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary className="email-campaign-history-summary">

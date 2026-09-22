@@ -29,7 +29,7 @@ export default function EmailCampaignHistory({ campaign, organizationId, busy, o
       }).catch(() => { if (active) setError('Não foi possível consultar os detalhes desta campanha.') })
     }
     return () => { active = false }
-  }, [expanded, campaign.id, campaign.metrics_enabled, organizationId, refresh])
+  }, [expanded, campaign, organizationId, refresh])
 
   const stats = useMemo(() => {
     const items = rows || []

@@ -59,7 +59,6 @@ export default function EmailCampaignHistory({ campaign, organizationId, busy, o
             <div><span>Cliques</span><strong>Não disponível</strong></div>
             <div><span>Denúncias de spam</span><strong>Não disponível</strong></div>
           </div>
-          <p className="muted">Envio aceito não confirma entrega. O Gmail não fornece abertura ou clique por sua API de envio; eventos de entrega e engajamento do Resend dependem de integração de eventos autenticada.</p>
           <h4>Destinatários e situação</h4>
           {rows.length === 0 ? <p className="muted">Nenhum destinatário registrado.</p> : <div className="email-campaign-history-scroll"><table><thead><tr><th>E-mail</th><th>Situação</th><th>Erro / motivo</th><th>Descadastro</th></tr></thead><tbody>
             {rows.map(r => <tr key={r.recipient_id}><td>{r.recipient_email}</td><td>{r.recipient_status === 'sent' ? 'Aceito pelo provedor' : r.recipient_status === 'failed' ? 'Falhou' : r.recipient_status === 'cancelled' ? 'Cancelado' : r.recipient_status === 'queued' ? 'Na fila' : r.recipient_status === 'sending' ? 'Enviando' : r.recipient_status}</td><td>{r.error_message || '—'}</td><td>{r.unsubscribed_at ? new Date(r.unsubscribed_at).toLocaleString('pt-BR') : '—'}</td></tr>)}

@@ -28,13 +28,14 @@ function trackedHtml(body:string,token:string|null){
 }
 function trackedBody(body:string,token:string|null){
  if(!token)return escapeHtml(body).replace(/\n/g,"<br>");
- const matches=[...String(body).matchAll(/https?:\/\/[^\s<>"']+/gi)].slice(0,30);
+ // This exact match expression also powers v=2 destination lookup in email-campaign-track.
+ const matches=[...String(body).matchAll(/https?:\/\/[^\s<>"']+|(?<![@\w./-])(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d{2,5})?(?:\/[^\s<>"']*)?/gi)].slice(0,30);
  let cursor=0;let output="";
  for(let i=0;i<matches.length;i++){
   const m=matches[i];const start=m.index||0;output+=escapeHtml(body.slice(cursor,start));
   const raw=m[0];const target=raw.replace(/[.,;!?)\]]+$/,"");const trailing=raw.slice(target.length);
-  let valid=false;try{const u=new URL(target);valid=["http:","https:"].includes(u.protocol)&&!u.username&&!u.password}catch{}
-  output+=valid?`<a href="${TRACK_BASE}?t=${token}&amp;l=${i}" rel="noopener noreferrer">${escapeHtml(target)}</a>${escapeHtml(trailing)}`:escapeHtml(raw);
+  let valid=false;try{const u=new URL(/^https?:\/\//i.test(target)?target:`https://${target}`);valid=["http:","https:"].includes(u.protocol)&&!u.username&&!u.password}catch{}
+  output+=valid?`<a href="${TRACK_BASE}?t=${token}&amp;l=${i}&amp;v=2" rel="noopener noreferrer">${escapeHtml(target)}</a>${escapeHtml(trailing)}`:escapeHtml(raw);
   cursor=start+raw.length;
  }
  output+=escapeHtml(body.slice(cursor));return output.replace(/\n/g,"<br>");

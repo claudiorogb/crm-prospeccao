@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
 import MarketingListImport from './marketing-list-import'
 import NewsletterMailingPanel from './newsletter-mailing-panel'
+import EmailCampaignHistory from './email-campaign-history'
 import './email-marketing.css'
 
 const BUCKET = 'email-campaign-attachments'
@@ -99,7 +100,7 @@ export function EmailMarketing({ organization, userEmail }) {
       supabase.from('organization_email_limits').select('*').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('leads').select('id,business_name,contact_name,email,city,state,email_marketing_opt_out').eq('organization_id', organization.id).eq('status', 'won').is('deleted_at', null).order('business_name'),
       supabase.from('email_marketing_contacts').select('id,email,contact_name,company_name,source,status,consent_confirmed,unsubscribed_at').eq('organization_id', organization.id).order('email'),
-      supabase.from('email_campaigns').select('id,name,subject,body_text,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at', { count: 'exact' }).eq('organization_id', organization.id).order('created_at', { ascending: false }).order('id', { ascending: false }).range(nextCampaignPage * CAMPAIGN_PAGE_SIZE, (nextCampaignPage + 1) * CAMPAIGN_PAGE_SIZE - 1)
+      supabase.from('email_campaigns').select('id,name,subject,body_text,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at,metrics_enabled', { count: 'exact' }).eq('organization_id', organization.id).order('created_at', { ascending: false }).order('id', { ascending: false }).range(nextCampaignPage * CAMPAIGN_PAGE_SIZE, (nextCampaignPage + 1) * CAMPAIGN_PAGE_SIZE - 1)
     ])
     if (sequence !== loadSequence.current) return
     setCampaignListLoading(false)
@@ -634,22 +635,15 @@ export function EmailMarketing({ organization, userEmail }) {
         {campaigns.length === 0 ? <p className="muted">Nenhuma campanha de e-mail criada.</p> : (
           <div className="email-campaign-list">
             {campaigns.map(campaign => (
-              <article className="email-campaign-row" key={campaign.id}>
-                <div><strong>{campaign.name}</strong><span>{campaign.subject}</span><small>{new Date(campaign.created_at).toLocaleString('pt-BR')} • {providerLabel(campaign.provider)} • {campaign.from_email}</small></div>
-                <div className="email-campaign-stats"><span className={`email-status ${campaign.status}`}>{campaignStatusLabel(campaign.status)}</span><strong>{campaign.sent_count}/{campaign.total_recipients} enviados</strong>{campaign.failed_count > 0 && <small>{campaign.failed_count} falha{campaign.failed_count === 1 ? '' : 's'}</small>}</div>
-                {campaign.status === 'draft' ? (
-                  <div className="email-campaign-actions">
-                    <button type="button" className="secondary" disabled={loading} onClick={() => continueDraft(campaign)}>Continuar</button>
-                    <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>
-                  </div>
-                ) : campaign.status === 'completed' ? (
-                  <div className="email-campaign-actions">
-                    <button type="button" className="secondary email-resend-campaign-button" disabled={loading} onClick={() => resendCampaign(campaign)}>Reenviar campanha</button>
-                  </div>
-                ) : ['queued','sending','paused','failed'].includes(campaign.status) ? (
-                  <button type="button" className="secondary" disabled={loading} onClick={() => cancelCampaign(campaign.id)}>Cancelar</button>
-                ) : null}
-              </article>
+              <EmailCampaignHistory
+                key={campaign.id}
+                campaign={campaign}
+                organizationId={organization.id}
+                busy={loading}
+                onContinue={continueDraft}
+                onCancel={cancelCampaign}
+                onResend={resendCampaign}
+              />
             ))}
           </div>
         )}

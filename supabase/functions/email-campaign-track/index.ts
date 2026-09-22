@@ -8,6 +8,8 @@ const PIXEL = Uint8Array.from(atob("R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="), c =>
 const gif = () => new Response(PIXEL, { status: 200, headers: { "Content-Type": "image/gif", "Cache-Control": "private, no-store, max-age=0", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "cross-origin" } });
 const missing = () => new Response(null, { status: 404, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
 const getUrls = (body: string) => [...body.matchAll(/https?:\/\/[^\s<>"']+/gi)].slice(0, 30).map(m => String(m[0]).replace(/[.,;!?)\]]+$/, ""));
+// Keep the original lookup for previously sent links; v=2 includes domains without a protocol.
+const getUrlsV2 = (body: string) => [...body.matchAll(/https?:\/\/[^\s<>"']+|(?<![@\w./-])(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d{2,5})?(?:\/[^\s<>"']*)?/gi)].slice(0, 30).map(m => String(m[0]).replace(/[.,;!?)\]]+$/, ""));
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });
@@ -23,10 +25,10 @@ Deno.serve(async (req: Request) => {
   if (!/^(0|[1-9]\d?)$/.test(link) || Number(link) >= 30) return missing();
   const { data: body, error } = await db.rpc("email_tracking_click_body", { p_token: token });
   if (error || typeof body !== "string") return missing();
-  const original = getUrls(body)[Number(link)];
+  const original = (url.searchParams.get("v") === "2" ? getUrlsV2(body) : getUrls(body))[Number(link)];
   if (!original) return missing();
   let destination: URL;
-  try { destination = new URL(original); } catch { return missing(); }
+  try { destination = new URL(/^https?:\/\//i.test(original) ? original : `https://${original}`); } catch { return missing(); }
   if (!["http:", "https:"].includes(destination.protocol) || destination.username || destination.password) return missing();
   try { await db.rpc("email_tracking_record", { p_token: token, p_kind: "click" }); } catch { /* Do not break the customer's original link. */ }
   return new Response(null, { status: 302, headers: { Location: destination.href, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" } });

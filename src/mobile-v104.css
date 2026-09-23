@@ -247,3 +247,61 @@
   .auth-card { padding:20px 16px; border-radius:14px; }
   .empty-state { padding:32px 14px; }
 }
+
+
+/* V104.1 — correções de interação mobile */
+@media (max-width: 760px) {
+  /* A barra fixa foi criada para desktop. Em celular ela pode disputar o gesto
+     horizontal com o próprio Kanban. O mobile usa rolagem nativa no funil. */
+  .kanban-fixed-horizontal-scroll {
+    display: none !important;
+  }
+
+  .sales-kanban-wrap.sales-kanban-always-scroll {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: scroll !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .sales-kanban-wrap.sales-kanban-always-scroll .sales-kanban {
+    display: grid !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    max-width: none !important;
+  }
+
+  .sales-kanban-wrap.sales-kanban-always-scroll .kanban-column {
+    scroll-snap-align: start;
+  }
+
+  /* Evita que containers de conteúdo cortem elementos que têm seu próprio scroll. */
+  .content .sales-kanban-wrap,
+  .content .admin-subnav,
+  .content .admin-table,
+  .content .sales-list-panel-v62,
+  .content .analytics-table-v69,
+  .content .customer-import-errors-scroll {
+    min-width: 0 !important;
+  }
+
+  /* Menu: mantém o botão acima do conteúdo e abaixo do drawer/backdrop. */
+  .mobile-menu-button {
+    z-index: 1200 !important;
+  }
+
+  .mobile-menu-backdrop {
+    z-index: 1250 !important;
+  }
+
+  .sidebar.mobile-open {
+    z-index: 1300 !important;
+  }
+}

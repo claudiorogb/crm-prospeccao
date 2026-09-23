@@ -4277,7 +4277,6 @@ function MessageSending({ organization, settings, userEmail }) {
       if (action === 'pause') {
         batchPatch = { status: 'paused', paused_at: new Date().toISOString() }
       } else if (action === 'resume') {
-        await rescheduleBatchMessages(batch.id, ['queued', 'ready', 'failed'])
         batchPatch = { status: 'queued', paused_at: null }
       } else if (action === 'cancel') {
         const cancelledAt = new Date().toISOString()
@@ -4303,11 +4302,21 @@ function MessageSending({ organization, settings, userEmail }) {
 
       if (batchError) throw batchError
 
+      setBatches(previous => previous.map(item =>
+        item.id === batch.id
+          ? { ...item, ...batchPatch }
+          : item
+      ))
+
+      if (action === 'resume') {
+        await rescheduleBatchMessages(batch.id, ['queued', 'ready', 'failed'])
+      }
+
       setMessage(
         action === 'pause'
-          ? 'Envio pausado. As mensagens pendentes permanecerão na fila até você retomar.'
+          ? 'Envio pausado. Clique em Reiniciar para continuar.'
           : action === 'resume'
-            ? 'Envio reiniciado.'
+            ? 'Envio reiniciado. O botão voltou para Pausar.'
             : 'Envio cancelado. As mensagens pendentes não serão enviadas.'
       )
       await loadData()

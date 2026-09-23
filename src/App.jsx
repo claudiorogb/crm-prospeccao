@@ -4316,7 +4316,7 @@ function MessageSending({ organization, settings, userEmail }) {
         action === 'pause'
           ? 'Envio pausado. Clique em Reiniciar para continuar.'
           : action === 'resume'
-            ? 'Envio reiniciado. O botão voltou para Pausar.'
+            ? 'Envio reiniciado.'
             : 'Envio cancelado. As mensagens pendentes não serão enviadas.'
       )
       await loadData()

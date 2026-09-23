@@ -2297,14 +2297,22 @@ select:focus {
 }
 .queue-summary-v32 {
   display: grid;
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(140px, 1fr)) auto;
+  align-items: center;
+  gap: 24px;
   margin-bottom: 14px;
 }
 .queue-summary-v32 > div {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+}
+.queue-summary-v32 > div:last-child {
+  justify-self: end;
+}
+.queue-summary-v32 > div:last-child .inline-btn {
+  white-space: nowrap;
 }
 .queue-summary-v32 strong { font-size: 24px; }
 .template-status.queued { background: #eef2ff; color: #3730a3; }

@@ -4109,7 +4109,8 @@ function MessageSending({ organization, settings, userEmail }) {
   useEffect(() => {
     const activeNumberIds = new Set(batches.map(batch => batch.whatsapp_number_id).filter(Boolean))
     const disconnected = whatsappNumbers.some(number =>
-      activeNumberIds.has(number.id) && String(number.connection_status || '').toLowerCase() !== 'connected'
+      activeNumberIds.has(number.id) &&
+      ['disconnected','close','closed','logout'].includes(String(number.connection_status || '').toLowerCase())
     )
 
     if (disconnected && !disconnectAlertedRef.current) {
@@ -4271,46 +4272,31 @@ function MessageSending({ organization, settings, userEmail }) {
     setLoading(true)
     setMessage('')
 
+    const optimisticStatus = action === 'pause' ? 'paused' : action === 'resume' ? 'queued' : 'cancelled'
+    const optimisticPausedAt = action === 'pause' ? new Date().toISOString() : null
+
+    setBatches(previous => previous.map(item =>
+      item.id === batch.id
+        ? { ...item, status: optimisticStatus, paused_at: optimisticPausedAt }
+        : item
+    ))
+
     try {
-      let batchPatch = {}
+      const { data, error } = await supabase.rpc('control_whatsapp_batch', {
+        p_batch_id: batch.id,
+        p_action: action
+      })
 
-      if (action === 'pause') {
-        batchPatch = { status: 'paused', paused_at: new Date().toISOString() }
-      } else if (action === 'resume') {
-        batchPatch = { status: 'queued', paused_at: null }
-      } else if (action === 'cancel') {
-        const cancelledAt = new Date().toISOString()
-        batchPatch = { status: 'cancelled', cancelled_at: cancelledAt }
+      if (error) throw error
 
-        const { error: messageError } = await supabase
-          .from('outbound_messages')
-          .update({ status: 'cancelled', cancelled_at: cancelledAt })
-          .eq('organization_id', organization.id)
-          .eq('batch_id', batch.id)
-          .in('status', ['queued', 'ready', 'failed'])
-
-        if (messageError) throw messageError
-      } else {
-        return
-      }
-
-      const { error: batchError } = await supabase
-        .from('outbound_batches')
-        .update(batchPatch)
-        .eq('organization_id', organization.id)
-        .eq('id', batch.id)
-
-      if (batchError) throw batchError
+      const persisted = Array.isArray(data) ? data[0] : data
+      if (!persisted?.batch_status) throw new Error('O sistema não confirmou a alteração do envio.')
 
       setBatches(previous => previous.map(item =>
         item.id === batch.id
-          ? { ...item, ...batchPatch }
+          ? { ...item, status: persisted.batch_status, paused_at: persisted.paused_at || null }
           : item
       ))
-
-      if (action === 'resume') {
-        await rescheduleBatchMessages(batch.id, ['queued', 'ready', 'failed'])
-      }
 
       setMessage(
         action === 'pause'
@@ -4319,8 +4305,10 @@ function MessageSending({ organization, settings, userEmail }) {
             ? 'Envio reiniciado.'
             : 'Envio cancelado. As mensagens pendentes não serão enviadas.'
       )
+
       await loadData()
     } catch (error) {
+      await loadData()
       setMessage(error?.message || 'Não foi possível atualizar o envio.')
     } finally {
       setLoading(false)

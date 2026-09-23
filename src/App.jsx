@@ -4006,6 +4006,8 @@ function MessageSending({ organization, settings, userEmail }) {
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [showFailures, setShowFailures] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [scheduleClock, setScheduleClock] = useState(Date.now())
   const [sendConfig, setSendConfig] = useState({
     dailyLimit: Number(settings?.whatsapp_daily_send_limit || 20),
@@ -4031,13 +4033,13 @@ function MessageSending({ organization, settings, userEmail }) {
         .eq('is_active', true),
       supabase
         .from('outbound_messages')
-        .select('id,lead_id,batch_id,status,scheduled_for,queued_at,sent_at,error_message')
+        .select('id,lead_id,batch_id,status,scheduled_for,queued_at,sent_at,error_message,created_at,leads(business_name)')
         .eq('organization_id', organization.id)
         .in('status', ['queued','ready','processing','failed'])
         .order('created_at', { ascending: false }),
       supabase
         .from('outbound_batches')
-        .select('id,name,status,total_recipients,interval_seconds,created_at,paused_at,cancelled_at')
+        .select('id,name,status,total_recipients,interval_seconds,created_at,paused_at,cancelled_at,sent_count,failed_count')
         .eq('organization_id', organization.id)
         .in('status', ['queued','paused','processing'])
         .order('created_at', { ascending: false })
@@ -4287,6 +4289,18 @@ function MessageSending({ organization, settings, userEmail }) {
     }
   }
 
+  async function refreshSendingData() {
+    if (refreshing) return
+    setRefreshing(true)
+    setMessage('')
+    try {
+      await loadData()
+      setScheduleClock(Date.now())
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   async function send() {
     if (!selected.size || loading) return
 
@@ -4336,6 +4350,57 @@ function MessageSending({ organization, settings, userEmail }) {
     setLoading(false)
   }
 
+  const failedMessages = queue.filter(item => item.status === 'failed')
+  const activeSentCount = batches.reduce((sum, batch) => sum + Number(batch.sent_count || 0), 0)
+
+  if (showFailures) {
+    return (
+      <>
+        <header className="topbar compact-subpage-header">
+          <div>
+            <button type="button" className="client-back" onClick={() => setShowFailures(false)}>
+              ← Voltar para Enviar Mensagens
+            </button>
+            <span className="eyebrow">CAMPANHAS</span>
+            <h1>Falhas de envio</h1>
+            <p className="muted">Mensagens que não puderam ser enviadas e o erro apresentado pelo sistema.</p>
+          </div>
+          <div className="topbar-actions">
+            <button type="button" className="secondary inline-btn" onClick={refreshSendingData} disabled={refreshing}>
+              <RefreshCw size={16}/>{refreshing ? 'Atualizando...' : 'Atualizar'}
+            </button>
+            <div className="user-badge">{userEmail}</div>
+          </div>
+        </header>
+
+        <section className="panel">
+          {failedMessages.length === 0 ? (
+            <div className="empty-state">
+              <CheckCircle2 size={30}/>
+              <h2>Nenhuma falha de envio</h2>
+              <p>Não há mensagens com erro no momento.</p>
+            </div>
+          ) : (
+            <div className="admin-table">
+              <div className="admin-table-row head">
+                <span>Cliente</span>
+                <span>Erro apresentado</span>
+                <span>Data</span>
+              </div>
+              {failedMessages.map(item => (
+                <div className="admin-table-row" key={item.id}>
+                  <span><strong>{item.leads?.business_name || 'Cliente não identificado'}</strong></span>
+                  <span>{item.error_message || 'Falha de envio sem detalhe informado pelo provedor.'}</span>
+                  <span>{formatDateTime(item.created_at || item.scheduled_for)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </>
+    )
+  }
+
   return (
     <>
       <header className="topbar compact-subpage-header">
@@ -4344,7 +4409,12 @@ function MessageSending({ organization, settings, userEmail }) {
           <h1>Envio</h1>
           <p className="muted">Selecione quantos leads quiser. O CRM distribui automaticamente os envios pelos dias e horários configurados.</p>
         </div>
-        <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
+        <div className="topbar-actions">
+          <button type="button" className="secondary inline-btn" onClick={refreshSendingData} disabled={refreshing}>
+            <RefreshCw size={16}/>{refreshing ? 'Atualizando...' : 'Atualizar'}
+          </button>
+          <div className="user-badge">{userEmail}</div>
+        </div>
       </header>
 
       {message && <div className="notice">{message}</div>}
@@ -4385,7 +4455,13 @@ function MessageSending({ organization, settings, userEmail }) {
 
       <section className="panel queue-summary-v32">
         <div><strong>{queue.filter(item => ['queued','ready','processing'].includes(item.status)).length}</strong><span>Na fila</span></div>
-        <div><strong>{queue.filter(item => item.status === 'failed').length}</strong><span>Falhas</span></div>
+        <div><strong>{activeSentCount}</strong><span>Enviadas</span></div>
+        <div><strong>{failedMessages.length}</strong><span>Falhas</span></div>
+        <div>
+          <button type="button" className="secondary inline-btn" onClick={() => setShowFailures(true)}>
+            <XCircle size={16}/> Ver falhas
+          </button>
+        </div>
       </section>
 
       {batches.length > 0 && (

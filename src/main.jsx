@@ -5,6 +5,7 @@ import PlatformHealthAccess from './platform-health-access'
 import { supabase } from './lib/supabase'
 import './styles.css'
 import './role-access.css'
+import './mobile-v104.css'
 import './user-account-confirmation.js'
 import './ui-copy-cleanup.js'
 

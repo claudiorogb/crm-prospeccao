@@ -1,11 +1,22 @@
-/* V104 — mobile responsive hardening
-   Presentation only. Existing screens and business rules remain unchanged. */
+/* V104 — responsive mobile layer
+   Presentation only. Existing screens, data, permissions and business rules remain unchanged. */
 
 @media (max-width: 760px) {
-  html, body, #root {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  html,
+  body,
+  #root {
     width: 100%;
     max-width: 100%;
+    min-width: 0;
     overflow-x: hidden;
+  }
+
+  body {
+    min-width: 0;
   }
 
   .app-shell,
@@ -14,39 +25,93 @@
   .panel,
   .stat-card,
   .topbar,
-  .admin-section-header {
+  .admin-section-header,
+  .dashboard-block-v61,
+  .commercial-analytics-v69 {
     min-width: 0;
     max-width: 100%;
   }
 
+  /* Main spacing / safe areas */
   .content {
-    padding: 72px 12px 24px;
+    width: 100%;
+    padding: calc(66px + env(safe-area-inset-top)) 12px calc(24px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+  }
+
+  .topbar {
+    gap: 12px;
+    margin-bottom: 18px;
   }
 
   .topbar,
   .admin-section-header,
-  .panel-head {
+  .panel-head,
+  .dashboard-block-head-v61 {
     display: flex;
     flex-direction: column;
     align-items: stretch;
   }
 
+  .topbar h1 {
+    margin-top: 0;
+    margin-bottom: 4px;
+    font-size: clamp(25px, 8vw, 30px);
+    line-height: 1.08;
+  }
+
   .topbar h1,
   .admin-section-header h2,
   .panel-head h2,
-  .panel-head h3 {
+  .panel-head h3,
+  .dashboard-block-head-v61 h2 {
     overflow-wrap: anywhere;
   }
 
+  .eyebrow {
+    line-height: 1.35;
+  }
+
+  .top-user {
+    position: static;
+    width: 100%;
+    margin: 0 0 12px;
+  }
+
+  .user-badge {
+    width: 100%;
+    margin-top: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* Buttons and action bars */
   .topbar-actions,
   .form-actions,
   .bulk-actions,
   .campaign-meta,
   .customer-import-head-buttons,
+  .customer-import-actions,
   .email-connection-actions,
+  .message-card-actions,
+  .client-list-actions,
+  .repository-row-actions,
+  .batch-message-actions,
   .sales-period-main-v62 {
     width: 100%;
     max-width: 100%;
+    gap: 8px;
+  }
+
+  .form-actions,
+  .topbar-actions,
+  .bulk-actions,
+  .customer-import-actions,
+  .email-connection-actions,
+  .client-list-actions,
+  .repository-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .topbar-actions > button,
@@ -54,10 +119,21 @@
   .topbar-actions > .secondary,
   .form-actions > button,
   .form-actions > .primary,
-  .form-actions > .secondary {
+  .form-actions > .secondary,
+  .bulk-actions > button,
+  .bulk-actions > .primary,
+  .bulk-actions > .secondary {
     min-height: 44px;
   }
 
+  button,
+  .primary,
+  .secondary,
+  .inline-btn {
+    touch-action: manipulation;
+  }
+
+  /* Inputs: 16px prevents iOS zoom on focus */
   input,
   select,
   textarea,
@@ -67,41 +143,103 @@
 
   input,
   select,
-  textarea {
+  textarea,
+  .message-textarea {
+    min-width: 0;
     font-size: 16px;
   }
 
+  textarea,
+  .message-textarea {
+    width: 100%;
+  }
+
+  /* Generic grids/forms */
   .field-grid,
   .field-grid.three,
   .lead-contact-fields,
-  .email-manual-recipient-grid {
+  .email-manual-recipient-grid,
+  .leads-toolbar,
+  .capture-controls,
+  .custom-term-input,
+  .panel-grid {
     grid-template-columns: 1fr !important;
   }
 
+  .leads-toolbar {
+    gap: 9px;
+  }
+
+  .leads-toolbar .search-box,
+  .leads-toolbar > select {
+    width: 100%;
+  }
+
+  .capture-button {
+    width: 100%;
+  }
+
+  .suggested-title,
+  .batch-detail-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .suggested-title {
+    gap: 5px;
+  }
+
+  /* Cards / metrics */
   .stats-grid,
   .client-metrics-grid,
   .admin-stat-grid,
   .capture-summary,
   .capture-result-grid,
-  .capture-result-grid.five {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .capture-result-grid.five,
+  .score-ranges,
+  .batch-summary,
+  .customer-import-analysis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .dashboard-metric-grid-three-v61,
+  .dashboard-metric-grid-two-v61,
+  .dashboard-metric-grid-four-v61,
+  .sales-summary-grid-v62 {
+    grid-template-columns: 1fr !important;
   }
 
   .stat-card {
+    min-width: 0;
     min-height: 0;
     padding: 14px;
   }
 
+  .dashboard-hero-v61 .stat-card {
+    min-height: 112px;
+  }
+
+  .dashboard-hero-v61 .stat-value,
   .stat-value {
-    font-size: clamp(22px, 8vw, 30px);
+    font-size: clamp(24px, 8vw, 34px);
+    overflow-wrap: anywhere;
+  }
+
+  .stat-label,
+  .stat-detail {
+    overflow-wrap: anywhere;
   }
 
   .panel {
+    min-width: 0;
     padding: 14px;
   }
 
+  /* Lead cards / campaign cards / client rows */
   .campaign-card,
   .message-card,
+  .lead-card,
   .client-list-row,
   .batch-message-row,
   .repository-row-v33,
@@ -109,6 +247,19 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    min-width: 0;
+  }
+
+  .lead-card {
+    gap: 16px;
+  }
+
+  .lead-title-row {
+    gap: 10px;
+  }
+
+  .lead-status-box {
+    width: 100%;
   }
 
   .campaign-meta,
@@ -120,56 +271,253 @@
     text-align: left;
   }
 
+  .message-card-actions,
+  .batch-message-actions {
+    min-width: 0;
+  }
+
+  .selectable-lead {
+    padding-left: 44px;
+  }
+
+  .lead-select-box {
+    left: 12px;
+    top: 18px;
+  }
+
+  .lead-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  /* Admin navigation stays complete but becomes horizontally scrollable */
   .admin-subnav {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 6px;
+    padding-bottom: 4px;
     scroll-snap-type: x proximity;
     overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .admin-subnav-item {
-    scroll-snap-align: start;
+    flex: 0 0 auto;
     min-height: 42px;
+    scroll-snap-align: start;
+    white-space: nowrap;
   }
 
+  /* Tables: preserve all columns; scroll instead of shrinking/cutting */
   .admin-table,
   .score-table-panel,
   .sales-list-panel-v62,
   .mailing-management-table-wrap,
-  .customer-import-errors-scroll {
+  .customer-import-errors-scroll,
+  .analytics-table-v69 {
     width: 100%;
     max-width: 100%;
-    overflow-x: auto;
+    overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
   }
 
+  .score-table {
+    overflow: visible;
+  }
+
+  .score-row {
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+  }
+
+  .score-head {
+    display: none;
+  }
+
+  .customer-import-errors table {
+    min-width: 680px;
+  }
+
+  .sales-table-v62,
+  .sales-table-row-v62,
+  .sales-table-row-v67,
+  .seller-table-v69 .analytics-row-v69,
+  .origin-table-v69 .analytics-row-v69 {
+    max-width: none;
+  }
+
+  /* Kanban: keep every stage and make swiping natural */
   .sales-kanban-always-scroll {
     width: calc(100vw - 24px) !important;
     max-width: calc(100vw - 24px) !important;
     overflow-x: auto !important;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
     scrollbar-gutter: stable;
+    padding-bottom: 8px;
   }
 
   .sales-kanban {
-    width: max-content;
-    min-width: 100%;
+    width: max-content !important;
+    min-width: max-content !important;
+    grid-template-columns: repeat(8, min(84vw, 304px)) !important;
+    gap: 10px !important;
   }
 
   .kanban-column {
-    flex: 0 0 min(84vw, 320px);
-    width: min(84vw, 320px);
-    max-width: min(84vw, 320px);
+    flex: 0 0 min(84vw, 304px) !important;
+    width: min(84vw, 304px) !important;
+    min-width: min(84vw, 304px) !important;
+    max-width: min(84vw, 304px) !important;
+    scroll-snap-align: start;
+  }
+
+  .kanban-column-head-v70 {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .kanban-column-cards {
+    padding: 7px !important;
   }
 
   .kanban-card,
-  .kanban-lead-card {
+  .kanban-lead-card,
+  .kanban-lead-card-v70 {
     max-width: 100%;
     min-width: 0;
   }
 
-  .lead-info-grid {
-    grid-template-columns: 1fr 1fr;
+  .kanban-summary-topline-v70,
+  .kanban-people-row-v70 {
+    min-width: 0;
   }
 
+  .kanban-segment-v70,
+  .kanban-company-v70,
+  .kanban-people-row-v70 > strong,
+  .kanban-people-row-v70 > span {
+    overflow-wrap: anywhere;
+  }
+
+  /* Sales page */
+  .sales-period-panel-v62,
+  .sales-period-main-v62 {
+    align-items: stretch;
+  }
+
+  .sales-period-main-v62 {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .sales-custom-range-v62 {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .sales-custom-range-v62 label,
+  .sales-period-main-v62 > label,
+  .sales-filters-v67 > label {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sales-range-separator-v62 {
+    display: none;
+  }
+
+  .sales-period-current-v62 {
+    text-align: left;
+  }
+
+  /* Customer import */
+  .customer-import-head,
+  .customer-import-confirm-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .customer-import-head-buttons,
+  .customer-import-file-button,
+  .customer-import-actions .inline-btn {
+    width: 100%;
+  }
+
+  .customer-import-head-buttons .inline-btn,
+  .customer-import-file-button,
+  .customer-import-actions .inline-btn {
+    justify-content: center;
+  }
+
+  .customer-import-duplicate-choice,
+  .customer-import-analysis .notice,
+  .customer-import-analysis > .primary {
+    grid-column: 1 / -1 !important;
+  }
+
+  .customer-import-analysis > .primary {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  /* Email / campaign content */
+  .variable-help,
+  .tag-row,
+  .suggested-term-grid,
+  .custom-term-list {
+    max-width: 100%;
+  }
+
+  .suggested-term,
+  .custom-term-list span,
+  .campaign-meta span,
+  .tag-row span {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* Schedule/admin settings */
+  .schedule-readonly-fields-v63 {
+    width: 100%;
+  }
+
+  .schedule-readonly-fields-v63 > div {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .admin-days-v63 {
+    gap: 6px;
+  }
+
+  .admin-day-option-v63 {
+    min-height: 40px;
+  }
+
+  .admin-pagination-v64 {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-pagination-v64 > div {
+    width: 100%;
+  }
+
+  .admin-pagination-v64 button {
+    flex: 1 1 0;
+    min-height: 42px;
+  }
+
+  /* Long text / URLs / labels */
   .lead-site-link,
   a,
   .muted,
@@ -178,19 +526,25 @@
   .lead-card p,
   .client-list-main,
   .email-provider-card span,
-  .email-provider-card small {
+  .email-provider-card small,
+  .batch-message-row p,
+  .result-query {
     overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
+  /* Confirmation / modal-like overlays */
   .delete-confirm-overlay {
     align-items: center;
     padding: 12px;
   }
 
   .delete-confirm-banner {
+    width: min(100%, 520px);
     margin-top: 0;
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .delete-confirm-actions {
@@ -199,15 +553,61 @@
 
   .delete-confirm-actions > button {
     width: 100%;
+    min-height: 44px;
   }
 
+  /* Mobile menu / sidebar */
   .mobile-menu-button {
     top: max(12px, env(safe-area-inset-top));
     left: max(12px, env(safe-area-inset-left));
+    min-width: 44px;
+    min-height: 44px;
+    z-index: 100;
   }
 
   .sidebar {
     padding-bottom: max(18px, env(safe-area-inset-bottom));
+    max-height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 520px) {
+  .stats-grid,
+  .client-metrics-grid,
+  .admin-stat-grid,
+  .capture-summary,
+  .capture-result-grid,
+  .capture-result-grid.five,
+  .score-ranges,
+  .batch-summary,
+  .customer-import-analysis,
+  .lead-info-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .schedule-readonly-fields-v63 {
+    flex-direction: column;
+  }
+
+  .schedule-readonly-fields-v63 > div {
+    width: 100%;
+  }
+
+  .bulk-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulk-actions > span {
+    width: 100%;
+  }
+
+  .bulk-actions > button,
+  .bulk-actions > .primary,
+  .bulk-actions > .secondary {
+    width: 100%;
   }
 }
 
@@ -217,19 +617,40 @@
     padding-right: 10px;
   }
 
-  .stats-grid,
-  .client-metrics-grid,
-  .admin-stat-grid,
-  .capture-summary,
-  .capture-result-grid,
-  .capture-result-grid.five,
-  .lead-info-grid {
-    grid-template-columns: 1fr;
-  }
-
   .panel,
   .stat-card {
     border-radius: 12px;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  .stat-card {
+    padding: 13px;
+  }
+
+  .topbar-actions,
+  .form-actions,
+  .customer-import-head-buttons,
+  .email-connection-actions,
+  .client-list-actions,
+  .repository-row-actions,
+  .message-card-actions,
+  .batch-message-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-actions > *,
+  .form-actions > *,
+  .customer-import-head-buttons > *,
+  .email-connection-actions > *,
+  .client-list-actions > *,
+  .repository-row-actions > *,
+  .message-card-actions > *,
+  .batch-message-actions > * {
+    width: 100%;
   }
 
   .sales-kanban-always-scroll {
@@ -237,10 +658,15 @@
     max-width: calc(100vw - 20px) !important;
   }
 
+  .sales-kanban {
+    grid-template-columns: repeat(8, min(88vw, 300px)) !important;
+  }
+
   .kanban-column {
-    flex-basis: min(88vw, 310px);
-    width: min(88vw, 310px);
-    max-width: min(88vw, 310px);
+    flex-basis: min(88vw, 300px) !important;
+    width: min(88vw, 300px) !important;
+    min-width: min(88vw, 300px) !important;
+    max-width: min(88vw, 300px) !important;
   }
 
   .auth-shell {
@@ -250,5 +676,9 @@
   .auth-card {
     padding: 20px 16px;
     border-radius: 14px;
+  }
+
+  .empty-state {
+    padding: 32px 14px;
   }
 }

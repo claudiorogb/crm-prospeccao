@@ -265,7 +265,7 @@ function AuthScreen() {
       <section className="auth-card">
         <div className="brand-mark">CP</div>
         <h1>CRM Prospecção</h1>
-        <p className="muted">Encontre e acompanhe potenciais clientes.</p>
+        <p className="muted">Digite seu e-mail e senha para entrar.</p>
 
         <div className="auth-tabs">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Entrar</button>

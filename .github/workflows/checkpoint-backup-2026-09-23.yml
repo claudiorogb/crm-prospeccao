@@ -1,0 +1,27 @@
+name: Build checkpoint backup 2026-09-23
+
+on:
+  push:
+    branches:
+      - checkpoint-mobile-pre-responsive-2026-09-23
+
+jobs:
+  build-backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact production checkpoint
+        uses: actions/checkout@v4
+        with:
+          ref: 05f56e1947072f83b37122bb423a91df4d7b654b
+
+      - name: Create backup zip
+        run: |
+          mkdir -p /tmp/checkpoint
+          zip -r "/tmp/checkpoint/backup 23.09.26.zip" . -x ".git/*"
+
+      - name: Upload checkpoint artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-23-09-26
+          path: /tmp/checkpoint/backup 23.09.26.zip
+          if-no-files-found: error

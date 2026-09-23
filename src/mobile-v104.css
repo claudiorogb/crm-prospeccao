@@ -1,0 +1,254 @@
+/* V104 — mobile responsive hardening
+   Presentation only. Existing screens and business rules remain unchanged. */
+
+@media (max-width: 760px) {
+  html, body, #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .app-shell,
+  .content,
+  .content > *,
+  .panel,
+  .stat-card,
+  .topbar,
+  .admin-section-header {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .content {
+    padding: 72px 12px 24px;
+  }
+
+  .topbar,
+  .admin-section-header,
+  .panel-head {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar h1,
+  .admin-section-header h2,
+  .panel-head h2,
+  .panel-head h3 {
+    overflow-wrap: anywhere;
+  }
+
+  .topbar-actions,
+  .form-actions,
+  .bulk-actions,
+  .campaign-meta,
+  .customer-import-head-buttons,
+  .email-connection-actions,
+  .sales-period-main-v62 {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .topbar-actions > button,
+  .topbar-actions > .primary,
+  .topbar-actions > .secondary,
+  .form-actions > button,
+  .form-actions > .primary,
+  .form-actions > .secondary {
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    max-width: 100%;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .field-grid,
+  .field-grid.three,
+  .lead-contact-fields,
+  .email-manual-recipient-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .stats-grid,
+  .client-metrics-grid,
+  .admin-stat-grid,
+  .capture-summary,
+  .capture-result-grid,
+  .capture-result-grid.five {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat-card {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .stat-value {
+    font-size: clamp(22px, 8vw, 30px);
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .campaign-card,
+  .message-card,
+  .client-list-row,
+  .batch-message-row,
+  .repository-row-v33,
+  .admin-search-panel.compact-search-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .campaign-meta,
+  .message-card-actions,
+  .client-list-actions,
+  .repository-row-actions,
+  .admin-result-count {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .admin-subnav {
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+  }
+
+  .admin-subnav-item {
+    scroll-snap-align: start;
+    min-height: 42px;
+  }
+
+  .admin-table,
+  .score-table-panel,
+  .sales-list-panel-v62,
+  .mailing-management-table-wrap,
+  .customer-import-errors-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sales-kanban-always-scroll {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+  }
+
+  .sales-kanban {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .kanban-column {
+    flex: 0 0 min(84vw, 320px);
+    width: min(84vw, 320px);
+    max-width: min(84vw, 320px);
+  }
+
+  .kanban-card,
+  .kanban-lead-card {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .lead-info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lead-site-link,
+  a,
+  .muted,
+  .notice,
+  .panel p,
+  .lead-card p,
+  .client-list-main,
+  .email-provider-card span,
+  .email-provider-card small {
+    overflow-wrap: anywhere;
+  }
+
+  .delete-confirm-overlay {
+    align-items: center;
+    padding: 12px;
+  }
+
+  .delete-confirm-banner {
+    margin-top: 0;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+
+  .delete-confirm-actions {
+    flex-direction: column-reverse;
+  }
+
+  .delete-confirm-actions > button {
+    width: 100%;
+  }
+
+  .mobile-menu-button {
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+  }
+
+  .sidebar {
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 430px) {
+  .content {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .stats-grid,
+  .client-metrics-grid,
+  .admin-stat-grid,
+  .capture-summary,
+  .capture-result-grid,
+  .capture-result-grid.five,
+  .lead-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel,
+  .stat-card {
+    border-radius: 12px;
+  }
+
+  .sales-kanban-always-scroll {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+  }
+
+  .kanban-column {
+    flex-basis: min(88vw, 310px);
+    width: min(88vw, 310px);
+    max-width: min(88vw, 310px);
+  }
+
+  .auth-shell {
+    padding: 10px;
+  }
+
+  .auth-card {
+    padding: 20px 16px;
+    border-radius: 14px;
+  }
+}

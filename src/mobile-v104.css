@@ -323,3 +323,26 @@
   margin: 0 !important;
   line-height: 1 !important;
 }
+
+
+/* V104.3 — centralização óptica dos botões +/- do Kanban em desktop e mobile */
+.kanban-expand-toggle-v70 {
+  box-sizing: border-box !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  font-size: 20px !important;
+  line-height: 28px !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  vertical-align: middle;
+}
+
+.kanban-expand-toggle-v70::first-line {
+  line-height: 28px !important;
+}

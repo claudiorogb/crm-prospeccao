@@ -3589,6 +3589,7 @@ function Clients({ organization, userEmail, userId }) {
       message_sent: 'Mensagem enviada',
       message_prepared: 'Mensagem preparada',
       reply_received: 'Resposta recebida',
+      auto_reply_received: 'Resposta automática',
       follow_up: 'Follow-up',
       status_change: 'Alteração de status',
       queued: 'Incluído na fila'

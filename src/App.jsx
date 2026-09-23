@@ -4003,6 +4003,8 @@ function MessageSending({ organization, settings, userEmail }) {
   const [templates, setTemplates] = useState([])
   const [queue, setQueue] = useState([])
   const [batches, setBatches] = useState([])
+  const [whatsappNumbers, setWhatsappNumbers] = useState([])
+  const disconnectAlertedRef = useRef(false)
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -4018,7 +4020,7 @@ function MessageSending({ organization, settings, userEmail }) {
   })
 
   async function loadData() {
-    const [leadResult, templateResult, queueResult, batchResult, settingsResult] = await Promise.all([
+    const [leadResult, templateResult, queueResult, batchResult, settingsResult, whatsappResult] = await Promise.all([
       supabase
         .from('leads')
         .select('id,business_name,phone,status,target_segment_id,target_segments(name),campaigns(name),city,state')
@@ -4039,7 +4041,7 @@ function MessageSending({ organization, settings, userEmail }) {
         .order('created_at', { ascending: false }),
       supabase
         .from('outbound_batches')
-        .select('id,name,status,total_recipients,interval_seconds,created_at,paused_at,cancelled_at,sent_count,failed_count')
+        .select('id,name,status,total_recipients,interval_seconds,created_at,paused_at,cancelled_at,sent_count,failed_count,whatsapp_number_id')
         .eq('organization_id', organization.id)
         .in('status', ['queued','paused','processing'])
         .order('created_at', { ascending: false })
@@ -4048,16 +4050,23 @@ function MessageSending({ organization, settings, userEmail }) {
         .from('organization_settings')
         .select('whatsapp_send_interval_seconds,whatsapp_daily_send_limit,allowed_send_start,allowed_send_end,default_cadence_days')
         .eq('organization_id', organization.id)
-        .single()
+        .single(),
+      supabase
+        .from('whatsapp_numbers')
+        .select('id,alias,connection_status,evolution_instance_name,is_active')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true)
+        .is('deleted_at', null)
     ])
 
-    if (leadResult.error || templateResult.error || queueResult.error || batchResult.error || settingsResult.error) {
+    if (leadResult.error || templateResult.error || queueResult.error || batchResult.error || settingsResult.error || whatsappResult.error) {
       setMessage(
         leadResult.error?.message ||
         templateResult.error?.message ||
         queueResult.error?.message ||
         batchResult.error?.message ||
         settingsResult.error?.message ||
+        whatsappResult.error?.message ||
         'Não foi possível carregar a página de envio.'
       )
       return
@@ -4067,6 +4076,7 @@ function MessageSending({ organization, settings, userEmail }) {
     setTemplates(templateResult.data || [])
     setQueue(queueResult.data || [])
     setBatches(batchResult.data || [])
+    setWhatsappNumbers(whatsappResult.data || [])
     const cfg = settingsResult.data || {}
     setSendConfig({
       dailyLimit: Number(cfg.whatsapp_daily_send_limit || 20),
@@ -4095,6 +4105,20 @@ function MessageSending({ organization, settings, userEmail }) {
     const timer = setInterval(() => setScheduleClock(Date.now()), 30000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    const activeNumberIds = new Set(batches.map(batch => batch.whatsapp_number_id).filter(Boolean))
+    const disconnected = whatsappNumbers.some(number =>
+      activeNumberIds.has(number.id) && String(number.connection_status || '').toLowerCase() !== 'connected'
+    )
+
+    if (disconnected && !disconnectAlertedRef.current) {
+      disconnectAlertedRef.current = true
+      window.alert('WhatsApp desconectado. Os envios foram pausados automaticamente. Reconecte o WhatsApp e clique em Reiniciar para continuar a campanha.')
+    } else if (!disconnected) {
+      disconnectAlertedRef.current = false
+    }
+  }, [batches, whatsappNumbers])
 
   const queuedLeadIds = new Set(
     queue
@@ -4205,7 +4229,7 @@ function MessageSending({ organization, settings, userEmail }) {
   async function rescheduleBatchMessages(batchId, statuses) {
     const { data: pending, error } = await supabase
       .from('outbound_messages')
-      .select('id')
+      .select('id,status,error_message')
       .eq('organization_id', organization.id)
       .eq('batch_id', batchId)
       .in('status', statuses)
@@ -4213,10 +4237,15 @@ function MessageSending({ organization, settings, userEmail }) {
 
     if (error) throw error
 
+    const retryable = (pending || []).filter(item =>
+      item.status !== 'failed' ||
+      /connection closed|instance requires property "webhook"|whatsapp desconectado|envio pausado/i.test(String(item.error_message || ''))
+    )
     const interval = Math.max(1, Number(batches.find(batch => batch.id === batchId)?.interval_seconds || sendConfig.intervalSeconds || 120))
     const now = Date.now()
 
-    for (let index = 0; index < (pending || []).length; index += 1) {
+    for (let index = 0; index < retryable.length; index += 1) {
+      const item = retryable[index]
       const { error: updateError } = await supabase
         .from('outbound_messages')
         .update({
@@ -4226,7 +4255,7 @@ function MessageSending({ organization, settings, userEmail }) {
           scheduled_for: new Date(now + index * interval * 1000).toISOString()
         })
         .eq('organization_id', organization.id)
-        .eq('id', pending[index].id)
+        .eq('id', item.id)
 
       if (updateError) throw updateError
     }
@@ -4248,7 +4277,7 @@ function MessageSending({ organization, settings, userEmail }) {
       if (action === 'pause') {
         batchPatch = { status: 'paused', paused_at: new Date().toISOString() }
       } else if (action === 'resume') {
-        await rescheduleBatchMessages(batch.id, ['queued', 'ready'])
+        await rescheduleBatchMessages(batch.id, ['queued', 'ready', 'failed'])
         batchPatch = { status: 'queued', paused_at: null }
       } else if (action === 'cancel') {
         const cancelledAt = new Date().toISOString()
@@ -4278,7 +4307,7 @@ function MessageSending({ organization, settings, userEmail }) {
         action === 'pause'
           ? 'Envio pausado. As mensagens pendentes permanecerão na fila até você retomar.'
           : action === 'resume'
-            ? 'Envio retomado.'
+            ? 'Envio reiniciado.'
             : 'Envio cancelado. As mensagens pendentes não serão enviadas.'
       )
       await loadData()
@@ -4489,7 +4518,7 @@ function MessageSending({ organization, settings, userEmail }) {
                   <div className="row-actions">
                     {batch.status === 'paused' ? (
                       <button type="button" className="secondary mini" onClick={() => controlBatch(batch, 'resume')} disabled={loading}>
-                        <Play size={14}/> Retomar
+                        <Play size={14}/> Reiniciar
                       </button>
                     ) : (
                       <button type="button" className="secondary mini" onClick={() => controlBatch(batch, 'pause')} disabled={loading}>

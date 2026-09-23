@@ -4001,6 +4001,7 @@ function MessageSending({ organization, settings, userEmail }) {
   const [leads, setLeads] = useState([])
   const [templates, setTemplates] = useState([])
   const [queue, setQueue] = useState([])
+  const [batches, setBatches] = useState([])
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -4014,7 +4015,7 @@ function MessageSending({ organization, settings, userEmail }) {
   })
 
   async function loadData() {
-    const [leadResult, templateResult, queueResult, settingsResult] = await Promise.all([
+    const [leadResult, templateResult, queueResult, batchResult, settingsResult] = await Promise.all([
       supabase
         .from('leads')
         .select('id,business_name,phone,status,target_segment_id,target_segments(name),campaigns(name),city,state')
@@ -4029,10 +4030,17 @@ function MessageSending({ organization, settings, userEmail }) {
         .eq('is_active', true),
       supabase
         .from('outbound_messages')
-        .select('id,lead_id,status,scheduled_for,queued_at,sent_at,error_message')
+        .select('id,lead_id,batch_id,status,scheduled_for,queued_at,sent_at,error_message')
         .eq('organization_id', organization.id)
         .in('status', ['queued','ready','processing','failed'])
         .order('created_at', { ascending: false }),
+      supabase
+        .from('outbound_batches')
+        .select('id,name,status,total_recipients,interval_seconds,created_at,paused_at,cancelled_at')
+        .eq('organization_id', organization.id)
+        .in('status', ['queued','paused','processing'])
+        .order('created_at', { ascending: false })
+        .limit(20),
       supabase
         .from('organization_settings')
         .select('whatsapp_send_interval_seconds,whatsapp_daily_send_limit,allowed_send_start,allowed_send_end,default_cadence_days')
@@ -4040,11 +4048,12 @@ function MessageSending({ organization, settings, userEmail }) {
         .single()
     ])
 
-    if (leadResult.error || templateResult.error || queueResult.error || settingsResult.error) {
+    if (leadResult.error || templateResult.error || queueResult.error || batchResult.error || settingsResult.error) {
       setMessage(
         leadResult.error?.message ||
         templateResult.error?.message ||
         queueResult.error?.message ||
+        batchResult.error?.message ||
         settingsResult.error?.message ||
         'Não foi possível carregar a página de envio.'
       )
@@ -4054,6 +4063,7 @@ function MessageSending({ organization, settings, userEmail }) {
     setLeads(leadResult.data || [])
     setTemplates(templateResult.data || [])
     setQueue(queueResult.data || [])
+    setBatches(batchResult.data || [])
     const cfg = settingsResult.data || {}
     setSendConfig({
       dailyLimit: Number(cfg.whatsapp_daily_send_limit || 20),
@@ -4189,6 +4199,93 @@ function MessageSending({ organization, settings, userEmail }) {
     setLoading(false)
   }
 
+  async function rescheduleBatchMessages(batchId, statuses) {
+    const { data: pending, error } = await supabase
+      .from('outbound_messages')
+      .select('id')
+      .eq('organization_id', organization.id)
+      .eq('batch_id', batchId)
+      .in('status', statuses)
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+
+    const interval = Math.max(1, Number(batches.find(batch => batch.id === batchId)?.interval_seconds || sendConfig.intervalSeconds || 120))
+    const now = Date.now()
+
+    for (let index = 0; index < (pending || []).length; index += 1) {
+      const { error: updateError } = await supabase
+        .from('outbound_messages')
+        .update({
+          status: 'queued',
+          error_message: null,
+          cancelled_at: null,
+          scheduled_for: new Date(now + index * interval * 1000).toISOString()
+        })
+        .eq('organization_id', organization.id)
+        .eq('id', pending[index].id)
+
+      if (updateError) throw updateError
+    }
+  }
+
+  async function controlBatch(batch, action) {
+    if (!batch?.id || loading) return
+
+    if (action === 'cancel' && !window.confirm('Cancelar este envio? As mensagens que ainda não foram enviadas serão interrompidas. Uma mensagem que já esteja sendo processada pode ser concluída.')) {
+      return
+    }
+
+    setLoading(true)
+    setMessage('')
+
+    try {
+      let batchPatch = {}
+
+      if (action === 'pause') {
+        batchPatch = { status: 'paused', paused_at: new Date().toISOString() }
+      } else if (action === 'resume') {
+        await rescheduleBatchMessages(batch.id, ['queued', 'ready'])
+        batchPatch = { status: 'queued', paused_at: null }
+      } else if (action === 'cancel') {
+        const cancelledAt = new Date().toISOString()
+        batchPatch = { status: 'cancelled', cancelled_at: cancelledAt }
+
+        const { error: messageError } = await supabase
+          .from('outbound_messages')
+          .update({ status: 'cancelled', cancelled_at: cancelledAt })
+          .eq('organization_id', organization.id)
+          .eq('batch_id', batch.id)
+          .in('status', ['queued', 'ready', 'failed'])
+
+        if (messageError) throw messageError
+      } else {
+        return
+      }
+
+      const { error: batchError } = await supabase
+        .from('outbound_batches')
+        .update(batchPatch)
+        .eq('organization_id', organization.id)
+        .eq('id', batch.id)
+
+      if (batchError) throw batchError
+
+      setMessage(
+        action === 'pause'
+          ? 'Envio pausado. As mensagens pendentes permanecerão na fila até você retomar.'
+          : action === 'resume'
+            ? 'Envio retomado.'
+            : 'Envio cancelado. As mensagens pendentes não serão enviadas.'
+      )
+      await loadData()
+    } catch (error) {
+      setMessage(error?.message || 'Não foi possível atualizar o envio.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function send() {
     if (!selected.size || loading) return
 
@@ -4289,6 +4386,49 @@ function MessageSending({ organization, settings, userEmail }) {
         <div><strong>{queue.filter(item => ['queued','ready','processing'].includes(item.status)).length}</strong><span>Na fila</span></div>
         <div><strong>{queue.filter(item => item.status === 'failed').length}</strong><span>Falhas</span></div>
       </section>
+
+      {batches.length > 0 && (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">CONTROLE DE ENVIO</span>
+              <h2>Envios em andamento</h2>
+              <p className="muted">Pause temporariamente ou cancele as mensagens que ainda não foram enviadas.</p>
+            </div>
+          </div>
+          <div className="admin-list">
+            {batches.map(batch => {
+              const pendingCount = queue.filter(item =>
+                item.batch_id === batch.id && ['queued', 'ready', 'processing'].includes(item.status)
+              ).length
+
+              return (
+                <div className="admin-list-row" key={batch.id}>
+                  <div>
+                    <strong>{batch.name || 'Envio de WhatsApp'}</strong>
+                    <span>{pendingCount} mensagem(ns) pendente(s) • criado em {formatDateTime(batch.created_at)}</span>
+                    <small>{batch.status === 'paused' ? 'Pausado' : 'Em andamento'}</small>
+                  </div>
+                  <div className="row-actions">
+                    {batch.status === 'paused' ? (
+                      <button type="button" className="secondary mini" onClick={() => controlBatch(batch, 'resume')} disabled={loading}>
+                        <Play size={14}/> Retomar
+                      </button>
+                    ) : (
+                      <button type="button" className="secondary mini" onClick={() => controlBatch(batch, 'pause')} disabled={loading}>
+                        <Pause size={14}/> Pausar
+                      </button>
+                    )}
+                    <button type="button" className="text-danger mini" onClick={() => controlBatch(batch, 'cancel')} disabled={loading}>
+                      <XCircle size={14}/> Cancelar envio
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="sending-list">
         {leads.length === 0 ? (

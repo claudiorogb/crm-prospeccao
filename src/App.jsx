@@ -4127,7 +4127,21 @@ function MessageSending({ organization, settings, userEmail }) {
       .map(item => item.lead_id)
   )
 
-  const selectableLeads = leads.filter(lead =>
+  const failedLeadIds = new Set(
+    queue
+      .filter(item => item.status === 'failed')
+      .map(item => item.lead_id)
+  )
+
+  // Falhas não podem voltar a aparecer como "Apto".
+  // Se existir uma nova mensagem ativa para o mesmo lead, ele volta a aparecer como "Na fila".
+  const unresolvedFailedLeadIds = new Set(
+    [...failedLeadIds].filter(leadId => !queuedLeadIds.has(leadId))
+  )
+
+  const sendingLeads = leads.filter(lead => !unresolvedFailedLeadIds.has(lead.id))
+
+  const selectableLeads = sendingLeads.filter(lead =>
     !queuedLeadIds.has(lead.id) &&
     lead.status !== 'queued'
   )
@@ -4534,9 +4548,9 @@ function MessageSending({ organization, settings, userEmail }) {
       )}
 
       <section className="sending-list">
-        {leads.length === 0 ? (
+        {sendingLeads.length === 0 ? (
           <article className="panel empty-state"><Send size={30}/><h2>Nenhum lead disponível para envio</h2></article>
-        ) : leads.map(lead => {
+        ) : sendingLeads.map(lead => {
           const hasPhone = Boolean(normalizeWhatsAppNumber(lead.phone))
           const hasTemplate = templates.some(template => template.target_segment_id === lead.target_segment_id)
           const isQueued = lead.status === 'queued' || queuedLeadIds.has(lead.id)

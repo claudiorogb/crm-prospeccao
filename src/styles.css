@@ -1159,6 +1159,13 @@ select:focus {
   font-weight: 800;
   border-radius: 8px 8px 0 0;
 }
+
+/* Lista de falhas — usa toda a largura disponível em três colunas */
+.failure-table .admin-table-row {
+  min-width: 830px;
+  grid-template-columns: minmax(280px, 1.55fr) minmax(360px, 1.9fr) minmax(180px, .8fr);
+  gap: 24px;
+}
 .audit-table .admin-table-row {
   grid-template-columns: 1.2fr 1.2fr .8fr 1.5fr 1fr;
 }

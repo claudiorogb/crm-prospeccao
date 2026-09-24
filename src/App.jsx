@@ -4009,6 +4009,7 @@ function MessageSending({ organization, settings, userEmail }) {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [showFailures, setShowFailures] = useState(false)
+  const [failurePage, setFailurePage] = useState(1)
   const [refreshing, setRefreshing] = useState(false)
   const [scheduleClock, setScheduleClock] = useState(Date.now())
   const [sendConfig, setSendConfig] = useState({
@@ -4035,7 +4036,7 @@ function MessageSending({ organization, settings, userEmail }) {
         .eq('is_active', true),
       supabase
         .from('outbound_messages')
-        .select('id,lead_id,batch_id,status,scheduled_for,queued_at,sent_at,error_message,created_at,leads(business_name)')
+        .select('id,lead_id,batch_id,status,scheduled_for,queued_at,sent_at,error_message,created_at,updated_at,leads(business_name)')
         .eq('organization_id', organization.id)
         .in('status', ['queued','ready','processing','failed'])
         .order('created_at', { ascending: false }),
@@ -4390,7 +4391,20 @@ function MessageSending({ organization, settings, userEmail }) {
     setLoading(false)
   }
 
-  const failedMessages = queue.filter(item => item.status === 'failed')
+  const failedMessages = queue
+    .filter(item => item.status === 'failed')
+    .sort((a, b) => {
+      const aTime = new Date(a.updated_at || a.created_at || a.scheduled_for || 0).getTime()
+      const bTime = new Date(b.updated_at || b.created_at || b.scheduled_for || 0).getTime()
+      return bTime - aTime
+    })
+  const FAILURE_PAGE_SIZE = 30
+  const failurePageCount = Math.max(1, Math.ceil(failedMessages.length / FAILURE_PAGE_SIZE))
+  const safeFailurePage = Math.min(failurePage, failurePageCount)
+  const paginatedFailedMessages = failedMessages.slice(
+    (safeFailurePage - 1) * FAILURE_PAGE_SIZE,
+    safeFailurePage * FAILURE_PAGE_SIZE
+  )
   const activeSentCount = batches.reduce((sum, batch) => sum + Number(batch.sent_count || 0), 0)
 
   if (showFailures) {
@@ -4427,13 +4441,44 @@ function MessageSending({ organization, settings, userEmail }) {
                 <span>Erro apresentado</span>
                 <span>Data</span>
               </div>
-              {failedMessages.map(item => (
+              {paginatedFailedMessages.map(item => (
                 <div className="admin-table-row" key={item.id}>
                   <span><strong>{item.leads?.business_name || 'Cliente não identificado'}</strong></span>
                   <span>{item.error_message || 'Falha de envio sem detalhe informado pelo provedor.'}</span>
-                  <span>{formatDateTime(item.created_at || item.scheduled_for)}</span>
+                  <span>{formatDateTime(item.updated_at || item.created_at || item.scheduled_for)}</span>
                 </div>
               ))}
+              {failurePageCount > 1 && (
+                <div className="row-actions" style={{ justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="secondary mini"
+                    disabled={safeFailurePage === 1}
+                    onClick={() => setFailurePage(page => Math.max(1, page - 1))}
+                  >
+                    Anterior
+                  </button>
+                  {Array.from({ length: failurePageCount }, (_, index) => index + 1).map(page => (
+                    <button
+                      type="button"
+                      key={page}
+                      className={page === safeFailurePage ? 'primary mini' : 'secondary mini'}
+                      onClick={() => setFailurePage(page)}
+                      aria-current={page === safeFailurePage ? 'page' : undefined}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="secondary mini"
+                    disabled={safeFailurePage === failurePageCount}
+                    onClick={() => setFailurePage(page => Math.min(failurePageCount, page + 1))}
+                  >
+                    Próxima
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -4498,7 +4543,7 @@ function MessageSending({ organization, settings, userEmail }) {
         <div><strong>{activeSentCount}</strong><span>Enviadas</span></div>
         <div><strong>{failedMessages.length}</strong><span>Falhas</span></div>
         <div>
-          <button type="button" className="secondary inline-btn" onClick={() => setShowFailures(true)}>
+          <button type="button" className="secondary inline-btn" onClick={() => { setFailurePage(1); setShowFailures(true) }}>
             <XCircle size={16}/> Ver falhas
           </button>
         </div>

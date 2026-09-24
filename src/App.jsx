@@ -4435,7 +4435,7 @@ function MessageSending({ organization, settings, userEmail }) {
               <p>Não há mensagens com erro no momento.</p>
             </div>
           ) : (
-            <div className="admin-table">
+            <div className="admin-table failure-table">
               <div className="admin-table-row head">
                 <span>Cliente</span>
                 <span>Erro apresentado</span>

@@ -4436,13 +4436,20 @@ function MessageSending({ organization, settings, userEmail }) {
             </div>
           ) : (
             <div className="admin-table failure-table">
-              <div className="admin-table-row head">
+              <div
+                className="admin-table-row head"
+                style={{ gridTemplateColumns: 'minmax(360px, 1.35fr) minmax(520px, 1.75fr) minmax(210px, .7fr)', gap: 24 }}
+              >
                 <span>Cliente</span>
                 <span>Erro apresentado</span>
                 <span>Data</span>
               </div>
               {paginatedFailedMessages.map(item => (
-                <div className="admin-table-row" key={item.id}>
+                <div
+                  className="admin-table-row"
+                  key={item.id}
+                  style={{ gridTemplateColumns: 'minmax(360px, 1.35fr) minmax(520px, 1.75fr) minmax(210px, .7fr)', gap: 24 }}
+                >
                   <span><strong>{item.leads?.business_name || 'Cliente não identificado'}</strong></span>
                   <span>{item.error_message || 'Falha de envio sem detalhe informado pelo provedor.'}</span>
                   <span>{formatDateTime(item.updated_at || item.created_at || item.scheduled_for)}</span>

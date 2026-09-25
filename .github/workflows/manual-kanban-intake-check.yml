@@ -1,0 +1,37 @@
+name: Manual Kanban Intake Check
+
+on:
+  push:
+    branches:
+      - feature/manual-kanban-intake
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check Supabase functions
+        run: |
+          deno check supabase/functions/capture_places_leads/index.ts
+          deno check supabase/functions/enqueue_whatsapp_messages/index.ts
+          deno check supabase/functions/process_whatsapp_queue/index.ts

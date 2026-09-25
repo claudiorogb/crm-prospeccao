@@ -4788,9 +4788,9 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['campaigns','Campanha'],
     ['capture','Captação'],
     ['messages','Mensagens'],
-    ['sending','Enviar Mensagens'],
+    ['sending','Enviar mensagens Whatsapp'],
     ['email','E-mail marketing'],
-    ['whatsapp','WhatsApp']
+    ['whatsapp','Cadastrar Whatsapp']
   ]
 
   return (

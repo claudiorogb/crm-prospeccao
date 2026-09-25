@@ -34,6 +34,6 @@ jobs:
 
       - name: Check Supabase functions
         run: |
-          deno check supabase/functions/capture_places_leads/index.ts
-          deno check supabase/functions/enqueue_whatsapp_messages/index.ts
-          deno check supabase/functions/process_whatsapp_queue/index.ts
+          deno check --node-modules-dir=auto supabase/functions/capture_places_leads/index.ts
+          deno check --node-modules-dir=auto supabase/functions/enqueue_whatsapp_messages/index.ts
+          deno check --node-modules-dir=auto supabase/functions/process_whatsapp_queue/index.ts

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npx esbuild supabase/functions/capture_places_leads/index.ts supabase/functions/enqueue_whatsapp_messages/index.ts supabase/functions/process_whatsapp_queue/index.ts --bundle --platform=neutral --format=esm --outdir=.function-check --external:jsr:* --external:npm:*",
     "preview": "vite preview"
   },
   "dependencies": {

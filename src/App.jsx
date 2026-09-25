@@ -4000,6 +4000,8 @@ function Messages({ organization, userEmail }) {
 
 function MessageSending({ organization, settings, userEmail }) {
   const [leads, setLeads] = useState([])
+  const [intakeLeads, setIntakeLeads] = useState([])
+  const [intakeView, setIntakeView] = useState(null)
   const [templates, setTemplates] = useState([])
   const [queue, setQueue] = useState([])
   const [batches, setBatches] = useState([])
@@ -4021,14 +4023,21 @@ function MessageSending({ organization, settings, userEmail }) {
   })
 
   async function loadData() {
-    const [leadResult, templateResult, queueResult, batchResult, settingsResult, whatsappResult] = await Promise.all([
+    const [leadResult, intakeResult, templateResult, queueResult, batchResult, settingsResult, whatsappResult] = await Promise.all([
       supabase
         .from('leads')
         .select('id,business_name,phone,status,target_segment_id,target_segments(name),campaigns(name),city,state')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
-        .in('status', ['new','queued'])
+        .in('status', ['new','queued','captured_pending'])
         .order('created_at', { ascending: false }),
+      supabase
+        .from('leads')
+        .select('id,business_name,phone,status,target_segment_id,target_segments(name),campaigns(name),city,state,created_at,updated_at')
+        .eq('organization_id', organization.id)
+        .is('deleted_at', null)
+        .in('status', ['captured_pending','contacted_pending'])
+        .order('updated_at', { ascending: false }),
       supabase
         .from('message_templates')
         .select('id,target_segment_id,name,is_default_for_target')
@@ -4060,9 +4069,10 @@ function MessageSending({ organization, settings, userEmail }) {
         .is('deleted_at', null)
     ])
 
-    if (leadResult.error || templateResult.error || queueResult.error || batchResult.error || settingsResult.error || whatsappResult.error) {
+    if (leadResult.error || intakeResult.error || templateResult.error || queueResult.error || batchResult.error || settingsResult.error || whatsappResult.error) {
       setMessage(
         leadResult.error?.message ||
+        intakeResult.error?.message ||
         templateResult.error?.message ||
         queueResult.error?.message ||
         batchResult.error?.message ||
@@ -4074,6 +4084,7 @@ function MessageSending({ organization, settings, userEmail }) {
     }
 
     setLeads(leadResult.data || [])
+    setIntakeLeads(intakeResult.data || [])
     setTemplates(templateResult.data || [])
     setQueue(queueResult.data || [])
     setBatches(batchResult.data || [])
@@ -4330,6 +4341,35 @@ function MessageSending({ organization, settings, userEmail }) {
     }
   }
 
+  async function moveIntakeLeadToKanban(lead, targetStatus) {
+    if (!lead?.id || loading) return
+
+    setLoading(true)
+    setMessage('')
+    try {
+      const { data, error } = await supabase.rpc('move_intake_lead_to_kanban', {
+        p_organization_id: organization.id,
+        p_lead_id: lead.id,
+        p_target_status: targetStatus
+      })
+
+      if (error) throw error
+
+      const targetLabel = targetStatus === 'replied'
+        ? 'Respondeu'
+        : targetStatus === 'contacted'
+          ? 'Contatado'
+          : 'Novo'
+
+      setMessage(`${lead.business_name} foi enviado para o Kanban em ${targetLabel}.`)
+      await loadData()
+    } catch (error) {
+      setMessage(error?.message || 'Não foi possível enviar o lead para o Kanban.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function refreshSendingData() {
     if (refreshing) return
     setRefreshing(true)
@@ -4391,6 +4431,9 @@ function MessageSending({ organization, settings, userEmail }) {
     setLoading(false)
   }
 
+  const capturedIntakeLeads = intakeLeads.filter(lead => lead.status === 'captured_pending')
+  const contactedIntakeLeads = intakeLeads.filter(lead => lead.status === 'contacted_pending')
+
   const failedMessages = queue
     .filter(item => item.status === 'failed')
     .sort((a, b) => {
@@ -4406,6 +4449,113 @@ function MessageSending({ organization, settings, userEmail }) {
     safeFailurePage * FAILURE_PAGE_SIZE
   )
   const activeSentCount = batches.reduce((sum, batch) => sum + Number(batch.sent_count || 0), 0)
+
+  if (intakeView === 'captured') {
+    return (
+      <>
+        <header className="topbar compact-subpage-header">
+          <div>
+            <button type="button" className="client-back" onClick={() => { setIntakeView(null); setMessage('') }}>
+              ← Voltar para Enviar Mensagens
+            </button>
+            <span className="eyebrow">CAMPANHAS</span>
+            <h1>Leads captados</h1>
+            <p className="muted">Leads captados ficam fora do Kanban até você escolher para onde enviá-los.</p>
+          </div>
+          <div className="topbar-actions">
+            <button type="button" className="secondary inline-btn" onClick={refreshSendingData} disabled={refreshing}>
+              <RefreshCw size={16}/>{refreshing ? 'Atualizando...' : 'Atualizar'}
+            </button>
+            <div className="user-badge">{userEmail}</div>
+          </div>
+        </header>
+
+        {message && <div className="notice">{message}</div>}
+
+        <section className="panel">
+          {capturedIntakeLeads.length === 0 ? (
+            <div className="empty-state">
+              <CheckCircle2 size={30}/>
+              <h2>Nenhum lead captado aguardando decisão</h2>
+              <p>Novas captações aparecerão aqui antes de entrar no Kanban.</p>
+            </div>
+          ) : (
+            <div className="admin-list">
+              {capturedIntakeLeads.map(lead => (
+                <div className="admin-list-row" key={lead.id}>
+                  <div>
+                    <strong>{lead.business_name}</strong>
+                    <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'} • {lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
+                    <small>{lead.phone || 'Sem telefone'}</small>
+                  </div>
+                  <div className="row-actions">
+                    <button type="button" className="secondary mini" onClick={() => moveIntakeLeadToKanban(lead, 'new')} disabled={loading}>
+                      Enviar como Novo
+                    </button>
+                    <button type="button" className="primary mini" onClick={() => moveIntakeLeadToKanban(lead, 'contacted')} disabled={loading}>
+                      Enviar como Contatado
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </>
+    )
+  }
+
+  if (intakeView === 'contacted') {
+    return (
+      <>
+        <header className="topbar compact-subpage-header">
+          <div>
+            <button type="button" className="client-back" onClick={() => { setIntakeView(null); setMessage('') }}>
+              ← Voltar para Enviar Mensagens
+            </button>
+            <span className="eyebrow">CAMPANHAS</span>
+            <h1>Clientes contactados</h1>
+            <p className="muted">Mensagens enviadas sem erro ficam aqui até você decidir colocá-las no Kanban.</p>
+          </div>
+          <div className="topbar-actions">
+            <button type="button" className="secondary inline-btn" onClick={refreshSendingData} disabled={refreshing}>
+              <RefreshCw size={16}/>{refreshing ? 'Atualizando...' : 'Atualizar'}
+            </button>
+            <div className="user-badge">{userEmail}</div>
+          </div>
+        </header>
+
+        {message && <div className="notice">{message}</div>}
+
+        <section className="panel">
+          {contactedIntakeLeads.length === 0 ? (
+            <div className="empty-state">
+              <CheckCircle2 size={30}/>
+              <h2>Nenhum cliente contactado aguardando decisão</h2>
+              <p>Envios concluídos sem erro aparecerão aqui antes de entrar no Kanban.</p>
+            </div>
+          ) : (
+            <div className="admin-list">
+              {contactedIntakeLeads.map(lead => (
+                <div className="admin-list-row" key={lead.id}>
+                  <div>
+                    <strong>{lead.business_name}</strong>
+                    <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'} • {lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
+                    <small>{lead.phone || 'Sem telefone'}</small>
+                  </div>
+                  <div className="row-actions">
+                    <button type="button" className="primary mini" onClick={() => moveIntakeLeadToKanban(lead, 'replied')} disabled={loading}>
+                      Enviar para Kanban como Respondeu
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </>
+    )
+  }
 
   if (showFailures) {
     return (
@@ -4502,6 +4652,12 @@ function MessageSending({ organization, settings, userEmail }) {
           <p className="muted">Selecione quantos leads quiser. O CRM distribui automaticamente os envios pelos dias e horários configurados.</p>
         </div>
         <div className="topbar-actions">
+          <button type="button" className="secondary inline-btn" onClick={() => { setIntakeView('captured'); setMessage('') }}>
+            Leads captados ({capturedIntakeLeads.length})
+          </button>
+          <button type="button" className="secondary inline-btn" onClick={() => { setIntakeView('contacted'); setMessage('') }}>
+            Clientes contactados ({contactedIntakeLeads.length})
+          </button>
           <button type="button" className="secondary inline-btn" onClick={refreshSendingData} disabled={refreshing}>
             <RefreshCw size={16}/>{refreshing ? 'Atualizando...' : 'Atualizar'}
           </button>

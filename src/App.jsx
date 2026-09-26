@@ -5707,7 +5707,7 @@ function AdminWhatsApp({ organizations, userEmail, userMode = false }) {
       { count: sentCount }
     ] = await Promise.all([
       supabase.from('organization_settings').select('*').eq('organization_id', organizationId).single(),
-      supabase.from('whatsapp_numbers').select('*').eq('organization_id', organizationId).order('created_at'),
+      supabase.from('whatsapp_numbers').select('*').eq('organization_id', organizationId).is('deleted_at', null).order('created_at'),
       supabase.from('outbound_messages')
         .select('id', { count: 'exact', head: true })
         .eq('organization_id', organizationId)
@@ -5881,7 +5881,8 @@ function AdminWhatsApp({ organizations, userEmail, userMode = false }) {
       try {
         await evolutionAction('delete_instance', { number_id: number.id })
       } catch (error) {
-        if (!window.confirm(`A Evolution API respondeu: ${error.message}. Deseja arquivar o cadastro do CRM mesmo assim?`)) return
+        setMessage(`Não foi possível remover a conexão na Evolution API: ${error.message}. O cadastro do CRM não foi arquivado.`)
+        return
       }
     }
 

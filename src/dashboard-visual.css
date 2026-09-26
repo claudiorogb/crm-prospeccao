@@ -26,3 +26,8 @@
 .axh-error{background:#fff7f7;border-color:#f0d3d3;color:#8c2731}
 @media(max-width:1050px){.axh-insights{grid-template-columns:1fr}.axh-origin{grid-template-columns:minmax(130px,38%) minmax(0,1fr)}}
 @media(max-width:540px){.axh-card{padding:13px}.axh-heading{gap:9px}.axh-heading h2{font-size:17px}.axh-heading p{font-size:12px}.axh-funnel{gap:4px;min-height:160px}.axh-stage{height:160px;gap:6px}.axh-stage strong{font-size:11px}.axh-stage span{font-size:9px}.axh-origin{grid-template-columns:minmax(105px,42%) minmax(0,1fr);gap:9px;min-height:140px}.axh-donut strong{font-size:22px}.axh-legend{gap:8px}.axh-legend>div{grid-template-columns:8px minmax(0,1fr);gap:5px;font-size:11px}.axh-legend i{height:8px;width:8px}.axh-legend strong{grid-column:2;font-size:10px}}
+
+.axh-legend-compact>div{grid-template-columns:10px minmax(0,1fr) auto;gap:7px;font-size:11px}
+.axh-legend-compact span{font-size:11px;line-height:1.15;min-width:0}
+.axh-legend-compact strong{font-size:10.5px}
+.axh-legend-compact i{width:10px;height:10px}

@@ -4988,6 +4988,8 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
 function NotInterestedRepository({ organization, userEmail }) {
   const [leads, setLeads] = useState([])
   const [message, setMessage] = useState('')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
 
   async function loadData() {
     const { data, error } = await supabase
@@ -5001,7 +5003,14 @@ function NotInterestedRepository({ organization, userEmail }) {
     else setLeads(data || [])
   }
 
-  useEffect(() => { loadData() }, [organization.id])
+  useEffect(() => {
+    setPage(1)
+    loadData()
+  }, [organization.id])
+
+  const pageCount = Math.max(1, Math.ceil(leads.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount)
+  const paginatedLeads = leads.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   async function returnToFunnel(lead) {
     if (!window.confirm(`Retornar "${lead.business_name}" ao funil como Novo?`)) return
@@ -5039,7 +5048,7 @@ function NotInterestedRepository({ organization, userEmail }) {
             <h2>Nenhum lead nesta área</h2>
             <p>Leads marcados como Sem interesse, Descartado ou Perdido aparecerão aqui.</p>
           </article>
-        ) : leads.map(lead => (
+        ) : paginatedLeads.map(lead => (
           <article className="panel repository-row-v33" key={lead.id}>
             <div className="repository-main-v33">
               <div className="repository-title-v33">
@@ -5058,6 +5067,44 @@ function NotInterestedRepository({ organization, userEmail }) {
           </article>
         ))}
       </section>
+
+      {leads.length > PAGE_SIZE && (
+        <div className="admin-pagination-v64">
+          <span>
+            Página <strong>{safePage}</strong> de <strong>{pageCount}</strong>
+            {' • '}{leads.length} lead{leads.length === 1 ? '' : 's'}
+          </span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="secondary mini"
+              onClick={() => setPage(current => Math.max(1, current - 1))}
+              disabled={safePage === 1}
+            >
+              Anterior
+            </button>
+            {Array.from({ length: pageCount }, (_, index) => index + 1).map(pageNumber => (
+              <button
+                type="button"
+                key={pageNumber}
+                className={pageNumber === safePage ? 'primary mini' : 'secondary mini'}
+                onClick={() => setPage(pageNumber)}
+                aria-current={pageNumber === safePage ? 'page' : undefined}
+              >
+                {pageNumber}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="secondary mini"
+              onClick={() => setPage(current => Math.min(pageCount, current + 1))}
+              disabled={safePage === pageCount}
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

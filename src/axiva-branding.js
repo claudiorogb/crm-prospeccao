@@ -10,8 +10,9 @@ function applyBranding() {
     if (current) return
     mark.textContent = ''
     const img = document.createElement('img')
-    img.src = mark.closest('.sidebar-brand') ? SIDEBAR_MARK_URL : MARK_DATA_URL
-    img.alt = 'AXIVA'
+    const isSidebar = Boolean(mark.closest('.sidebar-brand'))
+    img.src = isSidebar ? SIDEBAR_MARK_URL : MARK_DATA_URL
+    img.alt = isSidebar ? 'AXIVA CRM — Mais controle sobre suas vendas.' : 'AXIVA'
     img.dataset.axivaMark = 'true'
     img.style.width = '100%'
     img.style.height = '100%'
@@ -19,6 +20,17 @@ function applyBranding() {
     img.style.display = 'block'
     mark.style.padding = '0'
     mark.style.background = 'transparent'
+    if (isSidebar) {
+      mark.style.width = '100%'
+      mark.style.height = '78px'
+      mark.style.borderRadius = '0'
+      mark.style.flex = '0 0 100%'
+      const copy = mark.nextElementSibling
+      if (copy) {
+        const strong = copy.querySelector('strong')
+        if (strong) strong.style.display = 'none'
+      }
+    }
     mark.appendChild(img)
   })
 

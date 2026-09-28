@@ -29,21 +29,10 @@ function applyBranding() {
       mark.style.flex = '0 0 52px'
 
       const copy = mark.nextElementSibling
-      if (copy && !copy.querySelector('img[data-axiva-wordmark]')) {
+      if (copy) {
+        copy.querySelectorAll('img[data-axiva-wordmark]').forEach(node => node.remove())
         const strong = copy.querySelector('strong')
         if (strong) strong.style.display = 'none'
-
-        const wordmark = document.createElement('img')
-        wordmark.src = SIDEBAR_WORDMARK_URL
-        wordmark.alt = 'AXIVA CRM'
-        wordmark.dataset.axivaWordmark = 'true'
-        wordmark.style.display = 'block'
-        wordmark.style.width = '100%'
-        wordmark.style.height = 'auto'
-        wordmark.style.maxHeight = '34px'
-        wordmark.style.objectFit = 'contain'
-        wordmark.style.objectPosition = 'left center'
-        copy.insertBefore(wordmark, copy.firstChild)
       }
     }
 

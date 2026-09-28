@@ -3795,4 +3795,3 @@ button:not(:disabled):active,
 .sidebar-brand { flex-wrap: nowrap; align-items: center; }
 .sidebar-brand .brand-mark.small { width: 52px; height: 52px; flex: 0 0 52px; }
 .sidebar-brand .brand-mark.small + div { min-width: 0; flex: 1 1 auto; padding-left: 0; }
-.sidebar-brand img[data-axiva-wordmark] { max-width: 145px; }

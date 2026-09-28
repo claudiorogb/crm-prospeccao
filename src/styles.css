@@ -3790,3 +3790,8 @@ button:not(:disabled):active,
   min-width: 0;
   height: 48px;
 }
+
+/* AXIVA CRM — logo completo no topo do menu lateral */
+.sidebar-brand { flex-wrap: wrap; }
+.sidebar-brand .brand-mark.small { max-width: 218px; }
+.sidebar-brand .brand-mark.small + div { width: 100%; padding-left: 2px; }

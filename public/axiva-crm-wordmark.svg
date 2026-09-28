@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1008 230" role="img" aria-labelledby="title desc">
+  <title id="title">AXIVA CRM</title>
+  <desc id="desc">Logotipo AXIVA CRM</desc>
+  <rect width="1008" height="230" fill="#0b192c"/>
+  <g fill="#ffffff">
+    <path d="M31 187L116 60H139L216 187H179L128 99L69 187Z"/>
+    <path d="M221 60H260L302 108L344 60H383L325 126L383 187H344L302 147L260 187H221L279 126Z"/>
+    <rect x="414" y="60" width="31" height="127"/>
+    <path d="M470 60H507L554 150L601 60H638L573 187H535Z"/>
+    <path d="M621 187L699 60H724L797 187H760L711 99L659 187Z"/>
+  </g>
+  <text x="812" y="160" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="70" font-weight="700">CRM</text>
+  <path d="M254 122L302 176L350 122L331 101L302 134L273 101Z" fill="#11d2d9"/>
+</svg>

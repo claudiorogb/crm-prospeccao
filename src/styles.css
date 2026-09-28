@@ -3791,7 +3791,8 @@ button:not(:disabled):active,
   height: 48px;
 }
 
-/* AXIVA CRM — logo completo no topo do menu lateral */
-.sidebar-brand { flex-wrap: wrap; }
-.sidebar-brand .brand-mark.small { max-width: 218px; }
-.sidebar-brand .brand-mark.small + div { width: 100%; padding-left: 2px; }
+/* AXIVA CRM — identidade visual do menu lateral */
+.sidebar-brand { flex-wrap: nowrap; align-items: center; }
+.sidebar-brand .brand-mark.small { width: 52px; height: 52px; flex: 0 0 52px; }
+.sidebar-brand .brand-mark.small + div { min-width: 0; flex: 1 1 auto; padding-left: 0; }
+.sidebar-brand img[data-axiva-wordmark] { max-width: 145px; }

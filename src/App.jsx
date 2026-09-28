@@ -4994,9 +4994,10 @@ function NotInterestedRepository({ organization, userEmail }) {
   async function loadData() {
     const { data, error } = await supabase
       .from('leads')
-      .select('id,business_name,phone,city,state,status,commercial_notes,campaigns(name)')
+      .select('id,business_name,phone,city,state,status,commercial_notes,status_changed_at,updated_at,campaigns(name)')
       .eq('organization_id', organization.id)
       .in('status', ['not_interested','discarded','lost'])
+      .order('status_changed_at', { ascending: false, nullsFirst: false })
       .order('updated_at', { ascending: false })
 
     if (error) setMessage(error.message)

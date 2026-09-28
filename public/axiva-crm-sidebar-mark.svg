@@ -1,16 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1482 528" role="img" aria-labelledby="title desc">
-  <title id="title">AXIVA CRM</title>
-  <desc id="desc">AXIVA CRM — Mais controle sobre suas vendas.</desc>
-  <rect width="1482" height="528" fill="#0b192c"/>
-  <path d="M55 89H119L241 221L363 89H427L283 247H199Z" fill="#fff"/>
-  <path d="M55 426H119L241 294L363 426H427L283 270H199Z" fill="#20b7b5"/>
-  <g fill="#fff">
-    <path d="M498 291L586 165H607L681 291H645L596 205L536 291Z"/>
-    <path d="M689 165H726L769 213L812 165H849L790 230L849 291H812L769 251L726 291H689L748 230Z"/>
-    <rect x="881" y="165" width="31" height="126"/>
-    <path d="M938 165H973L1022 252L1071 165H1106L1040 291H1004Z"/>
-    <path d="M1086 291L1166 165H1190L1263 291H1228L1178 205L1124 291Z"/>
-    <text x="1276" y="265" font-family="Arial,Helvetica,sans-serif" font-size="72" font-weight="700">CRM</text>
-    <text x="500" y="364" font-family="Arial,Helvetica,sans-serif" font-size="48" font-weight="500">Mais controle sobre suas vendas.</text>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 494 446" role="img" aria-labelledby="title desc">
+  <title id="title">AXIVA</title>
+  <desc id="desc">Símbolo X da AXIVA</desc>
+  <rect width="494" height="446" fill="#0b192c"/>
+  <path d="M55 49H119L247 183L375 49H439L294 207H200Z" fill="#ffffff"/>
+  <path d="M55 386H119L247 252L375 386H439L294 230H200Z" fill="#20b7b5"/>
 </svg>

@@ -16,6 +16,50 @@ function haversineKm(lat1:number,lon1:number,lat2:number,lon2:number){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+
+function publicHttpUrl(value:unknown){
+  try{
+    const u=new URL(String(value||""));
+    if(!["http:","https:"].includes(u.protocol)) return null;
+    const h=u.hostname.toLowerCase();
+    if(h==="localhost"||h.endsWith(".local")||h==="0.0.0.0"||h==="127.0.0.1"||h==="::1") return null;
+    if(/^10\./.test(h)||/^192\.168\./.test(h)||/^172\.(1[6-9]|2\d|3[01])\./.test(h)||/^169\.254\./.test(h)) return null;
+    return u;
+  }catch{return null}
+}
+
+function extractPublicEmail(html:string){
+  const decoded=String(html||"")
+    .replace(/&#64;|&commat;/gi,"@")
+    .replace(/&#46;|&period;/gi,".");
+  const mailto=[...decoded.matchAll(/mailto:([^"'?\s<>]+)/gi)].map(m=>m[1]);
+  const plain=[...decoded.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)].map(m=>m[0]);
+  const blocked=/\.(png|jpg|jpeg|gif|svg|webp|css|js)$/i;
+  return [...mailto,...plain]
+    .map(v=>decodeURIComponent(v).trim().toLowerCase())
+    .find(v=>v.length<=254&&!blocked.test(v)&&!/(example\.com|sentry|cloudflare|wixpress|wordpress)/i.test(v))||null;
+}
+
+async function discoverPublicEmail(website:unknown){
+  const url=publicHttpUrl(website);
+  if(!url) return null;
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),3000);
+  try{
+    const r=await fetch(url.toString(),{
+      redirect:"follow",
+      signal:controller.signal,
+      headers:{"User-Agent":"AXIVA-CRM/1.0 (+https://axiva.com.br)"}
+    });
+    if(!r.ok) return null;
+    const type=String(r.headers.get("content-type")||"");
+    if(!type.includes("text/html")) return null;
+    const html=(await r.text()).slice(0,700000);
+    return extractPublicEmail(html);
+  }catch{return null}
+  finally{clearTimeout(timer)}
+}
+
 async function reserveQuota(admin:any, organizationId:string, bucket:"enterprise"|"pro") {
   const { data, error } = await admin.rpc("reserve_google_places_quota", {
     p_organization_id: organizationId,
@@ -239,6 +283,15 @@ Deno.serve(async(req)=>{
         score_reason:{distance_km:Number(distanceKm.toFixed(1)),primary_type:place.primaryType||"",search_term:place._axivaSearchTerm||""},
         status:"captured_pending",source:"google_places",captured_by:user.id,
       });
+    }
+
+    if(candidates.length){
+      const concurrency=5;
+      for(let start=0;start<candidates.length;start+=concurrency){
+        const chunk=candidates.slice(start,start+concurrency);
+        const emails=await Promise.all(chunk.map((candidate:any)=>discoverPublicEmail(candidate.website)));
+        emails.forEach((email,index)=>{ if(email) chunk[index].email=email; });
+      }
     }
 
     let inserted=0;

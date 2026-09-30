@@ -80,6 +80,12 @@ function extractMediaMetadata(data: any) {
     seconds: content?.seconds ?? null,
     width: content?.width ?? null,
     height: content?.height ?? null,
+    provider_message: {
+      key: data?.key || data?.data?.key || null,
+      message: data?.message || data?.data?.message || null,
+      messageType: data?.messageType || data?.data?.messageType || null,
+      messageTimestamp: data?.messageTimestamp || data?.timestamp || null,
+    },
   };
 }
 

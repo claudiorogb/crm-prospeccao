@@ -92,3 +92,29 @@
 .email-prospect-row a{font-weight:600;text-decoration:none}
 .email-prospecting-panel textarea{resize:vertical;min-height:130px}
 @media(max-width:780px){.email-prospect-row{grid-template-columns:auto minmax(0,1fr)}.email-prospect-row>a{grid-column:2}.email-prospecting-panel .email-section-title{align-items:flex-start;flex-direction:column}}
+
+
+/* Organização entre E-mail marketing e Prospecção por e-mail */
+.email-purpose-note{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  margin:0 0 14px;
+  padding:11px 13px;
+  border:1px solid #dbe4ee;
+  border-radius:10px;
+  background:#f8fafc;
+}
+.email-purpose-note strong{white-space:nowrap;font-size:13px;color:#1e293b}
+.email-purpose-note span{font-size:13px;line-height:1.45;color:#64748b}
+.email-prospect-row{grid-template-columns:auto minmax(0,1fr) minmax(150px,220px) auto}
+.email-prospect-progress{padding:0 4px}
+.email-prospect-progress strong{font-size:12px;color:#334155}
+.email-prospect-progress small{font-size:11px}
+@media(max-width:780px){
+  .email-purpose-note{display:grid;gap:3px}
+  .email-purpose-note strong{white-space:normal}
+  .email-prospect-row{grid-template-columns:auto minmax(0,1fr)}
+  .email-prospect-progress{grid-column:2;padding:2px 0}
+  .email-prospect-row>a{grid-column:2}
+}

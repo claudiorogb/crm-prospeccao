@@ -15,7 +15,8 @@ import { sortKanbanColumn } from './kanban-order.js'
 import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
-import DashboardVisual from './dashboard-visual'\nimport WhatsAppCenter from './whatsapp-center'
+import DashboardVisual from './dashboard-visual'
+import WhatsAppCenter from './whatsapp-center'
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',

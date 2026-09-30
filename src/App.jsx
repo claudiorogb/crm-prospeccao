@@ -4936,8 +4936,7 @@ function MessageSending({ organization, settings, userEmail }) {
     <>
       <header className="topbar compact-subpage-header">
         <div>
-          <span className="eyebrow">CAMPANHAS</span>
-          <h1>Envio</h1>
+          <h1>Envio de mensagens por Whatsapp</h1>
           <p className="muted">Selecione quantos leads quiser. O CRM distribui automaticamente os envios pelos dias e horários configurados.</p>
         </div>
         <div className="topbar-actions">

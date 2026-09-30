@@ -3114,7 +3114,20 @@ function Leads({ organization, settings, userEmail }) {
                                 ) : l.next_contact_date ? (
                                   <span><Clock size={14}/>{formatKanbanDate(l.next_contact_date)}</span>
                                 ) : (
-                                  <span>Sem retorno previsto</span>
+                                  <span className="kanban-no-return-row">
+                                    <span>Sem retorno previsto</span>
+                                    {status === 'new' && safeExternalUrl(l.website) && (
+                                      <a
+                                        className="kanban-inline-site-link"
+                                        href={safeExternalUrl(l.website)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={event => event.stopPropagation()}
+                                      >
+                                        Abrir site
+                                      </a>
+                                    )}
+                                  </span>
                                 )}
                               </div>
                             )}

@@ -52,6 +52,36 @@ function mediaTypeFromMime(mime: string) {
   return "document";
 }
 
+function base64Bytes(value: string) {
+  const clean = String(value || "").replace(/^data:[^;]+;base64,/, "");
+  const binary = atob(clean);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function safeFileName(value: string) {
+  return String(value || "arquivo")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120) || "arquivo";
+}
+
+async function storeMedia(admin: any, path: string, base64: string, mimeType: string) {
+  const bytes = base64Bytes(base64);
+  const { error } = await admin.storage
+    .from("whatsapp-media")
+    .upload(path, bytes, { contentType: mimeType || "application/octet-stream", upsert: true });
+  if (error) throw error;
+  const { data, error: signedError } = await admin.storage
+    .from("whatsapp-media")
+    .createSignedUrl(path, 60 * 60);
+  if (signedError) throw signedError;
+  return data?.signedUrl || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -274,19 +304,37 @@ Deno.serve(async (req) => {
 
   if (action === "get_media") {
     const messageId = Number(body?.message_id || 0);
-    if (!Number.isFinite(messageId) || messageId <= 0) return json({ error: "message_id is required" }, 400);
+    if (!Number.isFinite(messageId) || messageId <= 0) return json({ error: "message_id is required" }, 200);
+
     const { data: message, error: messageError } = await admin.from("whatsapp_messages")
-      .select("id,provider_message_id,message_type,media_metadata,provider")
+      .select("id,provider_message_id,message_type,media_metadata,provider,direction")
       .eq("id", messageId)
       .eq("conversation_id", conversationId)
       .eq("organization_id", organizationId)
       .maybeSingle();
-    if (messageError || !message) return json({ error: "Message not found" }, 404);
+
+    if (messageError || !message) return json({ error: "Mensagem de mídia não encontrada." }, 200);
     if (message.provider !== "evolution" || !numberRow.evolution_instance_name || !apiKey) {
-      return json({ error: "Mídia indisponível para esta conexão." }, 409);
+      return json({ error: "Mídia indisponível para esta conexão." }, 200);
+    }
+
+    const existingPath = String(message.media_metadata?.storage_path || "");
+    if (existingPath) {
+      const { data, error } = await admin.storage.from("whatsapp-media").createSignedUrl(existingPath, 60 * 60);
+      if (!error && data?.signedUrl) {
+        return json({
+          ok: true,
+          signed_url: data.signedUrl,
+          mimetype: message.media_metadata?.mime_type || null,
+          file_name: message.media_metadata?.file_name || null,
+          media_type: message.message_type,
+          caption: message.media_metadata?.caption || null,
+        });
+      }
     }
 
     let providerMessage = message.media_metadata?.provider_message || null;
+
     if (!providerMessage) {
       const { data: event } = await admin.from("whatsapp_inbound_events")
         .select("raw_event")
@@ -295,7 +343,37 @@ Deno.serve(async (req) => {
         .maybeSingle();
       providerMessage = event?.raw_event?.data || event?.raw_event || null;
     }
-    if (!providerMessage) return json({ error: "Conteúdo de mídia não encontrado." }, 404);
+
+    if (!providerMessage) {
+      try {
+        const findResponse = await fetch(
+          `${baseUrl}/chat/findMessages/${encodeURIComponent(numberRow.evolution_instance_name)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: apiKey },
+            body: JSON.stringify({
+              where: { key: { id: message.provider_message_id } },
+              limit: 1,
+            }),
+          }
+        );
+        if (findResponse.ok) {
+          const found = await findResponse.json();
+          providerMessage =
+            found?.messages?.records?.[0] ||
+            found?.messages?.[0] ||
+            found?.records?.[0] ||
+            found?.[0] ||
+            null;
+        }
+      } catch {
+        // O fallback abaixo exibirá uma mensagem amigável.
+      }
+    }
+
+    if (!providerMessage) {
+      return json({ error: "Esta mídia antiga não pôde ser recuperada. Novas mídias ficarão armazenadas para abertura no CRM." }, 200);
+    }
 
     try {
       const response = await fetch(
@@ -307,16 +385,38 @@ Deno.serve(async (req) => {
         }
       );
       const data = await providerJson(response);
+      const mediaBase64 = String(data?.base64 || "");
+      const mimeType = String(data?.mimetype || message.media_metadata?.mime_type || "application/octet-stream");
+      const fileName = safeFileName(data?.fileName || message.media_metadata?.file_name || `${message.message_type}-${message.id}`);
+      if (!mediaBase64) return json({ error: "A Evolution não retornou o conteúdo desta mídia." }, 200);
+
+      const storagePath = `${organizationId}/${conversationId}/${message.provider_message_id}-${fileName}`;
+      const signedUrl = await storeMedia(admin, storagePath, mediaBase64, mimeType);
+
+      await admin.from("whatsapp_messages")
+        .update({
+          media_metadata: {
+            ...(message.media_metadata || {}),
+            storage_path: storagePath,
+            file_name: fileName,
+            mime_type: mimeType,
+          }
+        })
+        .eq("id", message.id)
+        .eq("organization_id", organizationId);
+
       return json({
         ok: true,
-        base64: data?.base64 || null,
-        mimetype: data?.mimetype || message.media_metadata?.mime_type || null,
-        file_name: data?.fileName || message.media_metadata?.file_name || null,
+        signed_url: signedUrl,
+        mimetype: mimeType,
+        file_name: fileName,
         media_type: data?.mediaType || message.message_type,
         caption: data?.caption || message.media_metadata?.caption || null,
       });
     } catch (error) {
-      return json({ error: error instanceof Error ? error.message : String(error) }, 502);
+      return json({
+        error: `Não foi possível abrir esta mídia: ${error instanceof Error ? error.message : String(error)}`
+      }, 200);
     }
   }
 
@@ -375,6 +475,15 @@ Deno.serve(async (req) => {
     if (!providerMessageId) providerMessageId = `local-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     const preview = caption || (messageType === "image" ? "Imagem enviada" : messageType === "video" ? "Vídeo enviado" : messageType === "audio" ? "Áudio enviado" : "Documento enviado");
+
+    const storedFileName = safeFileName(fileName);
+    const storagePath = `${organizationId}/${conversationId}/${providerMessageId}-${storedFileName}`;
+    try {
+      await storeMedia(admin, storagePath, base64, mimeType);
+    } catch {
+      // O envio do WhatsApp não deve falhar se apenas o cache de mídia ficar indisponível.
+    }
+
     const { error: insertError } = await admin.from("whatsapp_messages").insert({
       organization_id: organizationId,
       conversation_id: conversationId,
@@ -385,7 +494,7 @@ Deno.serve(async (req) => {
       direction: "outbound",
       message_type: messageType,
       text_body: caption || null,
-      media_metadata: { file_name: fileName, mime_type: mimeType, caption: caption || null },
+      media_metadata: { file_name: storedFileName, mime_type: mimeType, caption: caption || null, storage_path: storagePath },
       delivery_status: "sent",
       is_automatic: false,
       source: "crm",

@@ -143,6 +143,7 @@ export default function WhatsAppCenter({ organization }) {
   const [selectedId, setSelectedId] = useState('')
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState('')
+  const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
@@ -339,6 +340,12 @@ export default function WhatsAppCenter({ organization }) {
   }, [selectedId])
 
   useEffect(() => {
+    if (!toast) return undefined
+    const timer = setTimeout(() => setToast(''), 3000)
+    return () => clearTimeout(timer)
+  }, [toast])
+
+  useEffect(() => {
     if (!['inbox','unread','unknown'].includes(view)) return undefined
     let active = true
     const timer = setInterval(async () => {
@@ -374,12 +381,13 @@ export default function WhatsAppCenter({ organization }) {
     setNotice('')
     try {
       const data = await invoke('get_media', { conversation_id: message.conversation_id, message_id: message.id })
-      if (!data.base64) throw new Error('A mídia não está mais disponível no provedor.')
       const mime = data.mimetype || message.media_metadata?.mime_type || 'application/octet-stream'
+      const url = data.signed_url || (data.base64 ? `data:${mime};base64,${data.base64}` : '')
+      if (!url) throw new Error('Não foi possível abrir esta mídia. Tente novamente.')
       setMediaCache(current => ({
         ...current,
         [message.id]: {
-          url: `data:${mime};base64,${data.base64}`,
+          url,
           mimetype: mime,
           file_name: data.file_name || message.media_metadata?.file_name || null,
         }
@@ -446,7 +454,8 @@ export default function WhatsAppCenter({ organization }) {
     setNotice('')
     try {
       await invoke('create_lead', { conversation_id: selected.id })
-      setNotice('Contato enviado ao Kanban na etapa Novo.')
+      setNotice('')
+      setToast('Contato enviado ao Kanban na etapa Novo.')
       await Promise.all([loadConversations(true), loadLeads()])
     } catch (error) {
       setNotice(error.message)
@@ -574,7 +583,6 @@ export default function WhatsAppCenter({ organization }) {
         <div>
           <span className="eyebrow">WHATSAPP</span>
           <h1>Central de conversas</h1>
-          <p className="muted">Receba, responda e organize conversas sem misturar este atendimento com o disparo de campanhas.</p>
         </div>
         <button className="secondary" type="button" onClick={loadAll}>
           <RefreshCw size={16}/> Atualizar
@@ -594,6 +602,12 @@ export default function WhatsAppCenter({ organization }) {
       </div>
 
       {notice && <div className="notice">{notice}</div>}
+      {toast && (
+        <div className="wa-success-toast" role="status" aria-live="polite">
+          <span>{toast}</span>
+          <button type="button" onClick={() => setToast('')} aria-label="Fechar aviso"><X size={16}/></button>
+        </div>
+      )}
 
       {isConversationView && (
         <>
@@ -799,7 +813,7 @@ export default function WhatsAppCenter({ organization }) {
                 </div>
               ))}
             </div>
-            <p className="muted wa-qr-note">Adicionar, remover ou reconectar números continua disponível em <strong>Cadastrar WhatsApp</strong>. A integração oficial da Meta permanece preparada no backend e oculta até a liberação futura.</p>
+            <p className="muted wa-qr-note">Para adicionar, trocar, remover ou reconectar seu número de Whatsapp acesse a aba <strong>Cadastrar WhatsApp</strong>.</p>
           </article>
         </div>
       )}
@@ -906,12 +920,13 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
     setNotice('')
     try {
       const data = await invoke('get_media', { message_id: message.id })
-      if (!data.base64) throw new Error('A mídia não está mais disponível.')
       const mime = data.mimetype || message.media_metadata?.mime_type || 'application/octet-stream'
+      const url = data.signed_url || (data.base64 ? `data:${mime};base64,${data.base64}` : '')
+      if (!url) throw new Error('Não foi possível abrir esta mídia. Tente novamente.')
       setMediaCache(current => ({
         ...current,
         [message.id]: {
-          url: `data:${mime};base64,${data.base64}`,
+          url,
           mimetype: mime,
           file_name: data.file_name || message.media_metadata?.file_name || null,
         }

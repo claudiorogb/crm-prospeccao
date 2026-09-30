@@ -16,6 +16,7 @@ import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
 import DashboardVisual from './dashboard-visual'
+import WhatsAppCenter from './whatsapp-center'
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
@@ -4790,6 +4791,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['messages','Mensagens'],
     ['sending','Enviar mensagens Whatsapp'],
     ['email','E-mail marketing'],
+    ['whatsapp_center','Central WhatsApp'],
     ['whatsapp','Cadastrar Whatsapp']
   ]
 
@@ -4808,6 +4810,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
       {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
       {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} />}
+      {section === 'whatsapp_center' && <WhatsAppCenter organization={organization} />}
       {section === 'whatsapp' && <AdminWhatsApp organizations={[organization]} userEmail={userEmail} userMode={true} />}
     </>
   )

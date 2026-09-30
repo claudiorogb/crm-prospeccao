@@ -3089,15 +3089,14 @@ function Leads({ organization, settings, userEmail }) {
                                 title="Abrir conversa do WhatsApp"
                               >
                                 <span className="wa-kanban-chat-main">
-                                  <MessageSquareText size={15}/>
-                                  {whatsappSummary[l.id].unread > 0
-                                    ? `${whatsappSummary[l.id].unread} nova${whatsappSummary[l.id].unread === 1 ? '' : 's'} mensagem${whatsappSummary[l.id].unread === 1 ? '' : 's'}`
-                                    : 'WhatsApp'}
-                                </span>
-                                <span className="wa-kanban-chat-meta">
-                                  {whatsappSummary[l.id].unread > 0 && <span className="wa-kanban-unread">{whatsappSummary[l.id].unread}</span>}
+                                  <span className="wa-kanban-whatsapp-logo" aria-hidden="true" />
                                   <span>Último contato: {formatWhatsappKanbanTime(whatsappSummary[l.id].last_message_at)}</span>
                                 </span>
+                                {whatsappSummary[l.id].unread > 0 && (
+                                  <span className="wa-kanban-unread" title="Mensagens não lidas">
+                                    {whatsappSummary[l.id].unread}
+                                  </span>
+                                )}
                               </button>
                             )}
 

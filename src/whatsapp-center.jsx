@@ -212,6 +212,14 @@ export default function WhatsAppCenter({ organization }) {
   const [attachment, setAttachment] = useState(null)
   const [mediaCache, setMediaCache] = useState({})
   const [quickForm, setQuickForm] = useState({ id: null, name: '', body: '' })
+  const [showNewConversation, setShowNewConversation] = useState(false)
+  const [newConversation, setNewConversation] = useState({
+    whatsapp_number_id: '',
+    lead_id: '',
+    phone: '',
+    contact_name: '',
+    text: ''
+  })
   const endRef = useRef(null)
   const fileRef = useRef(null)
 
@@ -315,6 +323,10 @@ export default function WhatsAppCenter({ organization }) {
 
     const rows = data || []
     setNumbers(rows)
+    if (!newConversation.whatsapp_number_id && rows.length) {
+      const preferred = rows.find(number => number.is_default && number.is_active) || rows.find(number => number.is_active) || rows[0]
+      if (preferred) setNewConversation(current => ({ ...current, whatsapp_number_id: preferred.id }))
+    }
 
     // Para administradores, a consulta também mantém o webhook Evolution
     // sincronizado com os eventos necessários da Central. Para atendentes,
@@ -605,6 +617,56 @@ export default function WhatsAppCenter({ organization }) {
     }
   }
 
+  function chooseNewConversationLead(leadId) {
+    const lead = leads.find(item => item.id === leadId)
+    setNewConversation(current => ({
+      ...current,
+      lead_id: leadId,
+      phone: lead ? (lead.whatsapp_phone || lead.phone || '') : current.phone,
+      contact_name: lead ? (lead.contact_name || lead.business_name || '') : current.contact_name
+    }))
+  }
+
+  async function startNewConversation(e) {
+    e.preventDefault()
+    if (loading) return
+    setLoading(true)
+    setNotice('')
+    try {
+      const started = await invoke('start_conversation', {
+        whatsapp_number_id: newConversation.whatsapp_number_id,
+        lead_id: newConversation.lead_id || null,
+        phone: newConversation.phone,
+        contact_name: newConversation.contact_name
+      })
+      const conversationId = started?.conversation?.id
+      if (!conversationId) throw new Error('Não foi possível iniciar a conversa.')
+
+      await invoke('send_message', {
+        conversation_id: conversationId,
+        text: newConversation.text.trim()
+      })
+
+      setStatusFilter('open')
+      setView('inbox')
+      setShowNewConversation(false)
+      setNewConversation(current => ({
+        whatsapp_number_id: current.whatsapp_number_id,
+        lead_id: '',
+        phone: '',
+        contact_name: '',
+        text: ''
+      }))
+      await loadConversations(false)
+      setSelectedId(conversationId)
+      setToast('Conversa iniciada pelo CRM.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function saveQuickReply(e) {
     e.preventDefault()
     const name = quickForm.name.trim()
@@ -661,9 +723,14 @@ export default function WhatsAppCenter({ organization }) {
           <span className="eyebrow">WHATSAPP</span>
           <h1>Central de conversas</h1>
         </div>
-        <button className="secondary" type="button" onClick={loadAll}>
-          <RefreshCw size={16}/> Atualizar
-        </button>
+        <div className="wa-header-actions-v72">
+          <button className="primary" type="button" onClick={() => setShowNewConversation(true)}>
+            <MessageSquareText size={16}/> Nova conversa
+          </button>
+          <button className="secondary" type="button" onClick={loadAll}>
+            <RefreshCw size={16}/> Atualizar
+          </button>
+        </div>
       </header>
 
       <div className="wa-center-tabs">
@@ -683,6 +750,81 @@ export default function WhatsAppCenter({ organization }) {
         <div className="wa-success-toast" role="status" aria-live="polite">
           <span>{toast}</span>
           <button type="button" onClick={() => setToast('')} aria-label="Fechar aviso"><X size={16}/></button>
+        </div>
+      )}
+
+      {showNewConversation && (
+        <div className="wa-new-overlay-v72" onMouseDown={e => { if (e.target === e.currentTarget) setShowNewConversation(false) }}>
+          <section className="panel wa-new-modal-v72" role="dialog" aria-modal="true" aria-label="Iniciar nova conversa">
+            <div className="wa-new-head-v72">
+              <div>
+                <span className="eyebrow">WHATSAPP</span>
+                <h2>Nova conversa</h2>
+              </div>
+              <button type="button" className="secondary mini" onClick={() => setShowNewConversation(false)}>Fechar</button>
+            </div>
+
+            <form className="campaign-form" onSubmit={startNewConversation}>
+              <label>Número remetente
+                <select
+                  value={newConversation.whatsapp_number_id}
+                  onChange={e => setNewConversation({...newConversation, whatsapp_number_id:e.target.value})}
+                  required
+                >
+                  <option value="">Selecione</option>
+                  {numbers.filter(number => number.is_active).map(number => (
+                    <option key={number.id} value={number.id}>{number.alias} • {number.phone_e164}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>Contato do CRM (opcional)
+                <select value={newConversation.lead_id} onChange={e => chooseNewConversationLead(e.target.value)}>
+                  <option value="">Informar número manualmente</option>
+                  {leads.map(lead => (
+                    <option key={lead.id} value={lead.id}>
+                      {lead.business_name}{lead.contact_name ? ` • ${lead.contact_name}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="field-grid">
+                <label>WhatsApp
+                  <input
+                    value={newConversation.phone}
+                    onChange={e => setNewConversation({...newConversation, phone:e.target.value})}
+                    placeholder="Ex.: 5511999999999"
+                    required
+                  />
+                </label>
+                <label>Nome
+                  <input
+                    value={newConversation.contact_name}
+                    onChange={e => setNewConversation({...newConversation, contact_name:e.target.value})}
+                    placeholder="Nome do contato"
+                  />
+                </label>
+              </div>
+
+              <label>Mensagem
+                <textarea
+                  value={newConversation.text}
+                  onChange={e => setNewConversation({...newConversation, text:e.target.value})}
+                  placeholder="Digite a primeira mensagem..."
+                  maxLength={4096}
+                  required
+                />
+              </label>
+
+              <div className="form-actions">
+                <button className="primary inline-btn" disabled={loading || !newConversation.text.trim()}>
+                  <Send size={15}/> {loading ? 'Enviando...' : 'Iniciar conversa'}
+                </button>
+                <button type="button" className="secondary inline-btn" onClick={() => setShowNewConversation(false)}>Cancelar</button>
+              </div>
+            </form>
+          </section>
         </div>
       )}
 

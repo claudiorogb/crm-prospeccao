@@ -720,8 +720,7 @@ export default function WhatsAppCenter({ organization }) {
     <section className="wa-center">
       <header className="wa-center-header">
         <div>
-          <span className="eyebrow">WHATSAPP</span>
-          <h1>Central de conversas</h1>
+          <h1>Whatsapp</h1>
         </div>
         <div className="wa-header-actions-v72">
           <button className="primary" type="button" onClick={() => setShowNewConversation(true)}>

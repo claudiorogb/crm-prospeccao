@@ -120,6 +120,94 @@ Deno.serve(async (req) => {
 
   if (!membership) return json({ error: "Forbidden" }, 403);
 
+  if (action === "start_conversation") {
+    const whatsappNumberId = String(body?.whatsapp_number_id || "");
+    const phone = normalizePhone(body?.phone);
+    const leadIdRaw = String(body?.lead_id || "");
+    const contactNameRaw = String(body?.contact_name || "").trim();
+
+    if (!whatsappNumberId) return json({ error: "Selecione o número de WhatsApp remetente." }, 400);
+    if (!phone || phone.length < 12) return json({ error: "Informe um número de WhatsApp válido com DDD." }, 400);
+
+    const { data: numberRow, error: numberError } = await admin
+      .from("whatsapp_numbers")
+      .select("id,provider,is_active,deleted_at")
+      .eq("id", whatsappNumberId)
+      .eq("organization_id", organizationId)
+      .eq("provider", "evolution")
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (numberError || !numberRow) return json({ error: "Número de WhatsApp não disponível." }, 409);
+
+    let leadId: string | null = leadIdRaw || null;
+    let contactName = contactNameRaw || null;
+
+    if (leadId) {
+      const { data: lead, error: leadError } = await admin
+        .from("leads")
+        .select("id,business_name,contact_name,phone,whatsapp_phone")
+        .eq("id", leadId)
+        .eq("organization_id", organizationId)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (leadError || !lead) return json({ error: "Lead não encontrado." }, 404);
+      contactName = contactName || String(lead.contact_name || lead.business_name || "").trim() || null;
+    }
+
+    const { data: existing, error: existingError } = await admin
+      .from("whatsapp_conversations")
+      .select("id,lead_id,contact_name,status")
+      .eq("organization_id", organizationId)
+      .eq("whatsapp_number_id", whatsappNumberId)
+      .eq("contact_phone", phone)
+      .maybeSingle();
+
+    if (existingError) return json({ error: existingError.message }, 500);
+
+    if (existing?.id) {
+      const patch: any = {
+        status: "open",
+        updated_at: new Date().toISOString(),
+      };
+      if (!existing.lead_id && leadId) patch.lead_id = leadId;
+      if ((!existing.contact_name || contactNameRaw) && contactName) patch.contact_name = contactName;
+
+      const { data: updated, error: updateError } = await admin
+        .from("whatsapp_conversations")
+        .update(patch)
+        .eq("id", existing.id)
+        .eq("organization_id", organizationId)
+        .select("id,lead_id,contact_phone,contact_name")
+        .single();
+
+      if (updateError || !updated) return json({ error: updateError?.message || "Não foi possível abrir a conversa." }, 500);
+      return json({ ok: true, conversation: updated, existing: true });
+    }
+
+    const { data: created, error: createError } = await admin
+      .from("whatsapp_conversations")
+      .insert({
+        organization_id: organizationId,
+        whatsapp_number_id: whatsappNumberId,
+        lead_id: leadId,
+        provider: "evolution",
+        contact_phone: phone,
+        contact_name: contactName,
+        status: "open",
+        unread_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select("id,lead_id,contact_phone,contact_name")
+      .single();
+
+    if (createError || !created) return json({ error: createError?.message || "Não foi possível iniciar a conversa." }, 500);
+    return json({ ok: true, conversation: created, existing: false });
+  }
+
   const conversationId = String(body?.conversation_id || "");
   if (!conversationId) return json({ error: "conversation_id is required" }, 400);
 

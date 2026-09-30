@@ -264,7 +264,12 @@ export default function WhatsAppCenter({ organization }) {
       return
     }
 
-    const rows = data || []
+    const rows = [...(data || [])].sort((a, b) => {
+      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0
+      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0
+      if (bTime !== aTime) return bTime - aTime
+      return String(b.id || '').localeCompare(String(a.id || ''))
+    })
     setConversations(rows)
     if (!keepSelection || !rows.some(item => item.id === selectedId)) {
       const firstVisible = view === 'unread'
@@ -385,6 +390,28 @@ export default function WhatsAppCenter({ organization }) {
   useEffect(() => {
     loadAll()
   }, [organization.id, statusFilter])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`wa-conversations-${organization.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'whatsapp_conversations',
+          filter: `organization_id=eq.${organization.id}`
+        },
+        async () => {
+          await loadConversations(true)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [organization.id, statusFilter, view, selectedId])
 
   useEffect(() => {
     if (!selectedId) {

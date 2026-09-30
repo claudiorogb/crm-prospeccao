@@ -471,9 +471,9 @@ export function EmailMarketing({ organization, userEmail }) {
     <>
       <header className="topbar compact-subpage-header">
         <div>
-          <span className="eyebrow">CAMPANHAS</span>
+          
           <h1>E-mail Marketing</h1>
-          <p className="muted">Envie para Clientes do CRM e para listas próprias de e-mail marketing. Leads frios do Funil não são usados como destinatários.</p>
+          <p className="muted">Envie para Clientes do CRM e para listas próprias de e-mail marketing.</p>
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>

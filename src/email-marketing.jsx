@@ -779,17 +779,17 @@ export function EmailMarketing({ organization, userEmail }) {
           <div className="email-provider-grid">
             <article className={`email-provider-card ${providerChoice === 'gmail' ? 'selected' : ''}`}>
               <button type="button" className="email-provider-select" onClick={() => setProviderChoice('gmail')}>
-                <strong>Gmail</strong><span>Conecte sua conta Google. Recomendado para volumes menores.</span>
+                <strong>Gmail</strong><span>Conecte sua conta Google.</span>
               </button>
               <button type="button" className="primary" disabled={loading} onClick={() => connectProvider('gmail')}>Conectar Gmail</button>
             </article>
             <article className={`email-provider-card ${providerChoice === 'resend' ? 'selected' : ''}`}>
               <button type="button" className="email-provider-select" onClick={() => setProviderChoice('resend')}>
-                <strong>Resend</strong><span>Use um domínio próprio verificado para campanhas profissionais.</span>
+                <strong>E-mail corporativo</strong><span>Conecte com seu e-mail corporativo</span>
               </button>
               <label>Nome do remetente<input value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Ex.: AXIVA" /></label>
               <label>E-mail remetente<input type="email" value={senderEmail} onChange={e => setSenderEmail(e.target.value)} placeholder="contato@empresa.com.br" /></label>
-              <button type="button" className="primary" disabled={loading} onClick={() => connectProvider('resend')}>Conectar Resend</button>
+              <button type="button" className="primary" disabled={loading} onClick={() => connectProvider('resend')}>Conectar E-mail corporativo</button>
             </article>
           </div>
         )}

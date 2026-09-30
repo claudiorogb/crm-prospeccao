@@ -68,6 +68,148 @@ async function invokeEmailProvider(body) {
   return data || {}
 }
 
+
+function EmailProspectingSequence({ organization, connection }) {
+  const [leads, setLeads] = useState([])
+  const [selected, setSelected] = useState(() => new Set())
+  const [form, setForm] = useState({ name: '', subject: '', first: '', followup1: '', followup2: '' })
+  const [basisConfirmed, setBasisConfirmed] = useState(false)
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function loadProspects() {
+    if (!organization?.id) return
+    const { data, error } = await supabase
+      .from('leads')
+      .select('id,business_name,contact_name,email,website,city,state,status,email_marketing_opt_out')
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .in('status', ['captured_pending','new','contacted','contacted_pending'])
+      .order('business_name')
+    if (error) setMessage(error.message)
+    else setLeads((data || []).filter(item => validEmail(item.email) && !item.email_marketing_opt_out))
+  }
+
+  useEffect(() => {
+    setSelected(new Set())
+    setMessage('')
+    loadProspects()
+  }, [organization?.id])
+
+  function toggle(id, checked) {
+    setSelected(current => {
+      const next = new Set(current)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  async function authorizeProspecting() {
+    setLoading(true); setMessage('')
+    try {
+      const { data, error } = await supabase.functions.invoke('email-prospecting-oauth', {
+        body: { organization_id: organization.id, return_url: window.location.origin }
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      if (!data?.authorization_url) throw new Error('O Google não retornou a autorização.')
+      window.location.href = data.authorization_url
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível iniciar a autorização do Gmail.')
+      setLoading(false)
+    }
+  }
+
+  async function startSequence(event) {
+    event.preventDefault()
+    if (connection?.status !== 'connected' || connection?.provider !== 'gmail') return setMessage('Conecte uma conta Gmail antes de iniciar a prospecção.')
+    if (!basisConfirmed) return setMessage('Confirme a base legítima e a relevância comercial dos destinatários.')
+    if (!selected.size) return setMessage('Selecione pelo menos um lead com e-mail.')
+    if (!form.name.trim() || !form.subject.trim() || !form.first.trim() || !form.followup1.trim() || !form.followup2.trim()) return setMessage('Preencha o nome, assunto e as três mensagens da sequência.')
+
+    setLoading(true); setMessage('')
+    try {
+      const { data, error } = await supabase.rpc('create_email_prospecting_sequence', {
+        p_organization_id: organization.id,
+        p_name: form.name.trim(),
+        p_subject: form.subject.trim(),
+        p_body_text: form.first,
+        p_followup1_body: form.followup1,
+        p_followup2_body: form.followup2,
+        p_lead_ids: [...selected]
+      })
+      if (error) throw error
+      const row = Array.isArray(data) ? data[0] : data
+      setMessage(`Sequência iniciada para ${row?.recipient_count || selected.size} lead(s). D1 agora, D4 em 3 dias e D8 em 7 dias, salvo se houver resposta.`)
+      setSelected(new Set())
+      setForm({ name: '', subject: '', first: '', followup1: '', followup2: '' })
+      setBasisConfirmed(false)
+      await loadProspects()
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível iniciar a sequência.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <section className="panel email-prospecting-panel">
+      <div className="email-section-title">
+        <div>
+          <span className="eyebrow">PROSPECÇÃO POR E-MAIL</span>
+          <h2>Sequência automática D1 · D4 · D8</h2>
+          <p className="muted">Primeiro contato no Dia 1, follow-up no Dia 4 e último contato no Dia 8. Se o lead responder, os próximos envios são cancelados e ele vai para Respondeu.</p>
+        </div>
+        <button type="button" className="secondary" onClick={authorizeProspecting} disabled={loading || connection?.provider !== 'gmail'}>
+          Autorizar Gmail para prospecção
+        </button>
+      </div>
+
+      {connection?.provider !== 'gmail' && (
+        <div className="notice">A detecção automática de resposta exige Gmail. O Resend continua disponível para campanhas normais.</div>
+      )}
+      {message && <div className="notice">{message}</div>}
+
+      <form onSubmit={startSequence}>
+        <div className="field-grid two">
+          <label>Nome da sequência<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Prospecção contabilidades Campinas" /></label>
+          <label>Assunto<input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Assunto do e-mail" /></label>
+        </div>
+        <div className="field-grid three">
+          <label>Dia 1 — primeiro contato<textarea rows="6" value={form.first} onChange={e => setForm({ ...form, first: e.target.value })} /></label>
+          <label>Dia 4 — follow-up<textarea rows="6" value={form.followup1} onChange={e => setForm({ ...form, followup1: e.target.value })} /></label>
+          <label>Dia 8 — último contato<textarea rows="6" value={form.followup2} onChange={e => setForm({ ...form, followup2: e.target.value })} /></label>
+        </div>
+
+        <div className="email-prospect-list">
+          <div className="panel-head">
+            <div><h3>Leads disponíveis</h3><p className="muted">Somente leads com e-mail e que não cancelaram o recebimento.</p></div>
+            <strong>{selected.size} selecionado(s)</strong>
+          </div>
+          {leads.length === 0 ? (
+            <p className="muted">Nenhum lead elegível com e-mail no momento.</p>
+          ) : leads.map(lead => (
+            <label className="email-prospect-row" key={lead.id}>
+              <input type="checkbox" checked={selected.has(lead.id)} onChange={e => toggle(lead.id, e.target.checked)} />
+              <span><strong>{lead.business_name}</strong><small>{lead.email}{lead.city ? ` • ${lead.city}${lead.state ? `/${lead.state}` : ''}` : ''}</small></span>
+              {lead.website && <a href={/^https?:\/\//i.test(lead.website) ? lead.website : `https://${lead.website}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Site</a>}
+            </label>
+          ))}
+        </div>
+
+        <label className="email-consent-check">
+          <input type="checkbox" checked={basisConfirmed} onChange={e => setBasisConfirmed(e.target.checked)} />
+          Confirmo que estes contatos têm relação comercial plausível com esta prospecção, que a abordagem é relevante e que o cancelamento de recebimento será respeitado.
+        </label>
+        <div className="form-actions">
+          <button type="submit" className="primary" disabled={loading || connection?.provider !== 'gmail'}>{loading ? 'Processando...' : 'Iniciar sequência'}</button>
+        </div>
+      </form>
+    </section>
+  )
+}
+
 export function EmailMarketing({ organization, userEmail }) {
   const [connection, setConnection] = useState(null)
   const [limits, setLimits] = useState(null)
@@ -479,6 +621,8 @@ export function EmailMarketing({ organization, userEmail }) {
       </header>
 
       {message && <div className="notice">{message}</div>}
+
+      <EmailProspectingSequence organization={organization} connection={connection} />
 
       <section className="panel email-connection-panel">
         <div className="email-section-title">

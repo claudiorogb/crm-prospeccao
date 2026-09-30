@@ -77,6 +77,7 @@ function EmailProspectingSequence({ organization, connection }) {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [prospectingState, setProspectingState] = useState({})
+  const [manualEmail, setManualEmail] = useState('')
 
   async function loadProspects() {
     if (!organization?.id) return
@@ -142,6 +143,36 @@ function EmailProspectingSequence({ organization, connection }) {
     })
   }
 
+  async function addManualProspect() {
+    const email = manualEmail.trim().toLowerCase()
+    if (!validEmail(email)) return setMessage('Informe um e-mail válido.')
+    setLoading(true); setMessage('')
+    try {
+      const { data, error } = await supabase.rpc('add_manual_email_prospect', {
+        p_organization_id: organization.id,
+        p_email: email,
+        p_contact_name: null,
+        p_business_name: null
+      })
+      if (error) throw error
+      const row = Array.isArray(data) ? data[0] : data
+      if (row?.lead_id) {
+        setSelected(current => {
+          const next = new Set(current)
+          next.add(row.lead_id)
+          return next
+        })
+      }
+      setManualEmail('')
+      setMessage(row?.created ? 'E-mail adicionado à base e selecionado para prospecção.' : 'Este e-mail já estava na base e foi selecionado.')
+      await loadProspects()
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível adicionar o e-mail.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function authorizeProspecting() {
     sessionStorage.setItem('crm_campaign_workspace_section', 'email-prospecting')
     setLoading(true); setMessage('')
@@ -161,7 +192,7 @@ function EmailProspectingSequence({ organization, connection }) {
 
   async function startSequence(event) {
     event.preventDefault()
-    if (connection?.status !== 'connected' || connection?.provider !== 'gmail') return setMessage('Conecte uma conta Gmail antes de iniciar a prospecção.')
+    if (connection?.status !== 'connected' || !['gmail', 'resend'].includes(connection?.provider)) return setMessage('Conecte uma conta Gmail ou Resend antes de iniciar a prospecção.')
     if (!basisConfirmed) return setMessage('Confirme a base legítima e a relevância comercial dos destinatários.')
     if (!selected.size) return setMessage('Selecione pelo menos um lead com e-mail.')
     if (!form.name.trim() || !form.subject.trim() || !form.first.trim() || !form.followup1.trim() || !form.followup2.trim()) return setMessage('Preencha o nome, assunto e as três mensagens da sequência.')
@@ -199,13 +230,19 @@ function EmailProspectingSequence({ organization, connection }) {
           <h2>Sequência automática D1 · D4 · D8</h2>
           <p className="muted">Primeiro contato no Dia 1, follow-up no Dia 4 e último contato no Dia 8. Se o lead responder, os próximos envios são cancelados e ele vai para Respondeu.</p>
         </div>
-        <button type="button" className="secondary" onClick={authorizeProspecting} disabled={loading || connection?.provider !== 'gmail'}>
-          Autorizar Gmail para prospecção
-        </button>
+        {connection?.provider === 'gmail' && (
+          <button type="button" className="secondary" onClick={authorizeProspecting} disabled={loading}>
+            Autorizar leitura de respostas do Gmail
+          </button>
+        )}
+        {connection?.provider === 'resend' && <span className="email-connected-badge">Respostas monitoradas pelo Resend</span>}
       </div>
 
-      {connection?.provider !== 'gmail' && (
-        <div className="notice">A detecção automática de resposta exige Gmail. O Resend continua disponível para campanhas normais.</div>
+      {connection?.status !== 'connected' && (
+        <div className="notice">Conecte uma conta Gmail ou Resend para usar a sequência automática.</div>
+      )}
+      {connection?.provider === 'resend' && (
+        <div className="notice">As respostas desta prospecção serão identificadas automaticamente pelo CRM e interromperão os próximos follow-ups.</div>
       )}
       {message && <div className="notice">{message}</div>}
 
@@ -218,6 +255,17 @@ function EmailProspectingSequence({ organization, connection }) {
           <label>Dia 1 — primeiro contato<textarea rows="6" value={form.first} onChange={e => setForm({ ...form, first: e.target.value })} /></label>
           <label>Dia 4 — follow-up<textarea rows="6" value={form.followup1} onChange={e => setForm({ ...form, followup1: e.target.value })} /></label>
           <label>Dia 8 — último contato<textarea rows="6" value={form.followup2} onChange={e => setForm({ ...form, followup2: e.target.value })} /></label>
+        </div>
+
+        <div className="email-manual-prospect-add">
+          <div>
+            <strong>Adicionar e-mail manualmente</strong>
+            <span>Use quando o contato ainda não estiver na base. Se já existir, o CRM reaproveita o mesmo cadastro.</span>
+          </div>
+          <div className="email-manual-prospect-actions">
+            <input type="email" value={manualEmail} onChange={e => setManualEmail(e.target.value)} placeholder="nome@empresa.com.br" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualProspect() } }} />
+            <button type="button" className="secondary" onClick={addManualProspect} disabled={loading || !manualEmail.trim()}>Adicionar e-mail</button>
+          </div>
         </div>
 
         <div className="email-prospect-list">
@@ -242,7 +290,7 @@ function EmailProspectingSequence({ organization, connection }) {
           Confirmo que estes contatos têm relação comercial plausível com esta prospecção, que a abordagem é relevante e que o cancelamento de recebimento será respeitado.
         </label>
         <div className="form-actions">
-          <button type="submit" className="primary" disabled={loading || connection?.provider !== 'gmail'}>{loading ? 'Processando...' : 'Iniciar sequência'}</button>
+          <button type="submit" className="primary" disabled={loading || connection?.status !== 'connected' || !['gmail', 'resend'].includes(connection?.provider)}>{loading ? 'Processando...' : 'Iniciar sequência'}</button>
         </div>
       </form>
     </section>

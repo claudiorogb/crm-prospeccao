@@ -44,6 +44,74 @@ function extractText(data: any) {
   return candidates.find(v => typeof v === "string" && v.trim())?.trim() || "";
 }
 
+function extractMessageType(data: any) {
+  const explicit = String(data?.messageType || data?.data?.messageType || "").toLowerCase();
+  const message = data?.message || data?.data?.message || {};
+  const keys = Object.keys(message || {}).map(key => key.toLowerCase());
+  const joined = [explicit, ...keys].join(" ");
+  if (joined.includes("image")) return "image";
+  if (joined.includes("video")) return "video";
+  if (joined.includes("audio")) return "audio";
+  if (joined.includes("document")) return "document";
+  if (joined.includes("sticker")) return "sticker";
+  if (joined.includes("contact")) return "contact";
+  if (joined.includes("location")) return "location";
+  if (joined.includes("conversation") || joined.includes("extendedtext")) return "text";
+  return extractText(data) ? "text" : "unknown";
+}
+
+function extractMediaMetadata(data: any) {
+  const type = extractMessageType(data);
+  if (!["image","video","audio","document","sticker"].includes(type)) return {};
+  const message = data?.message || data?.data?.message || {};
+  const content =
+    message?.imageMessage ||
+    message?.videoMessage ||
+    message?.audioMessage ||
+    message?.documentMessage ||
+    message?.documentWithCaptionMessage?.message?.documentMessage ||
+    message?.stickerMessage ||
+    {};
+  return {
+    file_name: content?.fileName || content?.filename || null,
+    mime_type: content?.mimetype || content?.mime_type || null,
+    caption: content?.caption || null,
+    file_length: content?.fileLength ? String(content.fileLength) : null,
+    seconds: content?.seconds ?? null,
+    width: content?.width ?? null,
+    height: content?.height ?? null,
+    provider_message: {
+      key: data?.key || data?.data?.key || null,
+      message: data?.message || data?.data?.message || null,
+      messageType: data?.messageType || data?.data?.messageType || null,
+      messageTimestamp: data?.messageTimestamp || data?.timestamp || null,
+    },
+  };
+}
+
+function extractContactName(data: any) {
+  const candidates = [
+    data?.pushName,
+    data?.pushname,
+    data?.senderName,
+    data?.notifyName,
+    data?.data?.pushName,
+    data?.data?.pushname,
+  ];
+  return String(candidates.find(value => typeof value === "string" && value.trim()) || "").trim();
+}
+
+function mapDeliveryStatus(value: any) {
+  const raw = String(value ?? "").toUpperCase();
+  if (["4","READ","READ_ACK"].includes(raw)) return "read";
+  if (["5","PLAYED"].includes(raw)) return "played";
+  if (["3","DELIVERY_ACK","DELIVERED"].includes(raw)) return "delivered";
+  if (["2","SERVER_ACK","SENT"].includes(raw)) return "sent";
+  if (["1","PENDING"].includes(raw)) return "pending";
+  if (raw === "ERROR" || raw === "FAILED") return "failed";
+  return raw ? raw.toLowerCase() : "sent";
+}
+
 function normalizeText(value: string) {
   return String(value || "")
     .normalize("NFD")
@@ -181,7 +249,7 @@ Deno.serve(async (req) => {
               url: webhookUrl,
               webhookByEvents: false,
               webhookBase64: false,
-              events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+              events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONTACTS_UPSERT", "CONTACTS_UPDATE", "CONNECTION_UPDATE"],
             },
           }),
         });
@@ -216,6 +284,83 @@ Deno.serve(async (req) => {
   const ev = eventName(payload);
   const data = payload?.data || payload;
   const instanceName = String(payload?.instance || data?.instance || payload?.instanceName || "");
+
+  if (ev === "MESSAGES_UPDATE") {
+    if (!instanceName) return json({ ok: true, ignored: true, reason: "missing_instance" });
+    const { data: numberRow } = await admin
+      .from("whatsapp_numbers")
+      .select("id,organization_id")
+      .eq("evolution_instance_name", instanceName)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!numberRow) return json({ ok: true, ignored: true, reason: "unknown_instance" });
+
+    const updates = Array.isArray(data) ? data : [data];
+    for (const item of updates) {
+      const key = item?.key || item?.data?.key || {};
+      const messageId = String(key?.id || item?.id || item?.messageId || "");
+      if (!messageId) continue;
+      const status = mapDeliveryStatus(item?.update?.status ?? item?.status ?? item?.data?.status);
+      await admin.from("whatsapp_messages")
+        .update({ delivery_status: status })
+        .eq("organization_id", numberRow.organization_id)
+        .eq("provider", "evolution")
+        .eq("provider_message_id", messageId);
+    }
+    return json({ ok: true, updated: updates.length });
+  }
+
+  if (ev === "CONTACTS_UPSERT" || ev === "CONTACTS_UPDATE") {
+    if (!instanceName) return json({ ok: true, ignored: true, reason: "missing_instance" });
+    const { data: numberRow } = await admin
+      .from("whatsapp_numbers")
+      .select("id,organization_id")
+      .eq("evolution_instance_name", instanceName)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!numberRow) return json({ ok: true, ignored: true, reason: "unknown_instance" });
+
+    const contacts = Array.isArray(data) ? data : [data];
+    let updated = 0;
+    for (const contact of contacts) {
+      const jid = String(contact?.remoteJid || contact?.id || contact?.jid || "");
+      if (!jid || jid.includes("@g.us")) continue;
+      const phone = normalizePhone(jid.split("@")[0]);
+      const name = String(contact?.pushName || contact?.name || contact?.notify || contact?.verifiedName || "").trim();
+      if (!phone || !name) continue;
+
+      const { data: conversation } = await admin.from("whatsapp_conversations")
+        .select("id,lead_id")
+        .eq("organization_id", numberRow.organization_id)
+        .eq("whatsapp_number_id", numberRow.id)
+        .eq("contact_phone", phone)
+        .maybeSingle();
+
+      if (conversation?.id) {
+        await admin.from("whatsapp_conversations")
+          .update({ contact_name: name, updated_at: new Date().toISOString() })
+          .eq("id", conversation.id)
+          .eq("organization_id", numberRow.organization_id);
+
+        if (conversation.lead_id) {
+          const { data: lead } = await admin.from("leads")
+            .select("id,business_name")
+            .eq("id", conversation.lead_id)
+            .eq("organization_id", numberRow.organization_id)
+            .maybeSingle();
+          const patch: any = { contact_name: name, updated_at: new Date().toISOString() };
+          if (String(lead?.business_name || "").startsWith("Contato WhatsApp")) patch.business_name = name;
+          await admin.from("leads").update(patch)
+            .eq("id", conversation.lead_id)
+            .eq("organization_id", numberRow.organization_id);
+        }
+        updated++;
+      }
+    }
+    return json({ ok: true, updated });
+  }
 
   if (ev === "CONNECTION_UPDATE") {
     if (!instanceName) return json({ ok: true, ignored: true, reason: "missing_instance" });
@@ -266,7 +411,6 @@ Deno.serve(async (req) => {
   if (ev && ev !== "MESSAGES_UPSERT") return json({ ok: true, ignored: true, reason: "event" });
 
   const key = data?.key || data?.data?.key || {};
-  if (key?.fromMe === true) return json({ ok: true, ignored: true, reason: "from_me" });
 
   const remoteJid = String(key?.remoteJid || data?.remoteJid || data?.sender || "");
   if (!remoteJid || remoteJid.includes("@g.us") || remoteJid.includes("@broadcast") || remoteJid.includes("status@")) {
@@ -292,6 +436,140 @@ Deno.serve(async (req) => {
 
   const providerMessageId = String(key?.id || data?.messageId || data?.id || "");
   if (!providerMessageId) return json({ ok: true, ignored: true, reason: "missing_message_id" });
+
+  if (key?.fromMe === true) {
+    const text = extractText(data);
+    const messageType = extractMessageType(data);
+    const mediaMetadata = extractMediaMetadata(data);
+    const occurredAtRaw = data?.messageTimestamp || data?.timestamp;
+    const occurredAt = occurredAtRaw
+      ? new Date(Number(occurredAtRaw) < 10_000_000_000 ? Number(occurredAtRaw) * 1000 : Number(occurredAtRaw)).toISOString()
+      : new Date().toISOString();
+
+    const { data: existingMessage } = await admin.from("whatsapp_messages")
+      .select("id,source")
+      .eq("organization_id", numberRow.organization_id)
+      .eq("provider", "evolution")
+      .eq("provider_message_id", providerMessageId)
+      .maybeSingle();
+    if (existingMessage?.id) {
+      await admin.from("whatsapp_messages")
+        .update({
+          message_type: messageType,
+          media_metadata: mediaMetadata,
+          delivery_status: mapDeliveryStatus(data?.status || "sent"),
+        })
+        .eq("id", existingMessage.id)
+        .eq("organization_id", numberRow.organization_id);
+      return json({ ok: true, duplicate: true, enriched: true, direction: "outbound" });
+    }
+
+    const { data: leadRows } = await admin.from("leads")
+      .select("id,phone,whatsapp_phone")
+      .eq("organization_id", numberRow.organization_id)
+      .is("deleted_at", null)
+      .neq("status", "discarded");
+    const matches = (leadRows || []).filter((lead: any) =>
+      [normalizePhone(lead.whatsapp_phone), normalizePhone(lead.phone)].filter(Boolean).includes(senderPhone)
+    );
+    const leadId = matches.length === 1 ? matches[0].id : null;
+    const contactName = extractContactName(data);
+    const preview = (text || (messageType === "audio" ? "Áudio enviado pelo celular" : messageType === "image" ? "Imagem enviada pelo celular" : messageType === "video" ? "Vídeo enviado pelo celular" : messageType === "document" ? "Documento enviado pelo celular" : "Mensagem enviada pelo celular")).slice(0, 240);
+
+    const { data: existingConversation } = await admin.from("whatsapp_conversations")
+      .select("id,lead_id,contact_name")
+      .eq("organization_id", numberRow.organization_id)
+      .eq("whatsapp_number_id", numberRow.id)
+      .eq("contact_phone", senderPhone)
+      .maybeSingle();
+
+    let conversation: any = existingConversation || null;
+    if (existingConversation?.id) {
+      const { data: updatedConversation, error: updateConversationError } = await admin.from("whatsapp_conversations")
+        .update({
+          lead_id: existingConversation.lead_id || leadId || null,
+          contact_name: contactName || existingConversation.contact_name || null,
+          provider: "evolution",
+          status: "open",
+          last_message_at: occurredAt,
+          last_message_preview: preview,
+          last_outbound_at: occurredAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingConversation.id)
+        .eq("organization_id", numberRow.organization_id)
+        .select("id,lead_id")
+        .single();
+      if (updateConversationError || !updatedConversation) {
+        return json({ error: "Unable to sync outbound conversation" }, 503);
+      }
+      conversation = updatedConversation;
+    } else {
+      const { data: createdConversation, error: createConversationError } = await admin.from("whatsapp_conversations")
+        .insert({
+          organization_id: numberRow.organization_id,
+          whatsapp_number_id: numberRow.id,
+          lead_id: leadId,
+          provider: "evolution",
+          contact_phone: senderPhone,
+          contact_name: contactName || null,
+          status: "open",
+          last_message_at: occurredAt,
+          last_message_preview: preview,
+          last_outbound_at: occurredAt,
+          updated_at: new Date().toISOString(),
+        })
+        .select("id,lead_id")
+        .single();
+      if (createConversationError || !createdConversation) {
+        return json({ error: "Unable to sync outbound conversation" }, 503);
+      }
+      conversation = createdConversation;
+    }
+
+    const { error: messageError } = await admin.from("whatsapp_messages").insert({
+      organization_id: numberRow.organization_id,
+      conversation_id: conversation.id,
+      whatsapp_number_id: numberRow.id,
+      lead_id: conversation.lead_id || leadId,
+      provider: "evolution",
+      provider_message_id: providerMessageId,
+      direction: "outbound",
+      message_type: messageType,
+      text_body: text || null,
+      media_metadata: mediaMetadata,
+      delivery_status: mapDeliveryStatus(data?.status || "sent"),
+      is_automatic: false,
+      source: "phone",
+      occurred_at: occurredAt,
+    });
+    if (messageError && !String(messageError.message || "").toLowerCase().includes("duplicate")) {
+      return json({ error: "Unable to sync outbound message" }, 503);
+    }
+
+    if (conversation.lead_id || leadId) {
+      const resolvedLeadId = conversation.lead_id || leadId;
+      await admin.from("activities").insert({
+        organization_id: numberRow.organization_id,
+        lead_id: resolvedLeadId,
+        activity_type: "message_sent",
+        channel: "whatsapp",
+        notes: text ? `Mensagem enviada pelo celular: ${text.slice(0, 3000)}` : `${preview}.`,
+        occurred_at: occurredAt,
+        created_by: null,
+      });
+      const localDate = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit"
+      }).format(new Date(occurredAt));
+      await admin.from("leads").update({
+        last_contact_date: localDate,
+        last_contacted_at: occurredAt,
+        updated_at: new Date().toISOString(),
+      }).eq("id", resolvedLeadId).eq("organization_id", numberRow.organization_id);
+    }
+
+    return json({ ok: true, direction: "outbound", lead_id: conversation.lead_id || leadId });
+  }
 
   const { data: existing } = await admin
     .from("whatsapp_inbound_events")
@@ -349,7 +627,43 @@ Deno.serve(async (req) => {
     return json({ error: "Unable to record inbound event" }, 503);
   }
 
-  if (!lead) return json({ ok: true, classification });
+  const messageType = extractMessageType(data);
+  const mediaMetadata = extractMediaMetadata(data);
+  const contactName = extractContactName(data);
+  await admin.from("whatsapp_messages")
+    .update({ message_type: messageType, media_metadata: mediaMetadata, source: "provider" })
+    .eq("organization_id", numberRow.organization_id)
+    .eq("provider", "evolution")
+    .eq("provider_message_id", providerMessageId);
+
+  if (contactName) {
+    const { data: conversation } = await admin.from("whatsapp_conversations")
+      .select("id,lead_id")
+      .eq("organization_id", numberRow.organization_id)
+      .eq("whatsapp_number_id", numberRow.id)
+      .eq("contact_phone", senderPhone)
+      .maybeSingle();
+    if (conversation?.id) {
+      await admin.from("whatsapp_conversations")
+        .update({ contact_name: contactName, updated_at: new Date().toISOString() })
+        .eq("id", conversation.id)
+        .eq("organization_id", numberRow.organization_id);
+    }
+    if (lead?.id) {
+      const { data: currentLead } = await admin.from("leads")
+        .select("business_name")
+        .eq("id", lead.id)
+        .eq("organization_id", numberRow.organization_id)
+        .maybeSingle();
+      const patch: any = { contact_name: contactName, updated_at: new Date().toISOString() };
+      if (String(currentLead?.business_name || "").startsWith("Contato WhatsApp")) patch.business_name = contactName;
+      await admin.from("leads").update(patch)
+        .eq("id", lead.id)
+        .eq("organization_id", numberRow.organization_id);
+    }
+  }
+
+  if (!lead) return json({ ok: true, classification, message_type: messageType });
 
   const notePrefix = classification === "automatic"
     ? "Resposta automática detectada (não alterou o funil)"

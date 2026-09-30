@@ -246,7 +246,36 @@ export default function WhatsAppCenter({ organization }) {
       .eq('provider', 'evolution')
       .is('deleted_at', null)
       .order('created_at')
-    setNumbers(data || [])
+
+    const rows = data || []
+    setNumbers(rows)
+
+    // Para administradores, a consulta também mantém o webhook Evolution
+    // sincronizado com os eventos necessários da Central. Para atendentes,
+    // uma eventual negativa de permissão é silenciosa e não interfere no uso.
+    const syncable = rows.filter(number => number.is_active && number.evolution_instance_name)
+    if (!syncable.length) return
+
+    const results = await Promise.all(syncable.map(async number => {
+      const { data: state, error } = await supabase.functions.invoke('evolution_gateway', {
+        body: {
+          action: 'connection_state',
+          organization_id: organization.id,
+          number_id: number.id
+        }
+      })
+      if (error || state?.error) return null
+      return {
+        id: number.id,
+        connection_status: state?.state === 'open' ? 'connected' : (state?.state || number.connection_status),
+        evolution_last_sync_at: new Date().toISOString()
+      }
+    }))
+
+    const patches = new Map(results.filter(Boolean).map(item => [item.id, item]))
+    if (patches.size) {
+      setNumbers(current => current.map(number => patches.has(number.id) ? { ...number, ...patches.get(number.id) } : number))
+    }
   }
 
   async function loadMembers() {

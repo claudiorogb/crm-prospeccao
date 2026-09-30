@@ -78,10 +78,14 @@ function EmailProspectingSequence({ organization, connection }) {
   const [loading, setLoading] = useState(false)
   const [prospectingState, setProspectingState] = useState({})
   const [manualEmail, setManualEmail] = useState('')
+  const [prospectingRuns, setProspectingRuns] = useState([])
+  const [prospectingRecipients, setProspectingRecipients] = useState([])
+  const [openProspectingId, setOpenProspectingId] = useState(null)
+  const [recipientActionId, setRecipientActionId] = useState(null)
 
   async function loadProspects() {
     if (!organization?.id) return
-    const [leadsResult, sequenceResult] = await Promise.all([
+    const [leadsResult, sequenceResult, runsResult, recipientsResult] = await Promise.all([
       supabase
         .from('leads')
         .select('id,business_name,contact_name,email,website,city,state,status,email_marketing_opt_out')
@@ -94,7 +98,20 @@ function EmailProspectingSequence({ organization, connection }) {
         .eq('organization_id', organization.id)
         .eq('recipient_source', 'crm_prospecting')
         .not('lead_id', 'is', null)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('email_campaigns')
+        .select('id,name,status,provider,total_recipients,created_at')
+        .eq('organization_id', organization.id)
+        .eq('sequence_mode', true)
         .order('created_at', { ascending: false })
+        .limit(30),
+      supabase
+        .from('email_campaign_recipients')
+        .select('id,campaign_id,lead_id,recipient_email,recipient_name,status,sequence_step,replied_at,next_attempt_at,created_at')
+        .eq('organization_id', organization.id)
+        .eq('recipient_source', 'crm_prospecting')
+        .order('created_at', { ascending: true })
     ])
 
     if (leadsResult.error) setMessage(leadsResult.error.message)
@@ -107,6 +124,8 @@ function EmailProspectingSequence({ organization, connection }) {
       }
       setProspectingState(latestByLead)
     }
+    if (!runsResult.error) setProspectingRuns(runsResult.data || [])
+    if (!recipientsResult.error) setProspectingRecipients(recipientsResult.data || [])
   }
 
   function prospectingLabel(leadId) {
@@ -170,6 +189,25 @@ function EmailProspectingSequence({ organization, connection }) {
       setMessage(error.message || 'Não foi possível adicionar o e-mail.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function controlProspectingRecipient(recipientId, action) {
+    setRecipientActionId(recipientId)
+    setMessage('')
+    try {
+      const { error } = await supabase.rpc('control_email_prospect_recipient', {
+        p_organization_id: organization.id,
+        p_recipient_id: recipientId,
+        p_action: action
+      })
+      if (error) throw error
+      setMessage(action === 'stop' ? 'Envios deste contato foram interrompidos.' : 'Contato enviado para o Kanban em Respondeu.')
+      await loadProspects()
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível atualizar este contato.')
+    } finally {
+      setRecipientActionId(null)
     }
   }
 
@@ -248,7 +286,7 @@ function EmailProspectingSequence({ organization, connection }) {
 
       <form onSubmit={startSequence}>
         <div className="field-grid two">
-          <label>Nome da sequência<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Prospecção contabilidades Campinas" /></label>
+          <label>Nome da prospecção<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Prospecção contabilidades Campinas" /></label>
           <label>Assunto<input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Assunto do e-mail" /></label>
         </div>
         <div className="field-grid three">
@@ -293,6 +331,53 @@ function EmailProspectingSequence({ organization, connection }) {
           <button type="submit" className="primary" disabled={loading || connection?.status !== 'connected' || !['gmail', 'resend'].includes(connection?.provider)}>{loading ? 'Processando...' : 'Iniciar sequência'}</button>
         </div>
       </form>
+
+      {prospectingRuns.length > 0 && (
+        <div className="email-prospecting-runs">
+          <div className="email-prospecting-runs-title">
+            <strong>Prospecções iniciadas</strong>
+            <span>Abra uma prospecção para acompanhar e controlar os contatos.</span>
+          </div>
+          {prospectingRuns.map(run => {
+            const rows = prospectingRecipients.filter(item => item.campaign_id === run.id)
+            const opened = openProspectingId === run.id
+            return (
+              <div className="email-prospecting-run" key={run.id}>
+                <button type="button" className="email-prospecting-run-toggle" onClick={() => setOpenProspectingId(opened ? null : run.id)}>
+                  <span>{run.name}</span>
+                  <small>{rows.length} contato{rows.length === 1 ? '' : 's'} {opened ? '▲' : '▼'}</small>
+                </button>
+                {opened && (
+                  <div className="email-prospecting-run-list">
+                    <div className="email-prospecting-run-head">
+                      <span>Nome do cliente</span>
+                      <span>E-mail</span>
+                      <span>Ações</span>
+                    </div>
+                    {rows.map(row => {
+                      const stopped = ['cancelled', 'replied', 'sent'].includes(row.status)
+                      return (
+                        <div className="email-prospecting-run-row" key={row.id}>
+                          <span title={row.recipient_name || row.recipient_email}>{row.recipient_name || 'Contato não informado'}</span>
+                          <span title={row.recipient_email}>{row.recipient_email}</span>
+                          <span className="email-prospecting-run-actions">
+                            <button type="button" className="secondary email-prospect-mini-button" disabled={recipientActionId === row.id || stopped} onClick={() => controlProspectingRecipient(row.id, 'stop')}>
+                              {row.status === 'cancelled' ? 'Envio parado' : 'Parar envio'}
+                            </button>
+                            <button type="button" className="primary email-prospect-mini-button" disabled={recipientActionId === row.id || row.status === 'replied'} onClick={() => controlProspectingRecipient(row.id, 'kanban_replied')}>
+                              {row.status === 'replied' ? 'No Kanban' : 'Enviar para Kanban'}
+                            </button>
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </section>
   )
 }

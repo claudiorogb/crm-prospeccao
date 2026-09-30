@@ -3132,20 +3132,7 @@ function Leads({ organization, settings, userEmail }) {
 
                             <div className="kanban-people-row-v70">
                               <strong>{l.contact_name || 'Contato não informado'}</strong>
-                              <span className="kanban-seller-block-v71">
-                                <span className="kanban-seller-name-v71"><UserRound size={14}/>{l.seller_name || 'Não atribuído'}</span>
-                                {status === 'new' && safeExternalUrl(l.website) && (
-                                  <a
-                                    className="kanban-site-under-seller-v71"
-                                    href={safeExternalUrl(l.website)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={event => event.stopPropagation()}
-                                  >
-                                    Abrir site
-                                  </a>
-                                )}
-                              </span>
+                              <span className="kanban-seller-name-v71"><UserRound size={14}/>{l.seller_name || 'Não atribuído'}</span>
                             </div>
 
                             {whatsappSummary[l.id] && (
@@ -3180,7 +3167,20 @@ function Leads({ organization, settings, userEmail }) {
                                 ) : l.next_contact_date ? (
                                   <span><Clock size={14}/>{formatKanbanDate(l.next_contact_date)}</span>
                                 ) : (
-                                  <span>Sem retorno previsto</span>
+                                  <span className="kanban-no-return-site-row-v71">
+                                    <span>Sem retorno previsto</span>
+                                    {status === 'new' && safeExternalUrl(l.website) && (
+                                      <a
+                                        className="kanban-site-inline-v71"
+                                        href={safeExternalUrl(l.website)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={event => event.stopPropagation()}
+                                      >
+                                        Abrir site
+                                      </a>
+                                    )}
+                                  </span>
                                 )}
                               </div>
                             )}

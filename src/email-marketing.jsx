@@ -76,17 +76,53 @@ function EmailProspectingSequence({ organization, connection }) {
   const [basisConfirmed, setBasisConfirmed] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [prospectingState, setProspectingState] = useState({})
 
   async function loadProspects() {
     if (!organization?.id) return
-    const { data, error } = await supabase
-      .from('leads')
-      .select('id,business_name,contact_name,email,website,city,state,status,email_marketing_opt_out')
-      .eq('organization_id', organization.id)
-      .is('deleted_at', null)
-      .order('business_name')
-    if (error) setMessage(error.message)
-    else setLeads((data || []).filter(item => validEmail(item.email)))
+    const [leadsResult, sequenceResult] = await Promise.all([
+      supabase
+        .from('leads')
+        .select('id,business_name,contact_name,email,website,city,state,status,email_marketing_opt_out')
+        .eq('organization_id', organization.id)
+        .is('deleted_at', null)
+        .order('business_name'),
+      supabase
+        .from('email_campaign_recipients')
+        .select('lead_id,status,sequence_step,next_attempt_at,replied_at,sent_at,created_at')
+        .eq('organization_id', organization.id)
+        .eq('recipient_source', 'crm_prospecting')
+        .not('lead_id', 'is', null)
+        .order('created_at', { ascending: false })
+    ])
+
+    if (leadsResult.error) setMessage(leadsResult.error.message)
+    else setLeads((leadsResult.data || []).filter(item => validEmail(item.email)))
+
+    if (!sequenceResult.error) {
+      const latestByLead = {}
+      for (const row of sequenceResult.data || []) {
+        if (row.lead_id && !latestByLead[row.lead_id]) latestByLead[row.lead_id] = row
+      }
+      setProspectingState(latestByLead)
+    }
+  }
+
+  function prospectingLabel(leadId) {
+    const row = prospectingState[leadId]
+    if (!row) return 'Não iniciado'
+    if (row.replied_at || row.status === 'replied') return 'Respondeu'
+    if (row.status === 'failed') return 'Falhou'
+    if (row.status === 'sent' && Number(row.sequence_step || 0) >= 3) return 'D8 enviado'
+    if (Number(row.sequence_step || 0) >= 3) return 'D4 enviado'
+    if (Number(row.sequence_step || 0) >= 2) return 'D1 enviado'
+    return 'D1 agendado'
+  }
+
+  function nextProspectingSend(leadId) {
+    const row = prospectingState[leadId]
+    if (!row?.next_attempt_at || row.replied_at || row.status === 'replied' || row.status === 'sent' || row.status === 'failed') return '—'
+    return new Date(row.next_attempt_at).toLocaleString('pt-BR')
   }
 
   useEffect(() => {
@@ -186,7 +222,7 @@ function EmailProspectingSequence({ organization, connection }) {
 
         <div className="email-prospect-list">
           <div className="panel-head">
-            <div><h3>Leads disponíveis</h3><p className="muted">Somente leads com e-mail e que não cancelaram o recebimento.</p></div>
+            <div><h3>Contatos do CRM</h3><p className="muted">A mesma base pode ser usada aqui e em E-mail marketing. Quem cancelou o recebimento permanece bloqueado para envio.</p></div>
             <strong>{selected.size} selecionado(s)</strong>
           </div>
           {leads.length === 0 ? (
@@ -195,6 +231,7 @@ function EmailProspectingSequence({ organization, connection }) {
             <label className={`email-prospect-row ${lead.email_marketing_opt_out ? 'disabled' : ''}`} key={lead.id}>
               <input type="checkbox" disabled={Boolean(lead.email_marketing_opt_out)} checked={selected.has(lead.id)} onChange={e => toggle(lead.id, e.target.checked)} />
               <span><strong>{lead.business_name}</strong><small>{lead.email}{lead.city ? ` • ${lead.city}${lead.state ? `/${lead.state}` : ''}` : ''}{lead.email_marketing_opt_out ? ' • Recebimento cancelado' : ''}</small></span>
+              <span className="email-prospect-progress"><strong>{prospectingLabel(lead.id)}</strong><small>Próximo envio: {nextProspectingSend(lead.id)}</small></span>
               {lead.website && <a href={/^https?:\/\//i.test(lead.website) ? lead.website : `https://${lead.website}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Site</a>}
             </label>
           ))}
@@ -247,10 +284,14 @@ export function EmailProspecting({ organization, userEmail }) {
       <header className="topbar compact-subpage-header">
         <div>
           <h1>Prospecção por e-mail</h1>
-          <p className="muted">Selecione leads com e-mail e envie uma sequência automática de primeiro contato e follow-ups.</p>
+          <p className="muted">Use a mesma base de contatos do CRM para iniciar e acompanhar abordagens comerciais por e-mail.</p>
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
+      <div className="email-purpose-note">
+        <strong>Quando usar esta aba</strong>
+        <span>Para primeiro contato comercial e follow-ups automáticos. O mesmo contato também pode ser usado em E-mail marketing.</span>
+      </div>
       {message && <div className="notice">{message}</div>}
       <EmailProspectingSequence organization={organization} connection={connection} />
     </>
@@ -287,7 +328,7 @@ export function EmailMarketing({ organization, userEmail }) {
     const [connectionResult, limitResult, clientsResult, marketingResult, campaignResult] = await Promise.all([
       supabase.from('email_connections').select('organization_id,provider,email_address,sender_email,sender_name,status,last_error,connected_at').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('organization_email_limits').select('*').eq('organization_id', organization.id).maybeSingle(),
-      supabase.from('leads').select('id,business_name,contact_name,email,city,state,email_marketing_opt_out').eq('organization_id', organization.id).eq('status', 'won').is('deleted_at', null).order('business_name'),
+      supabase.from('leads').select('id,business_name,contact_name,email,city,state,status,email_marketing_opt_out').eq('organization_id', organization.id).is('deleted_at', null).order('business_name'),
       supabase.from('email_marketing_contacts').select('id,email,contact_name,company_name,source,status,consent_confirmed,unsubscribed_at').eq('organization_id', organization.id).order('email'),
       supabase.from('email_campaigns').select('id,name,subject,body_text,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at,metrics_enabled', { count: 'exact' }).eq('organization_id', organization.id).order('created_at', { ascending: false }).order('id', { ascending: false }).range(nextCampaignPage * CAMPAIGN_PAGE_SIZE, (nextCampaignPage + 1) * CAMPAIGN_PAGE_SIZE - 1)
     ])
@@ -662,11 +703,15 @@ export function EmailMarketing({ organization, userEmail }) {
         <div>
           
           <h1>E-mail Marketing</h1>
-          <p className="muted">Envie para Clientes do CRM e para listas próprias de e-mail marketing.</p>
+          <p className="muted">Envie campanhas e comunicados para contatos do CRM e para suas listas próprias.</p>
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
 
+      <div className="email-purpose-note">
+        <strong>Quando usar esta aba</strong>
+        <span>Para campanhas, novidades, conteúdos e comunicados. Um contato usado em Prospecção por e-mail também pode ser selecionado aqui.</span>
+      </div>
       {message && <div className="notice">{message}</div>}
 
       <section className="panel email-connection-panel">
@@ -721,7 +766,7 @@ export function EmailMarketing({ organization, userEmail }) {
       <form className="panel email-compose-panel" onSubmit={createCampaign}>
         <div className="email-section-title">
           <div><span className="eyebrow">NOVA CAMPANHA</span><h2>Criar e-mail</h2></div>
-          <span className="email-client-only-badge">Clientes + Lista própria</span>
+          <span className="email-client-only-badge">Contatos do CRM + Lista própria</span>
         </div>
 
         <div className="field-grid">
@@ -748,7 +793,7 @@ export function EmailMarketing({ organization, userEmail }) {
           <div className="email-recipient-head">
             <div>
               <strong>Destinatários autorizados</strong>
-              <span>{eligibleClients.length} cliente{eligibleClients.length === 1 ? '' : 's'} do CRM • {eligibleMarketingContacts.length} contato{eligibleMarketingContacts.length === 1 ? '' : 's'} em listas próprias</span>
+              <span>{eligibleClients.length} contato{eligibleClients.length === 1 ? '' : 's'} do CRM • {eligibleMarketingContacts.length} contato{eligibleMarketingContacts.length === 1 ? '' : 's'} em listas próprias</span>
             </div>
             <strong>{selectedTotal} selecionado{selectedTotal === 1 ? '' : 's'}</strong>
           </div>
@@ -779,11 +824,11 @@ export function EmailMarketing({ organization, userEmail }) {
 
           <div className="email-recipient-source">
             <div className="email-recipient-source-head">
-              <div><strong>Clientes do CRM</strong><span>{eligibleClients.length} disponível{eligibleClients.length === 1 ? '' : 'is'} • {unavailableCount} indisponível{unavailableCount === 1 ? '' : 'is'}</span></div>
+              <div><strong>Contatos do CRM</strong><span>{eligibleClients.length} disponível{eligibleClients.length === 1 ? '' : 'is'} • {unavailableCount} indisponível{unavailableCount === 1 ? '' : 'is'}</span></div>
               <button type="button" className="secondary" onClick={toggleAllFiltered}>{filteredClients.length && filteredClients.every(c => selected.has(c.id)) ? 'Desmarcar exibidos' : 'Selecionar exibidos'}</button>
             </div>
             <div className="email-recipient-list">
-              {filteredClients.length === 0 ? <p className="muted email-empty-list">Nenhum cliente elegível encontrado.</p> : filteredClients.map(client => (
+              {filteredClients.length === 0 ? <p className="muted email-empty-list">Nenhum contato elegível encontrado.</p> : filteredClients.map(client => (
                 <label className="email-recipient-row" key={client.id}>
                   <input type="checkbox" checked={selected.has(client.id)} onChange={() => toggleClient(client.id)} />
                   <span><strong>{client.business_name}</strong><small>{client.contact_name || 'Contato não informado'} • {client.email}{client.city ? ` • ${client.city}${client.state ? `/${client.state}` : ''}` : ''}</small></span>

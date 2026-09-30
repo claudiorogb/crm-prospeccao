@@ -114,6 +114,9 @@ Deno.serve(async(req)=>{
             await admin.rpc("email_mark_prospecting_reply",{p_recipient_id:r.id});stopped++;continue;
           }
         }
+        const {data:gate,error:gateError}=await admin.from("email_campaign_recipients").select("status,replied_at").eq("id",r.id).single();
+        if(gateError)throw gateError;
+        if(gate?.status!=="sending"||gate?.replied_at){stopped++;continue;}
         const result=creds.provider==="resend"?await sendResend(creds,r,c):await sendGmail(creds,r,c);
         if(result.ok){
           if(result.threadId)await admin.from("email_campaign_recipients").update({gmail_thread_id:result.threadId,updated_at:new Date().toISOString()}).eq("id",r.id);

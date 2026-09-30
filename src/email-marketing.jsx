@@ -12,7 +12,7 @@ const CAMPAIGN_PAGE_SIZE = 20
 
 function providerLabel(provider) {
   if (provider === 'gmail') return 'Gmail'
-  if (provider === 'resend') return 'Resend'
+  if (provider === 'resend') return 'E-mail corporativo'
   return 'Não conectado'
 }
 

@@ -447,12 +447,22 @@ Deno.serve(async (req) => {
       : new Date().toISOString();
 
     const { data: existingMessage } = await admin.from("whatsapp_messages")
-      .select("id")
+      .select("id,source")
       .eq("organization_id", numberRow.organization_id)
       .eq("provider", "evolution")
       .eq("provider_message_id", providerMessageId)
       .maybeSingle();
-    if (existingMessage?.id) return json({ ok: true, duplicate: true, direction: "outbound" });
+    if (existingMessage?.id) {
+      await admin.from("whatsapp_messages")
+        .update({
+          message_type: messageType,
+          media_metadata: mediaMetadata,
+          delivery_status: mapDeliveryStatus(data?.status || "sent"),
+        })
+        .eq("id", existingMessage.id)
+        .eq("organization_id", numberRow.organization_id);
+      return json({ ok: true, duplicate: true, enriched: true, direction: "outbound" });
+    }
 
     const { data: leadRows } = await admin.from("leads")
       .select("id,phone,whatsapp_phone")

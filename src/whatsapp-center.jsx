@@ -72,6 +72,66 @@ function fileToBase64(file) {
   })
 }
 
+async function compressImageForWhatsapp(file) {
+  if (!file || !String(file.type || '').startsWith('image/')) return file
+
+  try {
+    const imageUrl = URL.createObjectURL(file)
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => reject(new Error('Não foi possível preparar a imagem.'))
+      img.src = imageUrl
+    })
+
+    const maxDimension = 1600
+    const scale = Math.min(1, maxDimension / Math.max(image.width || 1, image.height || 1))
+    const width = Math.max(1, Math.round(image.width * scale))
+    const height = Math.max(1, Math.round(image.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d', { alpha: true })
+    if (!ctx) {
+      URL.revokeObjectURL(imageUrl)
+      return file
+    }
+
+    ctx.drawImage(image, 0, 0, width, height)
+    URL.revokeObjectURL(imageUrl)
+
+    const isPng = file.type === 'image/png'
+    const outputType = isPng ? 'image/png' : 'image/jpeg'
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, outputType, isPng ? undefined : 0.82))
+    if (!blob || blob.size >= file.size) return file
+
+    const outputName = isPng
+      ? file.name
+      : String(file.name || 'imagem').replace(/\.[^.]+$/, '') + '.jpg'
+
+    return new File([blob], outputName, {
+      type: outputType,
+      lastModified: Date.now()
+    })
+  } catch {
+    return file
+  }
+}
+
+async function prepareWhatsappAttachment(file) {
+  const prepared = await compressImageForWhatsapp(file)
+  if (prepared.size > 8 * 1024 * 1024) {
+    throw new Error('O anexo deve ter no máximo 8 MB.')
+  }
+  const base64 = await fileToBase64(prepared)
+  return {
+    file_name: prepared.name,
+    mime_type: prepared.type || file.type || 'application/octet-stream',
+    base64,
+    size: prepared.size,
+  }
+}
+
 function MessageBubble({ message, media, onOpenMedia }) {
   const isMedia = ['image','video','audio','document','sticker'].includes(message.message_type)
   const meta = message.media_metadata || {}
@@ -401,22 +461,12 @@ export default function WhatsAppCenter({ organization }) {
 
   async function handleFile(file) {
     if (!file) return
-    if (file.size > 8 * 1024 * 1024) {
-      setNotice('O anexo deve ter no máximo 8 MB.')
-      if (fileRef.current) fileRef.current.value = ''
-      return
-    }
     try {
-      const base64 = await fileToBase64(file)
-      setAttachment({
-        file_name: file.name,
-        mime_type: file.type || 'application/octet-stream',
-        base64,
-        size: file.size,
-      })
+      setAttachment(await prepareWhatsappAttachment(file))
       setNotice('')
     } catch (error) {
       setNotice(error.message)
+      if (fileRef.current) fileRef.current.value = ''
     }
   }
 
@@ -940,12 +990,13 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
 
   async function handleFile(file) {
     if (!file) return
-    if (file.size > 8 * 1024 * 1024) {
-      setNotice('O anexo deve ter no máximo 8 MB.')
-      return
+    try {
+      setAttachment(await prepareWhatsappAttachment(file))
+      setNotice('')
+    } catch (error) {
+      setNotice(error.message)
+      if (fileRef.current) fileRef.current.value = ''
     }
-    const base64 = await fileToBase64(file)
-    setAttachment({ file_name:file.name, mime_type:file.type || 'application/octet-stream', base64 })
   }
 
   async function sendCurrent(e) {

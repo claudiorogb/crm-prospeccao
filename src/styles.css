@@ -3661,6 +3661,28 @@ label:has(> input[type="number"][step="0.01"]) > input {
   text-align: right;
 }
 .kanban-people-row-v70 > span svg { flex: 0 0 auto; }
+.kanban-seller-block-v71 {
+  display: flex !important;
+  flex-direction: column;
+  align-items: flex-end !important;
+  gap: 3px !important;
+}
+.kanban-seller-name-v71 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.kanban-site-under-seller-v71 {
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.kanban-site-under-seller-v71:hover {
+  opacity: .72;
+}
 .kanban-value-v70 { color: #1e293b; font-size: 13px; }
 .kanban-due-v70 {
   min-height: 18px;

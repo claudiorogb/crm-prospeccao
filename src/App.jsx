@@ -215,6 +215,49 @@ function AdminSectionHeader({ eyebrow = 'ADMINISTRAÇÃO', title, description, a
   )
 }
 
+const CRM_LOGIN_GUARD_KEY = 'axiva_crm_login_guard_v1'
+const LOGIN_MAX_ATTEMPTS = 5
+const LOGIN_LOCK_MS = 15 * 60 * 1000
+
+function readLoginGuard(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '{}')
+    return {
+      attempts: Number(parsed.attempts || 0),
+      blockedUntil: Number(parsed.blockedUntil || 0)
+    }
+  } catch {
+    return { attempts: 0, blockedUntil: 0 }
+  }
+}
+
+function loginBlockMessage(key) {
+  const guard = readLoginGuard(key)
+  if (!guard.blockedUntil || guard.blockedUntil <= Date.now()) {
+    if (guard.blockedUntil) localStorage.removeItem(key)
+    return ''
+  }
+  const minutes = Math.max(1, Math.ceil((guard.blockedUntil - Date.now()) / 60000))
+  return `Muitas tentativas de acesso. Tente novamente em ${minutes} minuto${minutes === 1 ? '' : 's'}.`
+}
+
+function recordLoginFailure(key) {
+  const current = readLoginGuard(key)
+  const attempts = current.attempts + 1
+  if (attempts >= LOGIN_MAX_ATTEMPTS) {
+    const blockedUntil = Date.now() + LOGIN_LOCK_MS
+    localStorage.setItem(key, JSON.stringify({ attempts: 0, blockedUntil }))
+    return loginBlockMessage(key)
+  }
+  localStorage.setItem(key, JSON.stringify({ attempts, blockedUntil: 0 }))
+  const remaining = LOGIN_MAX_ATTEMPTS - attempts
+  return `E-mail ou senha inválidos. Restam ${remaining} tentativa${remaining === 1 ? '' : 's'} antes do bloqueio temporário.`
+}
+
+function clearLoginGuard(key) {
+  try { localStorage.removeItem(key) } catch {}
+}
+
 function AuthScreen() {
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ email: '', password: '', fullName: '' })
@@ -247,13 +290,23 @@ function AuthScreen() {
         if (error) throw error
         setMessage('Cadastro criado. Se a confirmação de e-mail estiver ativa, confirme pelo link recebido.')
       } else {
+        const blocked = loginBlockMessage(CRM_LOGIN_GUARD_KEY)
+        if (blocked) {
+          setMessage(blocked)
+          return
+        }
+
         // Reset before auth emits SIGNED_IN, so a fresh login can show its notice.
         resetOverdueLoginAlerts()
         const { error } = await supabase.auth.signInWithPassword({
           email: form.email,
           password: form.password
         })
-        if (error) throw error
+        if (error) {
+          setMessage(recordLoginFailure(CRM_LOGIN_GUARD_KEY))
+          return
+        }
+        clearLoginGuard(CRM_LOGIN_GUARD_KEY)
       }
     } catch (err) {
       setMessage(err.message || 'Não foi possível concluir.')
@@ -3079,7 +3132,20 @@ function Leads({ organization, settings, userEmail }) {
 
                             <div className="kanban-people-row-v70">
                               <strong>{l.contact_name || 'Contato não informado'}</strong>
-                              <span><UserRound size={14}/>{l.seller_name || 'Não atribuído'}</span>
+                              <span className="kanban-seller-block-v71">
+                                <span className="kanban-seller-name-v71"><UserRound size={14}/>{l.seller_name || 'Não atribuído'}</span>
+                                {status === 'new' && safeExternalUrl(l.website) && (
+                                  <a
+                                    className="kanban-site-under-seller-v71"
+                                    href={safeExternalUrl(l.website)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={event => event.stopPropagation()}
+                                  >
+                                    Abrir site
+                                  </a>
+                                )}
+                              </span>
                             </div>
 
                             {whatsappSummary[l.id] && (
@@ -3114,20 +3180,7 @@ function Leads({ organization, settings, userEmail }) {
                                 ) : l.next_contact_date ? (
                                   <span><Clock size={14}/>{formatKanbanDate(l.next_contact_date)}</span>
                                 ) : (
-                                  <span className="kanban-no-return-row">
-                                    <span>Sem retorno previsto</span>
-                                    {status === 'new' && safeExternalUrl(l.website) && (
-                                      <a
-                                        className="kanban-inline-site-link"
-                                        href={safeExternalUrl(l.website)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={event => event.stopPropagation()}
-                                      >
-                                        Abrir site
-                                      </a>
-                                    )}
-                                  </span>
+                                  <span>Sem retorno previsto</span>
                                 )}
                               </div>
                             )}
@@ -3323,7 +3376,7 @@ function Leads({ organization, settings, userEmail }) {
                           )}
 
                               <div className="kanban-card-footer">
-                                {l.website ? <a className="lead-site-link" href={l.website} target="_blank" rel="noreferrer">Abrir site</a> : <span />}
+                                {status !== 'new' && l.website ? <a className="lead-site-link" href={l.website} target="_blank" rel="noreferrer">Abrir site</a> : <span />}
                               </div>
                             </div>
                           )}

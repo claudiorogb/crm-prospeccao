@@ -83,3 +83,12 @@
 .email-campaign-history-scroll th, .email-campaign-history-scroll td { padding: 9px; border-bottom: 1px solid #e2e8f0; overflow-wrap: anywhere; }
 .email-campaign-history-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
 @media(max-width:600px) { .email-campaign-history-summary { align-items: flex-start; } .email-campaign-history-summary time { white-space: normal; } }
+
+.email-prospect-list{margin-top:18px;border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:14px}
+.email-prospect-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 4px;border-top:1px solid var(--border,#e5e7eb)}
+.email-prospect-row:first-of-type{border-top:0}
+.email-prospect-row span{display:flex;flex-direction:column;gap:3px;min-width:0}
+.email-prospect-row small{color:var(--muted,#667085);overflow-wrap:anywhere}
+.email-prospect-row a{font-weight:600;text-decoration:none}
+.email-prospecting-panel textarea{resize:vertical;min-height:130px}
+@media(max-width:780px){.email-prospect-row{grid-template-columns:auto minmax(0,1fr)}.email-prospect-row>a{grid-column:2}.email-prospecting-panel .email-section-title{align-items:flex-start;flex-direction:column}}

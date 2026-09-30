@@ -4315,14 +4315,14 @@ function MessageSending({ organization, settings, userEmail }) {
     const [leadResult, intakeResult, templateResult, queueResult, batchResult, settingsResult, whatsappResult] = await Promise.all([
       supabase
         .from('leads')
-        .select('id,business_name,phone,status,target_segment_id,target_segments(name),campaigns(name),city,state')
+        .select('id,business_name,phone,website,email,status,target_segment_id,target_segments(name),campaigns(name),city,state')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .in('status', ['new','queued','captured_pending'])
         .order('created_at', { ascending: false }),
       supabase
         .from('leads')
-        .select('id,business_name,phone,status,target_segment_id,target_segments(name),campaigns(name),city,state,created_at,updated_at')
+        .select('id,business_name,phone,website,email,status,target_segment_id,target_segments(name),campaigns(name),city,state,created_at,updated_at')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .in('status', ['captured_pending','contacted_pending'])
@@ -4775,7 +4775,14 @@ function MessageSending({ organization, settings, userEmail }) {
                   <div>
                     <strong>{lead.business_name}</strong>
                     <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'} • {lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
-                    <small>{lead.phone || 'Sem telefone'}</small>
+                    <small>{lead.phone || 'Sem telefone'}{lead.email ? ` • ${lead.email}` : ''}</small>
+                    {(lead.website || lead.email) && (
+                      <small className="lead-contact-links">
+                        {lead.website && <ExternalWebsiteLink value={lead.website} />}
+                        {lead.website && lead.email ? ' • ' : ''}
+                        {lead.email && <a href={`mailto:${lead.email}`}>Enviar e-mail</a>}
+                      </small>
+                    )}
                   </div>
                   <div className="row-actions">
                     <button type="button" className="secondary mini" onClick={() => moveIntakeLeadToKanban(lead, 'new')} disabled={loading}>
@@ -4830,7 +4837,14 @@ function MessageSending({ organization, settings, userEmail }) {
                   <div>
                     <strong>{lead.business_name}</strong>
                     <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'} • {lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
-                    <small>{lead.phone || 'Sem telefone'}</small>
+                    <small>{lead.phone || 'Sem telefone'}{lead.email ? ` • ${lead.email}` : ''}</small>
+                    {(lead.website || lead.email) && (
+                      <small className="lead-contact-links">
+                        {lead.website && <ExternalWebsiteLink value={lead.website} />}
+                        {lead.website && lead.email ? ' • ' : ''}
+                        {lead.email && <a href={`mailto:${lead.email}`}>Enviar e-mail</a>}
+                      </small>
+                    )}
                   </div>
                   <div className="row-actions">
                     <button type="button" className="primary mini" onClick={() => moveIntakeLeadToKanban(lead, 'replied')} disabled={loading}>
@@ -5057,7 +5071,11 @@ function MessageSending({ organization, settings, userEmail }) {
               <input type="checkbox" checked={selected.has(lead.id)} onChange={event => toggleLead(lead.id, event.target.checked)} disabled={!canSelect} aria-label={`Selecionar ${lead.business_name}`} />
               <div><strong>{lead.business_name}</strong><span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'}</span></div>
               <span>{lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
-              <span>{lead.phone || 'Sem telefone'}</span>
+              <span>
+                {lead.phone || 'Sem telefone'}
+                {lead.email && <><br/><a href={`mailto:${lead.email}`}>{lead.email}</a></>}
+                {lead.website && <><br/><ExternalWebsiteLink value={lead.website} /></>}
+              </span>
               <span className={isQueued ? 'template-status queued' : canSend ? 'template-status active' : 'template-status inactive'}>
                 {isQueued ? 'Na fila' : canSend ? 'Apto' : !hasPhone ? 'Sem telefone' : 'Sem mensagem'}
               </span>
@@ -5302,7 +5320,7 @@ function NotInterestedRepository({ organization, userEmail }) {
   async function loadData() {
     const { data, error } = await supabase
       .from('leads')
-      .select('id,business_name,phone,city,state,status,commercial_notes,status_changed_at,updated_at,campaigns(name)')
+      .select('id,business_name,phone,website,email,city,state,status,commercial_notes,status_changed_at,updated_at,campaigns(name)')
       .eq('organization_id', organization.id)
       .in('status', ['not_interested','discarded','lost'])
       .order('status_changed_at', { ascending: false, nullsFirst: false })
@@ -5367,6 +5385,13 @@ function NotInterestedRepository({ organization, userEmail }) {
                 </span>
               </div>
               <span>{lead.campaigns?.name || 'Sem campanha'} • {lead.city || '—'}{lead.state ? ` / ${lead.state}` : ''} • {lead.phone || 'Sem telefone'}</span>
+              {(lead.website || lead.email) && (
+                <span>
+                  {lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}
+                  {lead.email && lead.website ? ' • ' : ''}
+                  {lead.website && <ExternalWebsiteLink value={lead.website} />}
+                </span>
+              )}
               <div className="repository-note-v33">
                 <span>Observações</span>
                 <p>{lead.commercial_notes || 'Nenhuma observação registrada.'}</p>

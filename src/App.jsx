@@ -14,7 +14,7 @@ import { mergeLeadsWithLocalDrafts } from './kanban-draft-merge.js'
 import { sortKanbanColumn } from './kanban-order.js'
 import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
-import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
+import { EmailMarketing, EmailProspecting, AdminEmailMarketing } from './email-marketing'
 import DashboardVisual from './dashboard-visual'
 import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
 import whatsappIcon from './whatsapp-icon.png'
@@ -5088,13 +5088,18 @@ function MessageSending({ organization, settings, userEmail }) {
 }
 
 function CampaignWorkspace({ organization, settings, userEmail }) {
-  const [section, setSection] = useState('targets')
+  const [section, setSection] = useState(() => {
+    const saved = sessionStorage.getItem('crm_campaign_workspace_section')
+    if (saved) sessionStorage.removeItem('crm_campaign_workspace_section')
+    return saved || 'targets'
+  })
   const items = [
     ['targets','Público-alvo'],
     ['campaigns','Campanha'],
     ['capture','Captação'],
     ['messages','Mensagens'],
     ['sending','Enviar mensagens'],
+    ['email-prospecting','Prospecção por e-mail'],
     ['email','E-mail marketing']
   ]
 
@@ -5112,6 +5117,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
       {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
       {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
+      {section === 'email-prospecting' && <EmailProspecting organization={organization} userEmail={userEmail} />}
       {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} />}
     </>
   )

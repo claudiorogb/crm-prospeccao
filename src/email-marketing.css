@@ -149,3 +149,36 @@
   .email-consent-check{align-items:flex-start!important;}
   .email-consent-check input[type="checkbox"]{margin-top:2px!important;}
 }
+
+
+/* Prospecção por e-mail: inclusão manual de contato */
+.email-manual-prospect-add{
+  margin-top:18px;
+  padding:14px;
+  border:1px solid #dbe4ee;
+  border-radius:12px;
+  background:#f8fafc;
+  display:grid;
+  gap:10px;
+}
+.email-manual-prospect-add>div:first-child{
+  display:grid;
+  gap:3px;
+}
+.email-manual-prospect-add span{
+  font-size:12px;
+  color:#64748b;
+}
+.email-manual-prospect-actions{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+}
+.email-manual-prospect-actions input{
+  min-height:40px;
+}
+@media(max-width:700px){
+  .email-manual-prospect-actions{grid-template-columns:1fr;}
+  .email-manual-prospect-actions .secondary{width:100%!important;}
+}

@@ -32,6 +32,14 @@ function messageFallback(message) {
   return 'Mensagem'
 }
 
+function mediaTypeFromMime(mime) {
+  const value = String(mime || '').toLowerCase()
+  if (value.startsWith('image/')) return 'image'
+  if (value.startsWith('video/')) return 'video'
+  if (value.startsWith('audio/')) return 'audio'
+  return 'document'
+}
+
 function deliveryLabel(value) {
   const labels = {
     pending: 'Pendente',

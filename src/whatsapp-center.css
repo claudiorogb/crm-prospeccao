@@ -106,3 +106,16 @@
 .wa-success-toast{position:fixed;right:24px;top:24px;z-index:1400;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border-radius:10px;background:#173f34;color:#fff;box-shadow:0 14px 35px rgba(0,0,0,.2)}
 .wa-success-toast button{border:0;background:transparent;color:#fff;display:grid;place-items:center;cursor:pointer;padding:2px}
 @media(max-width:700px){.wa-success-toast{left:16px;right:16px;top:16px;max-width:none}}
+
+.wa-header-actions-v72{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wa-new-overlay-v72{position:fixed;inset:0;z-index:1500;background:rgba(15,23,42,.36);display:flex;align-items:center;justify-content:center;padding:20px}
+.wa-new-modal-v72{width:min(680px,96vw);max-height:90vh;overflow:auto}
+.wa-new-head-v72{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.wa-new-head-v72 h2{margin:4px 0 0}
+.wa-new-modal-v72 textarea{min-height:120px;resize:vertical}
+@media(max-width:700px){
+  .wa-header-actions-v72{width:100%}
+  .wa-header-actions-v72 button{flex:1}
+  .wa-new-overlay-v72{padding:8px}
+  .wa-new-modal-v72{width:100%;max-height:96vh}
+}

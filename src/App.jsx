@@ -16,7 +16,7 @@ import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
 import DashboardVisual from './dashboard-visual'
-import WhatsAppCenter from './whatsapp-center'
+import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
@@ -2040,6 +2040,8 @@ function Leads({ organization, settings, userEmail }) {
   const [expandedLeadIds, setExpandedLeadIds] = useState(() => new Set())
   const [noteDrafts, setNoteDrafts] = useState({})
   const [savingLeadIds, setSavingLeadIds] = useState(new Set())
+  const [whatsappSummary, setWhatsappSummary] = useState({})
+  const [whatsappLead, setWhatsappLead] = useState(null)
   const dirtyLeadFieldsRef = useRef({})
 
   function parseMoneyValue(value) {
@@ -2136,6 +2138,57 @@ function Leads({ organization, settings, userEmail }) {
     proposal_sent_at: '',
     status: 'new'
   })
+
+  function formatWhatsappKanbanTime(value) {
+    if (!value) return '—'
+    try {
+      const date = new Date(value)
+      const dateKey = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(date)
+      const time = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date)
+      if (dateKey === currentBrazilDate()) return `hoje ${time}`
+      return new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date)
+    } catch {
+      return '—'
+    }
+  }
+
+  async function loadWhatsappSummary() {
+    const { data, error } = await supabase
+      .from('whatsapp_conversations')
+      .select('id,lead_id,unread_count,last_message_at,last_inbound_at,last_outbound_at,status')
+      .eq('organization_id', organization.id)
+      .eq('provider', 'evolution')
+      .not('lead_id', 'is', null)
+
+    if (error) return
+
+    const map = {}
+    for (const item of data || []) {
+      const current = map[item.lead_id] || { unread: 0, last_message_at: null, conversation_id: null }
+      current.unread += Number(item.unread_count || 0)
+      if (!current.last_message_at || (item.last_message_at && item.last_message_at > current.last_message_at)) {
+        current.last_message_at = item.last_message_at
+        current.conversation_id = item.id
+      }
+      map[item.lead_id] = current
+    }
+    setWhatsappSummary(map)
+  }
 
   async function loadLookups() {
     const [
@@ -2320,6 +2373,20 @@ function Leads({ organization, settings, userEmail }) {
       window.removeEventListener('focus', handleFocus)
     }
   }, [organization.id, filter.search, filter.segment, filter.status])
+
+  useEffect(() => {
+    let active = true
+    async function refreshWhatsappSummary() {
+      if (!active) return
+      await loadWhatsappSummary()
+    }
+    refreshWhatsappSummary()
+    const timer = setInterval(refreshWhatsappSummary, 4000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [organization.id])
 
   useEffect(() => {
     let active = true
@@ -3014,6 +3081,26 @@ function Leads({ organization, settings, userEmail }) {
                               <span><UserRound size={14}/>{l.seller_name || 'Não atribuído'}</span>
                             </div>
 
+                            {whatsappSummary[l.id] && (
+                              <button
+                                type="button"
+                                className="wa-kanban-chat-button"
+                                onClick={() => setWhatsappLead(l)}
+                                title="Abrir conversa do WhatsApp"
+                              >
+                                <span className="wa-kanban-chat-main">
+                                  <MessageSquareText size={15}/>
+                                  {whatsappSummary[l.id].unread > 0
+                                    ? `${whatsappSummary[l.id].unread} nova${whatsappSummary[l.id].unread === 1 ? '' : 's'} mensagem${whatsappSummary[l.id].unread === 1 ? '' : 's'}`
+                                    : 'WhatsApp'}
+                                </span>
+                                <span className="wa-kanban-chat-meta">
+                                  {whatsappSummary[l.id].unread > 0 && <span className="wa-kanban-unread">{whatsappSummary[l.id].unread}</span>}
+                                  <span>Último contato: {formatWhatsappKanbanTime(whatsappSummary[l.id].last_message_at)}</span>
+                                </span>
+                              </button>
+                            )}
+
                             {(!['new', 'contacted', 'replied', 'interested'].includes(status) || currentLeadValue(l) !== 0) && (
                               <strong className="kanban-value-v70">{formatCurrency(currentLeadValue(l))}</strong>
                             )}
@@ -3234,6 +3321,15 @@ function Leads({ organization, settings, userEmail }) {
             })}
         </div>
       </section>
+
+      {whatsappLead && (
+        <WhatsAppLeadPanel
+          organization={organization}
+          lead={whatsappLead}
+          onClose={() => setWhatsappLead(null)}
+          onUpdated={loadWhatsappSummary}
+        />
+      )}
     </>
   )
 }

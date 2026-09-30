@@ -100,3 +100,10 @@
   .wa-assignee{width:100%}
   .wa-assignee select{flex:1}
 }
+
+.kanban-no-return-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kanban-inline-site-link{font:inherit;color:inherit;text-decoration:underline;text-underline-offset:2px}
+.kanban-inline-site-link:hover{opacity:.75}
+.wa-success-toast{position:fixed;right:24px;top:24px;z-index:1400;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border-radius:10px;background:#173f34;color:#fff;box-shadow:0 14px 35px rgba(0,0,0,.2)}
+.wa-success-toast button{border:0;background:transparent;color:#fff;display:grid;place-items:center;cursor:pointer;padding:2px}
+@media(max-width:700px){.wa-success-toast{left:16px;right:16px;top:16px;max-width:none}}

@@ -17,6 +17,7 @@ import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, AdminEmailMarketing } from './email-marketing'
 import DashboardVisual from './dashboard-visual'
 import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
+import whatsappIcon from './whatsapp-icon.png'
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
@@ -3089,13 +3090,10 @@ function Leads({ organization, settings, userEmail }) {
                                 title="Abrir conversa do WhatsApp"
                               >
                                 <span className="wa-kanban-chat-main">
-                                  <MessageSquareText size={15}/>
-                                  {whatsappSummary[l.id].unread > 0
-                                    ? `${whatsappSummary[l.id].unread} nova${whatsappSummary[l.id].unread === 1 ? '' : 's'} mensagem${whatsappSummary[l.id].unread === 1 ? '' : 's'}`
-                                    : 'WhatsApp'}
+                                  <img className="wa-kanban-chat-icon" src={whatsappIcon} alt="WhatsApp" />
+                                  {whatsappSummary[l.id].unread > 0 && <span className="wa-kanban-unread">{whatsappSummary[l.id].unread}</span>}
                                 </span>
                                 <span className="wa-kanban-chat-meta">
-                                  {whatsappSummary[l.id].unread > 0 && <span className="wa-kanban-unread">{whatsappSummary[l.id].unread}</span>}
                                   <span>Último contato: {formatWhatsappKanbanTime(whatsappSummary[l.id].last_message_at)}</span>
                                 </span>
                               </button>

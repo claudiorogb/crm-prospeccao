@@ -3091,11 +3091,15 @@ function Leads({ organization, settings, userEmail }) {
                               >
                                 <span className="wa-kanban-chat-main">
                                   <img className="wa-kanban-chat-icon" src={whatsappIcon} alt="WhatsApp" />
-                                  {whatsappSummary[l.id].unread > 0 && <span className="wa-kanban-unread">{whatsappSummary[l.id].unread}</span>}
+                                  <span className="wa-kanban-last-contact">
+                                    Último contato: {formatWhatsappKanbanTime(whatsappSummary[l.id].last_message_at)}
+                                  </span>
                                 </span>
-                                <span className="wa-kanban-chat-meta">
-                                  <span>Último contato: {formatWhatsappKanbanTime(whatsappSummary[l.id].last_message_at)}</span>
-                                </span>
+                                {whatsappSummary[l.id].unread > 0 && (
+                                  <span className="wa-kanban-unread" title="Mensagens não lidas">
+                                    {whatsappSummary[l.id].unread}
+                                  </span>
+                                )}
                               </button>
                             )}
 

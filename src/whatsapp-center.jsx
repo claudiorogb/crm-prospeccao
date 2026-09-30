@@ -86,7 +86,8 @@ export default function WhatsAppCenter({ organization }) {
       return
     }
     setMessages(data || [])
-    endRef.current?.scrollIntoView({ block: 'end' })
+    const messagesContainer = endRef.current?.parentElement
+    if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight
   }
 
   async function loadNumbers() {

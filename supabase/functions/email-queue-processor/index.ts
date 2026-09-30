@@ -91,7 +91,8 @@ async function sendResend(creds:any,recipient:any,campaign:any,attachments:any[]
 }
 async function sendGmail(creds:any,recipient:any,campaign:any,attachments:any[],token:string|null){
  const unsubscribe=`${UNSUBSCRIBE_BASE}?token=${recipient.unsubscribe_token}`;const files=attachments.length?await gmailAttachmentData(attachments):[];const mime=buildMime(campaign.from_email,campaign.from_name,recipient.recipient_email,campaign.subject,campaign.body_text,unsubscribe,files,token);const raw=base64urlText(mime);
- const r=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{Authorization:`Bearer ${creds.access_token}`,"Content-Type":"application/json"},body:JSON.stringify({raw})});const d=await r.json();return {ok:r.ok,status:r.status,id:d?.id||null,error:d?.error?.message||(!r.ok?`Gmail HTTP ${r.status}`:null)};
+ const payload:any={raw};if(recipient.gmail_thread_id)payload.threadId=recipient.gmail_thread_id;
+ const r=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{Authorization:`Bearer ${creds.access_token}`,"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();return {ok:r.ok,status:r.status,id:d?.id||null,threadId:d?.threadId||recipient.gmail_thread_id||null,error:d?.error?.message||(!r.ok?`Gmail HTTP ${r.status}`:null)};
 }
 Deno.serve(async(req)=>{
  if(req.method!=="POST")return json({error:"Method not allowed"},405);
@@ -103,16 +104,23 @@ Deno.serve(async(req)=>{
    processed++;
    try{
     const [{data:recipient,error:rErr},{data:campaign,error:cErr},attachments,creds]=await Promise.all([
-     admin.from("email_campaign_recipients").select("id,recipient_email,recipient_name,unsubscribe_token").eq("id",c.recipient_id).single(),
-     admin.from("email_campaigns").select("id,organization_id,subject,body_text,from_email,from_name,provider,status,metrics_enabled").eq("id",c.campaign_id).single(),
+     admin.from("email_campaign_recipients").select("id,recipient_email,recipient_name,unsubscribe_token,gmail_thread_id,sequence_step,replied_at").eq("id",c.recipient_id).single(),
+     admin.from("email_campaigns").select("id,organization_id,subject,body_text,followup1_body,followup2_body,from_email,from_name,provider,status,metrics_enabled,sequence_mode").eq("id",c.campaign_id).single(),
      signedAttachments(c.campaign_id),usableCreds(c.organization_id),
     ]);
     if(rErr)throw rErr;if(cErr)throw cErr;if(!recipient||!campaign)throw new Error("Campanha ou destinatário não encontrado.");
     if(creds.provider!==campaign.provider)throw new Error("O provedor conectado mudou após a criação da campanha. Cancele e recrie a campanha.");
+    if(campaign.sequence_mode&&creds.provider!=="gmail")throw new Error("Sequências automáticas de prospecção exigem Gmail.");
+    if(recipient.replied_at){await admin.rpc("email_mark_prospecting_reply",{p_recipient_id:recipient.id});continue;}
+    const step=Number(recipient.sequence_step||1);
+    const sendCampaign=campaign.sequence_mode?{...campaign,body_text:step===2?campaign.followup1_body:step===3?campaign.followup2_body:campaign.body_text}:campaign;
     let trackingToken:string|null=null;
     if(campaign.metrics_enabled){const {data,error}=await admin.rpc("email_tracking_prepare",{p_recipient_id:recipient.id});if(error||!data)throw new Error("Não foi possível preparar o acompanhamento seguro deste e-mail.");trackingToken=String(data);}
-    const result=creds.provider==="resend"?await sendResend(creds,recipient,campaign,attachments,trackingToken):await sendGmail(creds,recipient,campaign,attachments,trackingToken);
-    if(result.ok){await admin.rpc("email_complete_recipient",{p_recipient_id:recipient.id,p_success:true,p_provider_message_id:result.id,p_error:null,p_retry_after_seconds:null});sent++;}
+    const result=creds.provider==="resend"?await sendResend(creds,recipient,sendCampaign,attachments,trackingToken):await sendGmail(creds,recipient,sendCampaign,attachments,trackingToken);
+    if(result.ok){
+      if(creds.provider==="gmail"&&result.threadId){await admin.from("email_campaign_recipients").update({gmail_thread_id:result.threadId,updated_at:new Date().toISOString()}).eq("id",recipient.id);}
+      await admin.rpc("email_complete_recipient",{p_recipient_id:recipient.id,p_success:true,p_provider_message_id:result.id,p_error:null,p_retry_after_seconds:null});sent++;
+    }
     else{const retry=[401,403,429,500,502,503,504].includes(Number(result.status))?3600:null;await admin.rpc("email_complete_recipient",{p_recipient_id:recipient.id,p_success:false,p_provider_message_id:null,p_error:result.error,p_retry_after_seconds:retry});if(retry)retried++;else failed++;}
    }catch(e){const msg=e instanceof Error?e.message:String(e);await admin.rpc("email_complete_recipient",{p_recipient_id:c.recipient_id,p_success:false,p_provider_message_id:null,p_error:msg,p_retry_after_seconds:3600});retried++;if(/token|oauth|autoriz|credencial|conect/i.test(msg))await admin.from("email_connections").update({status:"error",last_error:msg,updated_at:new Date().toISOString()}).eq("organization_id",c.organization_id);}
   }

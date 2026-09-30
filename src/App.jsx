@@ -5077,10 +5077,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['campaigns','Campanha'],
     ['capture','Captação'],
     ['messages','Mensagens'],
-    ['sending','Enviar mensagens Whatsapp'],
-    ['email','E-mail marketing'],
-    ['whatsapp_center','Central WhatsApp'],
-    ['whatsapp','Cadastrar Whatsapp']
+    ['email','E-mail marketing']
   ]
 
   return (
@@ -5095,11 +5092,32 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
       {section === 'targets' && <TargetSegments organization={organization} userEmail={userEmail} />}
       {section === 'campaigns' && settings?.feature_flags?.campaigns !== false && <Campaigns organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
-      {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
       {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} />}
-      {section === 'whatsapp_center' && <WhatsAppCenter organization={organization} />}
-      {section === 'whatsapp' && <AdminWhatsApp organizations={[organization]} userEmail={userEmail} userMode={true} />}
+    </>
+  )
+}
+
+function WhatsAppWorkspace({ organization, settings, userEmail }) {
+  const [section, setSection] = useState('center')
+  const items = [
+    ['center','Central de conversas'],
+    ['sending','Enviar mensagens'],
+    ['numbers','Cadastrar WhatsApp']
+  ]
+
+  return (
+    <>
+      <div className="workspace-tabs">
+        {items.map(([key,label]) => (
+          <button key={key} className={section === key ? 'active' : ''} onClick={() => setSection(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {section === 'center' && <WhatsAppCenter organization={organization} />}
+      {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
+      {section === 'numbers' && <AdminWhatsApp organizations={[organization]} userEmail={userEmail} userMode={true} />}
     </>
   )
 }
@@ -8491,6 +8509,12 @@ export default function App() {
                   <Target size={18}/> Campanhas
                 </button>
                 <button
+                  className={`nav-item ${adminCommercialPage === 'whatsapp' ? 'active' : ''}`}
+                  onClick={() => { setAdminCommercialPage('whatsapp'); setMobileMenuOpen(false) }}
+                >
+                  <MessageSquareText size={18}/> WhatsApp
+                </button>
+                <button
                   className={`nav-item ${adminCommercialPage === 'sales-funnel' ? 'active' : ''}`}
                   onClick={() => { setAdminCommercialPage('sales-funnel'); setMobileMenuOpen(false) }}
                 >
@@ -8586,6 +8610,13 @@ export default function App() {
               userEmail={userEmail}
             />
           )}
+          {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'whatsapp' && (
+            <WhatsAppWorkspace
+              organization={sandboxOrganization}
+              settings={adminSandboxSettings}
+              userEmail={userEmail}
+            />
+          )}
 
           {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'sales-funnel' && adminSandboxSettings?.feature_flags?.leads !== false && (
             <SalesFunnelWorkspace
@@ -8667,6 +8698,9 @@ export default function App() {
           <button className={`nav-item ${page === 'campaign-workspace' ? 'active' : ''}`} onClick={() => { setPage('campaign-workspace'); setMobileMenuOpen(false) }}>
             <Target size={18}/> Campanhas
           </button>
+          <button className={`nav-item ${page === 'whatsapp' ? 'active' : ''}`} onClick={() => { setPage('whatsapp'); setMobileMenuOpen(false) }}>
+            <MessageSquareText size={18}/> WhatsApp
+          </button>
           <button className={`nav-item ${page === 'sales-funnel' ? 'active' : ''}`} onClick={() => { setPage('sales-funnel'); setMobileMenuOpen(false) }}>
             <Users size={18}/> Funil de vendas
           </button>
@@ -8708,6 +8742,9 @@ export default function App() {
         )}
         {page === 'campaign-workspace' && (
           <CampaignWorkspace organization={organization} settings={settings} userEmail={userLabel} />
+        )}
+        {page === 'whatsapp' && (
+          <WhatsAppWorkspace organization={organization} settings={settings} userEmail={userLabel} />
         )}
         {page === 'sales' && (
           <SalesPage organization={organization} userEmail={userLabel} />

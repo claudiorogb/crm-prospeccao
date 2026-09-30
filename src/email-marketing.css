@@ -118,3 +118,34 @@
   .email-prospect-progress{grid-column:2;padding:2px 0}
   .email-prospect-row>a{grid-column:2}
 }
+
+
+/* Prospecção por e-mail: confirmação em uma única linha no desktop */
+.email-consent-check{
+  display:flex!important;
+  align-items:center!important;
+  gap:9px!important;
+  margin:14px 0 0!important;
+  cursor:pointer;
+  font-size:13px;
+  line-height:1.4;
+  font-weight:600;
+  color:#243247;
+}
+.email-consent-check input[type="checkbox"]{
+  appearance:auto!important;
+  -webkit-appearance:checkbox!important;
+  width:16px!important;
+  height:16px!important;
+  min-width:16px!important;
+  max-width:16px!important;
+  min-height:16px!important;
+  margin:0!important;
+  padding:0!important;
+  flex:0 0 16px!important;
+  accent-color:#0f766e;
+}
+@media(max-width:700px){
+  .email-consent-check{align-items:flex-start!important;}
+  .email-consent-check input[type="checkbox"]{margin-top:2px!important;}
+}

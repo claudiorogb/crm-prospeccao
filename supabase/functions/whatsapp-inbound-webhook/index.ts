@@ -476,23 +476,56 @@ Deno.serve(async (req) => {
     const contactName = extractContactName(data);
     const preview = (text || (messageType === "audio" ? "Áudio enviado pelo celular" : messageType === "image" ? "Imagem enviada pelo celular" : messageType === "video" ? "Vídeo enviado pelo celular" : messageType === "document" ? "Documento enviado pelo celular" : "Mensagem enviada pelo celular")).slice(0, 240);
 
-    const { data: conversation, error: conversationError } = await admin.from("whatsapp_conversations")
-      .upsert({
-        organization_id: numberRow.organization_id,
-        whatsapp_number_id: numberRow.id,
-        lead_id: leadId,
-        provider: "evolution",
-        contact_phone: senderPhone,
-        contact_name: contactName || null,
-        status: "open",
-        last_message_at: occurredAt,
-        last_message_preview: preview,
-        last_outbound_at: occurredAt,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "organization_id,whatsapp_number_id,contact_phone" })
-      .select("id,lead_id")
-      .single();
-    if (conversationError || !conversation) return json({ error: "Unable to sync outbound conversation" }, 503);
+    const { data: existingConversation } = await admin.from("whatsapp_conversations")
+      .select("id,lead_id,contact_name")
+      .eq("organization_id", numberRow.organization_id)
+      .eq("whatsapp_number_id", numberRow.id)
+      .eq("contact_phone", senderPhone)
+      .maybeSingle();
+
+    let conversation: any = existingConversation || null;
+    if (existingConversation?.id) {
+      const { data: updatedConversation, error: updateConversationError } = await admin.from("whatsapp_conversations")
+        .update({
+          lead_id: existingConversation.lead_id || leadId || null,
+          contact_name: contactName || existingConversation.contact_name || null,
+          provider: "evolution",
+          status: "open",
+          last_message_at: occurredAt,
+          last_message_preview: preview,
+          last_outbound_at: occurredAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingConversation.id)
+        .eq("organization_id", numberRow.organization_id)
+        .select("id,lead_id")
+        .single();
+      if (updateConversationError || !updatedConversation) {
+        return json({ error: "Unable to sync outbound conversation" }, 503);
+      }
+      conversation = updatedConversation;
+    } else {
+      const { data: createdConversation, error: createConversationError } = await admin.from("whatsapp_conversations")
+        .insert({
+          organization_id: numberRow.organization_id,
+          whatsapp_number_id: numberRow.id,
+          lead_id: leadId,
+          provider: "evolution",
+          contact_phone: senderPhone,
+          contact_name: contactName || null,
+          status: "open",
+          last_message_at: occurredAt,
+          last_message_preview: preview,
+          last_outbound_at: occurredAt,
+          updated_at: new Date().toISOString(),
+        })
+        .select("id,lead_id")
+        .single();
+      if (createConversationError || !createdConversation) {
+        return json({ error: "Unable to sync outbound conversation" }, 503);
+      }
+      conversation = createdConversation;
+    }
 
     const { error: messageError } = await admin.from("whatsapp_messages").insert({
       organization_id: numberRow.organization_id,

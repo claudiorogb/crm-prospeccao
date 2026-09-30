@@ -77,7 +77,7 @@ export default function NewsletterMailingPanel({ organization, onChanged }) {
 
       <div className="mailing-management-import">
         <h3>Importar lista de e-mail marketing</h3>
-        <p className="muted">Importe uma lista própria autorizada. O modelo, a origem e as regras de importação ficam nesta área.</p>
+        <p className="muted">Importe uma lista própria autorizada. Baixe o modelo com as regras de preenchimento da planilha.</p>
         <MarketingListImport organization={organization} mode="import" onImported={handleImported} />
       </div>
 

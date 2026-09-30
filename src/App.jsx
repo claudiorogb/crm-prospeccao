@@ -3342,6 +3342,7 @@ function Clients({ organization, userEmail, userId }) {
   const [search, setSearch] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [whatsappClientOpen, setWhatsappClientOpen] = useState(false)
   const [clientForm, setClientForm] = useState({})
   const [interactionForm, setInteractionForm] = useState({
     type: 'whatsapp',
@@ -3709,7 +3710,12 @@ function Clients({ organization, userEmail, userId }) {
             <span className="eyebrow">CLIENTE</span>
             <h1>{selectedClient.business_name}</h1>
           </div>
-          <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
+          <div className="topbar-actions">
+            <button type="button" className="secondary inline-btn" onClick={() => setWhatsappClientOpen(true)}>
+              <MessageSquareText size={16}/> WhatsApp
+            </button>
+            <div className="user-badge">{userEmail}</div>
+          </div>
         </header>
 
         {message && <div className="notice">{message}</div>}
@@ -3853,6 +3859,15 @@ function Clients({ organization, userEmail, userId }) {
             </div>
           </section>
         </div>
+
+        {whatsappClientOpen && (
+          <WhatsAppLeadPanel
+            organization={organization}
+            lead={selectedClient}
+            onClose={() => setWhatsappClientOpen(false)}
+            onUpdated={() => loadData(selectedClient.id)}
+          />
+        )}
       </>
     )
   }

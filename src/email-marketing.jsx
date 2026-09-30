@@ -84,10 +84,9 @@ function EmailProspectingSequence({ organization, connection }) {
       .select('id,business_name,contact_name,email,website,city,state,status,email_marketing_opt_out')
       .eq('organization_id', organization.id)
       .is('deleted_at', null)
-      .in('status', ['captured_pending','new','contacted','contacted_pending'])
       .order('business_name')
     if (error) setMessage(error.message)
-    else setLeads((data || []).filter(item => validEmail(item.email) && !item.email_marketing_opt_out))
+    else setLeads((data || []).filter(item => validEmail(item.email)))
   }
 
   useEffect(() => {
@@ -97,6 +96,8 @@ function EmailProspectingSequence({ organization, connection }) {
   }, [organization?.id])
 
   function toggle(id, checked) {
+    const lead = leads.find(item => item.id === id)
+    if (lead?.email_marketing_opt_out) return
     setSelected(current => {
       const next = new Set(current)
       if (checked) next.add(id)
@@ -106,6 +107,7 @@ function EmailProspectingSequence({ organization, connection }) {
   }
 
   async function authorizeProspecting() {
+    sessionStorage.setItem('crm_campaign_workspace_section', 'email-prospecting')
     setLoading(true); setMessage('')
     try {
       const { data, error } = await supabase.functions.invoke('email-prospecting-oauth', {
@@ -190,9 +192,9 @@ function EmailProspectingSequence({ organization, connection }) {
           {leads.length === 0 ? (
             <p className="muted">Nenhum lead elegível com e-mail no momento.</p>
           ) : leads.map(lead => (
-            <label className="email-prospect-row" key={lead.id}>
-              <input type="checkbox" checked={selected.has(lead.id)} onChange={e => toggle(lead.id, e.target.checked)} />
-              <span><strong>{lead.business_name}</strong><small>{lead.email}{lead.city ? ` • ${lead.city}${lead.state ? `/${lead.state}` : ''}` : ''}</small></span>
+            <label className={`email-prospect-row ${lead.email_marketing_opt_out ? 'disabled' : ''}`} key={lead.id}>
+              <input type="checkbox" disabled={Boolean(lead.email_marketing_opt_out)} checked={selected.has(lead.id)} onChange={e => toggle(lead.id, e.target.checked)} />
+              <span><strong>{lead.business_name}</strong><small>{lead.email}{lead.city ? ` • ${lead.city}${lead.state ? `/${lead.state}` : ''}` : ''}{lead.email_marketing_opt_out ? ' • Recebimento cancelado' : ''}</small></span>
               {lead.website && <a href={/^https?:\/\//i.test(lead.website) ? lead.website : `https://${lead.website}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Site</a>}
             </label>
           ))}
@@ -207,6 +209,51 @@ function EmailProspectingSequence({ organization, connection }) {
         </div>
       </form>
     </section>
+  )
+}
+
+export function EmailProspecting({ organization, userEmail }) {
+  const [connection, setConnection] = useState(null)
+  const [message, setMessage] = useState('')
+
+  async function loadConnection() {
+    if (!organization?.id) return
+    const { data, error } = await supabase
+      .from('email_connections')
+      .select('organization_id,provider,email_address,sender_email,sender_name,status,last_error,connected_at')
+      .eq('organization_id', organization.id)
+      .maybeSingle()
+    if (error) setMessage(`Não foi possível carregar a conta de e-mail: ${error.message}`)
+    else setConnection(data || null)
+  }
+
+  useEffect(() => { loadConnection() }, [organization?.id])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const oauth = params.get('email_oauth')
+    if (!oauth) return
+    const provider = providerLabel(params.get('provider'))
+    if (oauth === 'success') setMessage(`${provider} conectado com sucesso para prospecção.`)
+    else setMessage(params.get('message') || `Não foi possível conectar ${provider}.`)
+    params.delete('email_oauth'); params.delete('provider'); params.delete('message')
+    const next = params.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${next ? `?${next}` : ''}${window.location.hash || ''}`)
+    loadConnection()
+  }, [])
+
+  return (
+    <>
+      <header className="topbar compact-subpage-header">
+        <div>
+          <h1>Prospecção por e-mail</h1>
+          <p className="muted">Selecione leads com e-mail e envie uma sequência automática de primeiro contato e follow-ups.</p>
+        </div>
+        <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
+      </header>
+      {message && <div className="notice">{message}</div>}
+      <EmailProspectingSequence organization={organization} connection={connection} />
+    </>
   )
 }
 
@@ -621,8 +668,6 @@ export function EmailMarketing({ organization, userEmail }) {
       </header>
 
       {message && <div className="notice">{message}</div>}
-
-      <EmailProspectingSequence organization={organization} connection={connection} />
 
       <section className="panel email-connection-panel">
         <div className="email-section-title">

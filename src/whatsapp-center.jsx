@@ -3,6 +3,8 @@ import { Archive, CheckCheck, Link2, MessageSquareText, RefreshCw, Send, Smartph
 import { supabase } from './lib/supabase'
 import './whatsapp-center.css'
 
+const META_UI_ENABLED = false
+
 function formatTime(value) {
   if (!value) return ''
   try {
@@ -62,7 +64,7 @@ export default function WhatsAppCenter({ organization }) {
       return
     }
 
-    const rows = data || []
+    const rows = (data || []).filter(item => META_UI_ENABLED || item.provider !== 'meta')
     setConversations(rows)
     if (!keepSelection || !rows.some(item => item.id === selectedId)) {
       setSelectedId(rows[0]?.id || '')
@@ -97,7 +99,7 @@ export default function WhatsAppCenter({ organization }) {
       .eq('organization_id', organization.id)
       .is('deleted_at', null)
       .order('created_at')
-    setNumbers(data || [])
+    setNumbers((data || []).filter(number => META_UI_ENABLED || number.provider !== 'meta'))
   }
 
   async function loadMetaConfig() {
@@ -320,20 +322,22 @@ export default function WhatsAppCenter({ organization }) {
 
       {tab === 'connections' ? (
         <div className="wa-connections">
-          <article className="panel wa-provider-card">
-            <div>
-              <span className="eyebrow">API OFICIAL</span>
-              <h2>Meta Cloud API</h2>
-              <p className="muted">Cada cliente conecta a própria conta WhatsApp Business pelo fluxo oficial da Meta.</p>
-            </div>
-            {metaConfig?.configured ? (
-              <button className="primary" type="button" onClick={connectMeta} disabled={loading}>
-                <Smartphone size={16}/> {loading ? 'Conectando...' : 'Conectar WhatsApp oficial'}
-              </button>
-            ) : (
-              <div className="wa-config-pending">Configuração do aplicativo Meta da AXIVA pendente no servidor.</div>
-            )}
-          </article>
+          {META_UI_ENABLED && (
+            <article className="panel wa-provider-card">
+              <div>
+                <span className="eyebrow">API OFICIAL</span>
+                <h2>Meta Cloud API</h2>
+                <p className="muted">Cada cliente conecta a própria conta WhatsApp Business pelo fluxo oficial da Meta.</p>
+              </div>
+              {metaConfig?.configured ? (
+                <button className="primary" type="button" onClick={connectMeta} disabled={loading}>
+                  <Smartphone size={16}/> {loading ? 'Conectando...' : 'Conectar WhatsApp oficial'}
+                </button>
+              ) : (
+                <div className="wa-config-pending">Configuração do aplicativo Meta da AXIVA pendente no servidor.</div>
+              )}
+            </article>
+          )}
 
           <article className="panel">
             <span className="eyebrow">NÚMEROS</span>

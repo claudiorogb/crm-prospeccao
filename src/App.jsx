@@ -2096,6 +2096,8 @@ function Leads({ organization, settings, userEmail }) {
   const [savingLeadIds, setSavingLeadIds] = useState(new Set())
   const [whatsappSummary, setWhatsappSummary] = useState({})
   const [whatsappLead, setWhatsappLead] = useState(null)
+  const [editingLead, setEditingLead] = useState(null)
+  const [editLeadForm, setEditLeadForm] = useState(null)
   const dirtyLeadFieldsRef = useRef({})
 
   function parseMoneyValue(value) {
@@ -2899,6 +2901,60 @@ function Leads({ organization, settings, userEmail }) {
     return `${get('year')}-${get('month')}-${get('day')}`
   }
 
+  function openLeadEditor(lead) {
+    setEditingLead(lead)
+    setEditLeadForm({
+      business_name: lead.business_name || '',
+      contact_name: lead.contact_name || '',
+      phone: lead.phone || '',
+      website: lead.website || '',
+      email: lead.email || '',
+      address: lead.address || '',
+      city: lead.city || '',
+      state: lead.state || '',
+      target_segment_id: lead.target_segment_id || '',
+      last_contact_date: lead.last_contact_date || '',
+      next_contact_date: lead.next_contact_date || ''
+    })
+  }
+
+  async function saveLeadEditor(e) {
+    e.preventDefault()
+    if (!editingLead || !editLeadForm) return
+    setLoading(true)
+    setMessage('')
+    const selectedTarget = targetSegments.find(item => item.id === editLeadForm.target_segment_id)
+    const { error } = await supabase
+      .from('leads')
+      .update({
+        business_name: editLeadForm.business_name.trim(),
+        contact_name: editLeadForm.contact_name.trim() || null,
+        phone: editLeadForm.phone.trim() || null,
+        whatsapp_phone: editLeadForm.phone.trim() || null,
+        website: editLeadForm.website.trim() || null,
+        email: editLeadForm.email.trim() || null,
+        address: editLeadForm.address.trim() || null,
+        city: editLeadForm.city.trim() || null,
+        state: editLeadForm.state || null,
+        target_segment_id: editLeadForm.target_segment_id || null,
+        segment: selectedTarget?.name || editingLead.segment,
+        last_contact_date: editLeadForm.last_contact_date || null,
+        next_contact_date: editLeadForm.next_contact_date || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', editingLead.id)
+      .eq('organization_id', organization.id)
+
+    if (error) {
+      setMessage(error.message)
+    } else {
+      setEditingLead(null)
+      setEditLeadForm(null)
+      await loadAllLeads(filter)
+    }
+    setLoading(false)
+  }
+
   function toggleLeadExpanded(leadId) {
     setExpandedLeadIds(current => {
       const next = new Set(current)
@@ -3117,7 +3173,14 @@ function Leads({ organization, settings, userEmail }) {
                             <div className="kanban-summary-topline-v70">
                               <div>
                                 <span className="kanban-segment-v70">{l.target_segments?.name || l.segment || 'Sem segmento'}</span>
-                                <span className="kanban-company-v70">{l.business_name}</span>
+                                <button
+                                  type="button"
+                                  className="kanban-company-edit-v72"
+                                  onClick={() => openLeadEditor(l)}
+                                  title="Editar cadastro do lead"
+                                >
+                                  {l.business_name}
+                                </button>
                               </div>
                               <button
                                 type="button"
@@ -3389,6 +3452,52 @@ function Leads({ organization, settings, userEmail }) {
             })}
         </div>
       </section>
+
+      {editingLead && editLeadForm && (
+        <div className="lead-edit-overlay-v72" onMouseDown={e => { if (e.target === e.currentTarget) { setEditingLead(null); setEditLeadForm(null) } }}>
+          <section className="panel lead-edit-modal-v72" role="dialog" aria-modal="true" aria-label="Editar cadastro do lead">
+            <div className="lead-edit-head-v72">
+              <div>
+                <span className="eyebrow">EDITAR LEAD</span>
+                <h2>{editingLead.business_name}</h2>
+              </div>
+              <button type="button" className="secondary mini" onClick={() => { setEditingLead(null); setEditLeadForm(null) }}>Fechar</button>
+            </div>
+            <form className="campaign-form" onSubmit={saveLeadEditor}>
+              <div className="field-grid">
+                <label>Empresa<input value={editLeadForm.business_name} onChange={e=>setEditLeadForm({...editLeadForm,business_name:e.target.value})} required /></label>
+                <label>Nome do contato<input value={editLeadForm.contact_name} onChange={e=>setEditLeadForm({...editLeadForm,contact_name:e.target.value})} /></label>
+              </div>
+              <div className="field-grid">
+                <label>Telefone / WhatsApp<input value={editLeadForm.phone} onChange={e=>setEditLeadForm({...editLeadForm,phone:e.target.value})} /></label>
+                <label>E-mail<input type="email" value={editLeadForm.email} onChange={e=>setEditLeadForm({...editLeadForm,email:e.target.value})} /></label>
+              </div>
+              <div className="field-grid">
+                <label>Site<input value={editLeadForm.website} onChange={e=>setEditLeadForm({...editLeadForm,website:e.target.value})} /></label>
+                <label>Público-alvo
+                  <select value={editLeadForm.target_segment_id} onChange={e=>setEditLeadForm({...editLeadForm,target_segment_id:e.target.value})}>
+                    <option value="">Não informado</option>
+                    {targetSegments.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </label>
+              </div>
+              <label>Endereço<input value={editLeadForm.address} onChange={e=>setEditLeadForm({...editLeadForm,address:e.target.value})} /></label>
+              <div className="field-grid">
+                <label>Cidade<input value={editLeadForm.city} onChange={e=>setEditLeadForm({...editLeadForm,city:e.target.value})} /></label>
+                <label>UF<input value={editLeadForm.state} maxLength={2} onChange={e=>setEditLeadForm({...editLeadForm,state:e.target.value.toUpperCase()})} /></label>
+              </div>
+              <div className="field-grid">
+                <label>Último contato<input type="date" value={editLeadForm.last_contact_date} onChange={e=>setEditLeadForm({...editLeadForm,last_contact_date:e.target.value})} /></label>
+                <label>Próximo contato<input type="date" value={editLeadForm.next_contact_date} onChange={e=>setEditLeadForm({...editLeadForm,next_contact_date:e.target.value})} /></label>
+              </div>
+              <div className="form-actions">
+                <button className="primary inline-btn" disabled={loading}>Salvar alterações</button>
+                <button type="button" className="secondary inline-btn" onClick={() => { setEditingLead(null); setEditLeadForm(null) }}>Cancelar</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       {whatsappLead && (
         <WhatsAppLeadPanel

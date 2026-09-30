@@ -615,7 +615,7 @@ function TeamPerformance({ organization }) {
       <section className="panel commercial-analytics-v69">
         <div className="panel-head">
           <div>
-            <span className="eyebrow">EQUIPE</span>
+            
             <h2>Desempenho por vendedor</h2>
           </div>
         </div>
@@ -653,7 +653,7 @@ function TeamPerformance({ organization }) {
       <section className="panel commercial-analytics-v69">
         <div className="panel-head">
           <div>
-            <span className="eyebrow">ORIGEM E CONVERSÃO</span>
+            
             <h2>Resultado por canal</h2>
             <p className="muted">Mostra quais origens geram leads, clientes e receita.</p>
           </div>
@@ -743,9 +743,9 @@ function Dashboard({ organization, userEmail, onGoCampaigns }) {
     <>
       <header className="topbar">
         <div>
-          <span className="eyebrow">PAINEL</span>
+          
           <h1>Dashboard</h1>
-          <p className="muted">Visão resumida do funil, resultados e atividade comercial.</p>
+          
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
@@ -771,8 +771,8 @@ function Dashboard({ organization, userEmail, onGoCampaigns }) {
       <section className="panel dashboard-block-v61">
         <div className="dashboard-block-head-v61">
           <div>
-            <span className="eyebrow">RESULTADOS</span>
-            <h2>Fechamentos</h2>
+            
+            <h2>Resultados</h2>
             <p className="muted">Resultado das oportunidades que saíram do funil ativo.</p>
           </div>
         </div>
@@ -785,7 +785,7 @@ function Dashboard({ organization, userEmail, onGoCampaigns }) {
       <section className="panel dashboard-block-v61">
         <div className="dashboard-block-head-v61">
           <div>
-            <span className="eyebrow">BASE COMERCIAL</span>
+            
             <h2>Leads e contatos</h2>
           </div>
         </div>
@@ -1423,7 +1423,7 @@ function TargetSegments({ organization, userEmail }) {
     <>
       <header className="topbar">
         <div>
-          <span className="eyebrow">PROSPECÇÃO</span>
+          
           <h1>Públicos-alvo</h1>
           <p className="muted">Escolha um segmento sugerido ou crie um público totalmente personalizado.</p>
         </div>
@@ -1723,7 +1723,7 @@ function Campaigns({ organization, settings, userEmail }) {
     <>
       <header className="topbar">
         <div>
-          <span className="eyebrow">PROSPECÇÃO</span>
+          
           <h1>Campanhas</h1>
           <p className="muted">Associe um público-alvo a uma região de prospecção.</p>
         </div>
@@ -1847,7 +1847,7 @@ function Capture({ organization, settings, userEmail }) {
     <>
       <header className="topbar">
         <div>
-          <span className="eyebrow">CAPTAÇÃO AUTOMÁTICA</span>
+          
           <h1>Captação</h1>
           <p className="muted">Encontre empresas do público escolhido dentro do raio da campanha.</p>
         </div>
@@ -2982,7 +2982,7 @@ function Leads({ organization, settings, userEmail }) {
     <>
       <header className="topbar">
         <div>
-          <span className="eyebrow">BASE COMERCIAL</span>
+          
           <h1>Leads</h1>
           <p className="muted">Selecione as empresas que devem receber a mensagem definida para o público-alvo.</p>
         </div>
@@ -4209,7 +4209,7 @@ function Messages({ organization, userEmail }) {
     <>
       <header className="topbar">
         <div>
-          <span className="eyebrow">ABORDAGEM</span>
+          
           <h1>Mensagens</h1>
           <p className="muted">Crie mensagens específicas para cada público-alvo.</p>
         </div>
@@ -5077,6 +5077,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['campaigns','Campanha'],
     ['capture','Captação'],
     ['messages','Mensagens'],
+    ['sending','Enviar mensagens'],
     ['email','E-mail marketing']
   ]
 
@@ -5093,6 +5094,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
       {section === 'campaigns' && settings?.feature_flags?.campaigns !== false && <Campaigns organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
+      {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} />}
     </>
   )
@@ -5101,8 +5103,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
 function WhatsAppWorkspace({ organization, settings, userEmail }) {
   const [section, setSection] = useState('center')
   const items = [
-    ['center','Central de conversas'],
-    ['sending','Enviar mensagens'],
+    ['center','Whatsapp'],
     ['numbers','Cadastrar WhatsApp']
   ]
 
@@ -5116,7 +5117,6 @@ function WhatsAppWorkspace({ organization, settings, userEmail }) {
         ))}
       </div>
       {section === 'center' && <WhatsAppCenter organization={organization} />}
-      {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'numbers' && <AdminWhatsApp organizations={[organization]} userEmail={userEmail} userMode={true} />}
     </>
   )

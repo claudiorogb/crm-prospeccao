@@ -92,10 +92,6 @@ grant select on table public.whatsapp_messages to authenticated;
 grant all on table public.whatsapp_messages to service_role;
 grant usage, select on sequence public.whatsapp_messages_id_seq to service_role;
 
--- Fecha uma condição de corrida no webhook atual: o mesmo evento não pode ser gravado duas vezes.
-create unique index if not exists whatsapp_inbound_events_org_provider_message_ux
-  on public.whatsapp_inbound_events (organization_id, provider_message_id);
-
 -- Tokens por cliente ficam criptografados no Supabase Vault.
 -- Estas funções são exclusivas do backend (service_role).
 create or replace function public.store_whatsapp_provider_secret(

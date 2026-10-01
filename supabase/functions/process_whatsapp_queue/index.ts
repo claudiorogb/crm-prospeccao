@@ -22,6 +22,21 @@ function randomIndex(length: number) {
   return Number(bytes[0] % length);
 }
 
+function saoPauloGreeting() {
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date()));
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const endings = ["tudo bem?", "como vai?", "como está?", "tudo certo?"];
+  return `${greeting}, ${endings[randomIndex(endings.length)]}`;
+}
+
+function applySmartGreeting(value: string) {
+  return String(value || "").replaceAll("{saudacao}", saoPauloGreeting()).replaceAll("{nome}", "");
+}
+
 function applySpintax(value: string) {
   let output = String(value || "");
   const pattern = /\{([^{}]*\|[^{}]*)\}/g;
@@ -238,7 +253,7 @@ Deno.serve(async (req) => {
 
         const result = await evolution(`/message/sendText/${encodeURIComponent(message.evolution_instance_name)}`, {
           method: "POST",
-          body: JSON.stringify({ number: message.recipient, text: applySpintax(message.rendered_message) }),
+          body: JSON.stringify({ number: message.recipient, text: applySpintax(applySmartGreeting(message.rendered_message)) }),
         });
         const sentAt = new Date().toISOString();
         const providerMessageId = result?.key?.id || result?.messageId || result?.id || null;

@@ -510,7 +510,7 @@ export function EmailProspecting({ organization, userEmail }) {
   )
 }
 
-export function EmailMarketing({ organization, userEmail }) {
+export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) {
   const [connection, setConnection] = useState(null)
   const [limits, setLimits] = useState(null)
   const [clients, setClients] = useState([])
@@ -1005,20 +1005,23 @@ export function EmailMarketing({ organization, userEmail }) {
     <>
       <header className="topbar compact-subpage-header">
         <div>
-          
-          <h1>E-mail Marketing</h1>
-          <p className="muted">Envie campanhas e comunicados para contatos do CRM e para suas listas próprias.</p>
+          <h1>{mode === 'connection' ? 'Cadastrar e-mail' : 'E-mail Marketing'}</h1>
+          <p className="muted">{mode === 'connection'
+            ? 'Conecte e configure o e-mail usado pelo CRM.'
+            : 'Envie campanhas e comunicados para contatos do CRM e para suas listas próprias.'}</p>
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
 
-      <div className="email-purpose-note">
-        <strong>Quando usar esta aba</strong>
-        <span>Para campanhas, novidades, conteúdos e comunicados. Um contato usado em Prospecção por e-mail também pode ser selecionado aqui.</span>
-      </div>
+      {mode !== 'connection' && (
+        <div className="email-purpose-note">
+          <strong>Quando usar esta aba</strong>
+          <span>Para campanhas, novidades, conteúdos e comunicados. Um contato usado em Prospecção por e-mail também pode ser selecionado aqui.</span>
+        </div>
+      )}
       {message && <div className="notice">{message}</div>}
 
-      <section className="panel email-connection-panel">
+      {mode === 'connection' && <section className="panel email-connection-panel">
         <div className="email-section-title">
           <div><span className="eyebrow">CONTA DE ENVIO</span><h2>Escolha como enviar</h2></div>
           {connection?.status === 'connected' && <span className="email-connected-badge">Conectado</span>}
@@ -1143,8 +1146,9 @@ export function EmailMarketing({ organization, userEmail }) {
           </div>
         )}
         {connection?.status === 'error' && <div className="notice error">A conexão precisa de atenção: {connection.last_error || 'reconecte a conta.'}</div>}
-      </section>
+      </section>}
 
+      {mode !== 'connection' && <>
       <NewsletterMailingPanel organization={organization} onChanged={loadData} />
 
       <form className="panel email-compose-panel" onSubmit={createCampaign}>
@@ -1278,6 +1282,7 @@ export function EmailMarketing({ organization, userEmail }) {
           </nav>
         )}
       </section>
+      </>}
     </>
   )
 }

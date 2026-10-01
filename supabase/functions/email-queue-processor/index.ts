@@ -20,9 +20,14 @@ function applySpintax(value:string){
  }
  return output;
 }
+function saoPauloGreeting(){
+ const hour=Number(new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",hour:"2-digit",hourCycle:"h23"}).format(new Date()));
+ const greeting=hour<12?"Bom dia":hour<18?"Boa tarde":"Boa noite";
+ const endings=["tudo bem?","como vai?","como está?","tudo certo?"];
+ return `${greeting}, ${endings[randomIndex(endings.length)]}`;
+}
 function applyVariables(value:string,ctx:any){
- return String(value||"")
-  .replaceAll("{nome}",ctx?.nome||"")
+ return String(value||"").replaceAll("{saudacao}",saoPauloGreeting()).replaceAll("{nome}","")
   .replaceAll("{empresa}",ctx?.empresa||"")
   .replaceAll("{cidade}",ctx?.cidade||"")
   .replaceAll("{uf}",ctx?.uf||"")

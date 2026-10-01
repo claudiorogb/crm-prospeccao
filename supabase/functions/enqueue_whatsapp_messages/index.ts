@@ -42,7 +42,6 @@ function applySpintax(value: string) {
 
 function renderTemplate(body: string, lead: any) {
   const withVariables = String(body || "")
-    .replaceAll("{nome}", lead?.contact_name || "")
     .replaceAll("{empresa}", lead?.business_name || "")
     .replaceAll("{cidade}", lead?.city || "")
     .replaceAll("{uf}", lead?.state || "")

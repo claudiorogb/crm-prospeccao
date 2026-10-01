@@ -289,7 +289,7 @@ function EmailProspectingSequence({ organization, connection }) {
           <label>Nome da prospecção<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Prospecção contabilidades Campinas" /></label>
           <label>Assunto<input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Assunto do e-mail" /></label>
         </div>
-        <div className="muted">Spintax: <strong>{'{Olá|Oi|Bom dia}'}</strong> • Variáveis: {'{nome}'} {'{empresa}'} {'{cidade}'} {'{uf}'} {'{telefone}'} {'{segmento}'} {'{email}'}</div>
+        <div className="muted">Spintax: <strong>{'{opção 1|opção 2|opção 3}'}</strong> • Variáveis: {'{saudacao}'} {'{empresa}'} {'{cidade}'} {'{uf}'} {'{telefone}'} {'{segmento}'} {'{email}'} • {'{saudacao}'} usa o horário de São Paulo e alterna a pergunta final.</div>
         <div className="field-grid three">
           <label>Dia 1 — primeiro contato<textarea rows="6" value={form.first} onChange={e => setForm({ ...form, first: e.target.value })} /></label>
           <label>Dia 4 — follow-up<textarea rows="6" value={form.followup1} onChange={e => setForm({ ...form, followup1: e.target.value })} /></label>
@@ -907,7 +907,7 @@ export function EmailMarketing({ organization, userEmail }) {
           <label>Nome da campanha<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Novidades de setembro" required /></label>
           <label>Assunto<input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Assunto do e-mail" required /></label>
         </div>
-        <div className="muted">Spintax: <strong>{'{Olá|Oi|Bom dia}'}</strong> • Variáveis: {'{nome}'} {'{empresa}'} {'{cidade}'} {'{uf}'} {'{telefone}'} {'{segmento}'} {'{email}'}</div>
+        <div className="muted">Spintax: <strong>{'{opção 1|opção 2|opção 3}'}</strong> • Variáveis: {'{saudacao}'} {'{empresa}'} {'{cidade}'} {'{uf}'} {'{telefone}'} {'{segmento}'} {'{email}'} • {'{saudacao}'} usa o horário de São Paulo e alterna a pergunta final.</div>
         <label>Mensagem<textarea className="email-body-textarea" value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} placeholder="Escreva a mensagem da campanha..." required /></label>
 
         <div className="email-attachments-box">

@@ -5,6 +5,9 @@ on:
     paths:
       - 'docs/ai-implementation.md'
       - 'src/ai-client.js'
+      - 'src/ai-assistant.jsx'
+      - 'src/App.jsx'
+      - 'src/styles.css'
       - 'supabase/functions/crm-ai-chat/**'
       - 'supabase/migrations/20261001200000_ai_readonly_foundation.sql'
       - 'tests/ai-foundation-security.test.mjs'

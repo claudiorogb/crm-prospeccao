@@ -4129,6 +4129,7 @@ function Messages({ organization, userEmail }) {
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const messageTextareaRef = useRef(null)
   const [form, setForm] = useState({
     name: '',
     target_segment_id: '',
@@ -4169,6 +4170,23 @@ function Messages({ organization, userEmail }) {
       body:t.body
     })
     setShowForm(true)
+  }
+
+  function insertMessageToken(token) {
+    const textarea = messageTextareaRef.current
+    const body = String(form.body || '')
+    const start = textarea?.selectionStart ?? body.length
+    const end = textarea?.selectionEnd ?? body.length
+    const next = body.slice(0, start) + token + body.slice(end)
+    setForm(current => ({ ...current, body: next }))
+
+    requestAnimationFrame(() => {
+      const node = messageTextareaRef.current
+      if (!node) return
+      const cursor = start + token.length
+      node.focus()
+      node.setSelectionRange(cursor, cursor)
+    })
   }
 
   async function saveTemplate(e) {
@@ -4272,12 +4290,30 @@ function Messages({ organization, userEmail }) {
               />
               Usar como mensagem padrão deste público-alvo
             </label>
-            <label>Mensagem<textarea className="message-textarea" rows="7" value={form.body} onChange={e=>setForm({...form,body:e.target.value})} required/></label>
+            <label>Mensagem<textarea ref={messageTextareaRef} className="message-textarea" rows="7" value={form.body} onChange={e=>setForm({...form,body:e.target.value})} required/></label>
             <div className="variable-help">
-              <strong>Variáveis:</strong>
-              <span>{'{saudacao}'}</span><span>{'{empresa}'}</span><span>{'{cidade}'}</span><span>{'{uf}'}</span><span>{'{telefone}'}</span><span>{'{segmento}'}</span><span>{'{email}'}</span>
-              <span>Spintax: {'{opção 1|opção 2|opção 3}'}</span>
-              <span>{'{saudacao}'} usa o horário de São Paulo e alterna entre “tudo bem?”, “como vai?”, “como está?” e “tudo certo?”.</span>
+              <strong>Adicionar ao texto:</strong>
+              {[
+                ['{saudacao}', 'Saudação'],
+                ['{empresa}', 'Empresa'],
+                ['{cidade}', 'Cidade'],
+                ['{uf}', 'UF'],
+                ['{telefone}', 'Telefone'],
+                ['{segmento}', 'Segmento'],
+                ['{email}', 'E-mail']
+              ].map(([token, label]) => (
+                <button key={token} type="button" className="variable-token-button" onClick={() => insertMessageToken(token)} title={`Inserir ${token}`}>
+                  {label}
+                </button>
+              ))}
+              <button type="button" className="variable-token-button" onClick={() => insertMessageToken('{opção 1|opção 2|opção 3}')} title="Inserir exemplo de Spintax">
+                Spintax
+              </button>
+            </div>
+            <div className="variable-explanation">
+              <span><strong>Saudação:</strong> insere Bom dia, Boa tarde ou Boa noite conforme o horário de São Paulo e alterna entre “tudo bem?”, “como vai?”, “como está?” e “tudo certo?”.</span>
+              <span><strong>Empresa, cidade, UF, telefone, segmento e e-mail:</strong> são preenchidos automaticamente com os dados de cada lead.</span>
+              <span><strong>Spintax:</strong> escreva alternativas entre chaves separadas por |, por exemplo {'{quero te mostrar|gostaria de apresentar|posso te apresentar}'}.</span>
             </div>
             <div className="message-preview"><span>Pré-visualização</span><p>{renderTemplate(form.body,preview)}</p></div>
             <div className="form-actions">

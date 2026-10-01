@@ -100,3 +100,14 @@ test('cliente tenta mostrar a mensagem segura retornada pela Edge Function', () 
   assert.match(client, /error\.context/)
   assert.match(client, /payload\?\.error/)
 })
+
+
+test('tentativa explícita a outra empresa é bloqueada antes de leitura comercial', () => {
+  const guardIndex = edge.indexOf('cross_tenant_request_blocked')
+  const contextIndex = edge.indexOf('authorizedContext(userClient, organizationId, scopes)')
+  assert.ok(guardIndex > -1)
+  assert.ok(contextIndex > -1)
+  assert.ok(guardIndex < contextIndex)
+  assert.match(edge, /records_considered: 0/)
+  assert.match(edge, /Não acesso, confirmo ou listo dados de outras empresas/)
+})

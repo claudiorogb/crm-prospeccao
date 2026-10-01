@@ -367,3 +367,18 @@
   .email-dns-row{grid-template-columns:1fr;gap:3px}
   .email-reply-inline-button{display:block!important;margin:8px 0 0!important}
 }
+
+
+/* Fluxo simplificado de cadastro de e-mail */
+.email-reply-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:8px}
+.email-reply-choice-card{display:flex;flex-direction:column;justify-content:space-between;gap:16px;padding:18px;border:1px solid #dbe4ee;border-radius:12px;background:#fff}
+.email-reply-choice-card.selected{border-color:#94a3b8;box-shadow:0 0 0 1px rgba(100,116,139,.12)}
+.email-reply-choice-card h3{margin:5px 0 10px;font-size:18px}
+.email-reply-choice-card p{margin:6px 0;font-size:13px;line-height:1.45;color:#475569}
+.email-reply-option-number{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b}
+.email-custom-reply-expanded{margin-top:16px;padding:16px;border:1px solid #dbe4ee;border-radius:12px;background:#f8fafc}
+.email-connection-footer{margin-top:16px;justify-content:space-between;align-items:center}
+@media(max-width:760px){
+  .email-reply-choice-grid{grid-template-columns:1fr}
+  .email-connection-footer{align-items:stretch}
+}

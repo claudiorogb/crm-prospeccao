@@ -88,3 +88,15 @@ test('modelo inicial incorreto é normalizado para o identificador atual', () =>
   assert.match(edge, /configuredModel === "gpt-5\.6-luna"/)
   assert.match(edge, /"gpt-6-luna"/)
 })
+
+
+test('erro 429 do provedor preserva categoria segura e não expõe segredo', () => {
+  assert.match(edge, /provider_http_\$\{providerResponse\.status\}_\$\{providerCode\}/)
+  assert.match(edge, /code\.startsWith\("provider_http_429_"\)/)
+  assert.doesNotMatch(edge, /OPENAI_API_KEY.*json\(/)
+})
+
+test('cliente tenta mostrar a mensagem segura retornada pela Edge Function', () => {
+  assert.match(client, /error\.context/)
+  assert.match(client, /payload\?\.error/)
+})

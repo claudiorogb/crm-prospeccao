@@ -498,7 +498,13 @@ Deno.serve(async (req) => {
     }
 
     if (!providerResponse.ok) {
-      throw new Error(`provider_http_${providerResponse.status}`);
+      const providerCode = String(
+        providerPayload?.error?.code ||
+        providerPayload?.error?.type ||
+        "unknown"
+      ).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+
+      throw new Error(`provider_http_${providerResponse.status}_${providerCode}`);
     }
 
     const answer = extractOutputText(providerPayload);
@@ -575,6 +581,16 @@ Deno.serve(async (req) => {
       error_code: code,
     });
 
-    return json({ error: "A IA está temporariamente indisponível. Nenhum dado do CRM foi alterado." }, 502);
+    if (code.startsWith("provider_http_429_")) {
+      return json({
+        error: "A API da OpenAI recusou a solicitação por limite de uso, saldo ou limite de gastos. Verifique Billing e Limits na plataforma da OpenAI. Nenhum dado do CRM foi alterado.",
+        error_code: code,
+      }, 429);
+    }
+
+    return json({
+      error: "A IA está temporariamente indisponível. Nenhum dado do CRM foi alterado.",
+      error_code: code,
+    }, 502);
   }
 });

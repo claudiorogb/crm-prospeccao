@@ -4369,6 +4369,12 @@ function MessageSending({ organization, settings, userEmail }) {
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [manualRecipient, setManualRecipient] = useState({
+    contact_name: '',
+    phone: '',
+    business_name: '',
+    target_segment_id: ''
+  })
   const [showFailures, setShowFailures] = useState(false)
   const [failurePage, setFailurePage] = useState(1)
   const [refreshing, setRefreshing] = useState(false)
@@ -4399,7 +4405,7 @@ function MessageSending({ organization, settings, userEmail }) {
         .order('updated_at', { ascending: false }),
       supabase
         .from('message_templates')
-        .select('id,target_segment_id,name,is_default_for_target')
+        .select('id,target_segment_id,name,is_default_for_target,target_segments(name)')
         .eq('organization_id', organization.id)
         .eq('is_active', true),
       supabase
@@ -4741,6 +4747,79 @@ function MessageSending({ organization, settings, userEmail }) {
     }
   }
 
+  const manualMessageOptions = Array.from(
+    new Map(
+      templates
+        .filter(template => template.target_segment_id)
+        .map(template => [template.target_segment_id, {
+          target_segment_id: template.target_segment_id,
+          label: template.target_segments?.name || template.name || 'Mensagem cadastrada'
+        }])
+    ).values()
+  )
+
+  async function addManualRecipient(event) {
+    event.preventDefault()
+    if (loading) return
+
+    const contactName = manualRecipient.contact_name.trim()
+    const businessName = manualRecipient.business_name.trim()
+    const phone = manualRecipient.phone.trim()
+    const targetSegmentId = manualRecipient.target_segment_id
+
+    if (!contactName || !businessName || !phone || !targetSegmentId) {
+      setMessage('Preencha nome, telefone, empresa e mensagem para adicionar o destinatário.')
+      return
+    }
+
+    if (!normalizeWhatsAppNumber(phone)) {
+      setMessage('Informe um telefone válido para o destinatário.')
+      return
+    }
+
+    const selectedMessage = manualMessageOptions.find(item => item.target_segment_id === targetSegmentId)
+
+    setLoading(true)
+    setMessage('')
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .insert({
+          organization_id: organization.id,
+          business_name: businessName,
+          contact_name: contactName,
+          phone,
+          target_segment_id: targetSegmentId,
+          segment: selectedMessage?.label || 'Cadastro manual',
+          status: 'new',
+          source: 'manual'
+        })
+        .select('id')
+        .single()
+
+      if (error) throw error
+      if (!data?.id) throw new Error('O CRM não confirmou o cadastro do destinatário.')
+
+      setManualRecipient({
+        contact_name: '',
+        phone: '',
+        business_name: '',
+        target_segment_id: ''
+      })
+      setSelected(previous => {
+        const next = new Set(previous)
+        next.add(data.id)
+        return next
+      })
+      setMessage('Destinatário adicionado e selecionado para envio.')
+      await loadData()
+    } catch (error) {
+      setMessage(error?.message || 'Não foi possível adicionar o destinatário manualmente.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function send() {
     if (!selected.size || loading) return
 
@@ -5055,6 +5134,59 @@ function MessageSending({ organization, settings, userEmail }) {
             <strong>{sendConfig.end}</strong>
           </div>
         </div>
+      </section>
+
+      <section className="panel manual-recipient-panel-v73">
+        <div className="panel-head">
+          <div>
+            <h2>Adicionar destinatário manualmente</h2>
+            <p className="muted">Inclua um número que não esteja na lista atual e selecione qual mensagem será usada no envio.</p>
+          </div>
+        </div>
+        <form className="manual-recipient-form-v73" onSubmit={addManualRecipient}>
+          <label>Nome
+            <input
+              value={manualRecipient.contact_name}
+              onChange={event => setManualRecipient(current => ({ ...current, contact_name: event.target.value }))}
+              placeholder="Nome do contato"
+              required
+            />
+          </label>
+          <label>Telefone
+            <input
+              value={manualRecipient.phone}
+              onChange={event => setManualRecipient(current => ({ ...current, phone: event.target.value }))}
+              placeholder="Ex.: 19 99999-9999"
+              required
+            />
+          </label>
+          <label>Empresa
+            <input
+              value={manualRecipient.business_name}
+              onChange={event => setManualRecipient(current => ({ ...current, business_name: event.target.value }))}
+              placeholder="Nome da empresa"
+              required
+            />
+          </label>
+          <label>Mensagem
+            <select
+              value={manualRecipient.target_segment_id}
+              onChange={event => setManualRecipient(current => ({ ...current, target_segment_id: event.target.value }))}
+              required
+            >
+              <option value="">Selecione</option>
+              {manualMessageOptions.map(item => (
+                <option key={item.target_segment_id} value={item.target_segment_id}>{item.label}</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="primary inline-btn" disabled={loading || manualMessageOptions.length === 0}>
+            <Plus size={16}/>{loading ? 'Adicionando...' : 'Adicionar destinatário'}
+          </button>
+        </form>
+        {manualMessageOptions.length === 0 && (
+          <p className="muted">Cadastre uma mensagem para um público-alvo antes de adicionar destinatários manuais.</p>
+        )}
       </section>
 
       <section className="panel sending-toolbar">

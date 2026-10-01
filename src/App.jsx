@@ -24,13 +24,32 @@ const UF_OPTIONS = [
   'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'
 ]
 
+function previewSpintax(value) {
+  let output = String(value || '')
+  const pattern = /\{([^{}]*\|[^{}]*)\}/g
+  for (let pass = 0; pass < 12; pass += 1) {
+    let changed = false
+    output = output.replace(pattern, (_match, inner) => {
+      const options = String(inner).split('|').map(item => item.trim())
+      if (options.length < 2) return _match
+      changed = true
+      return options[0] || ''
+    })
+    if (!changed) break
+  }
+  return output
+}
+
 function renderTemplate(body, lead) {
-  return String(body || '')
+  const rendered = String(body || '')
+    .replaceAll('{nome}', lead?.contact_name || '')
     .replaceAll('{empresa}', lead?.business_name || '')
     .replaceAll('{cidade}', lead?.city || '')
     .replaceAll('{uf}', lead?.state || '')
-    .replaceAll('{telefone}', lead?.phone || '')
+    .replaceAll('{telefone}', lead?.whatsapp_phone || lead?.phone || '')
     .replaceAll('{segmento}', lead?.segment || '')
+    .replaceAll('{email}', lead?.email || '')
+  return previewSpintax(rendered)
 }
 
 
@@ -4247,7 +4266,8 @@ function Messages({ organization, userEmail }) {
             <label>Mensagem<textarea className="message-textarea" rows="7" value={form.body} onChange={e=>setForm({...form,body:e.target.value})} required/></label>
             <div className="variable-help">
               <strong>Variáveis:</strong>
-              <span>{'{empresa}'}</span><span>{'{cidade}'}</span><span>{'{uf}'}</span><span>{'{telefone}'}</span><span>{'{segmento}'}</span>
+              <span>{'{nome}'}</span><span>{'{empresa}'}</span><span>{'{cidade}'}</span><span>{'{uf}'}</span><span>{'{telefone}'}</span><span>{'{segmento}'}</span><span>{'{email}'}</span>
+              <span>Spintax: {'{Olá|Oi|Bom dia}'}</span>
             </div>
             <div className="message-preview"><span>Pré-visualização</span><p>{renderTemplate(form.body,preview)}</p></div>
             <div className="form-actions">

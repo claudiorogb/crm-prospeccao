@@ -29,11 +29,23 @@ test('consultas comerciais da IA são somente leitura', () => {
   ]
 
   for (const table of commercialTables) {
-    const mutating = new RegExp(
-      String.raw`from\\(["']${table}["']\\)[\\s\\S]{0,250}?\\.(insert|update|upsert|delete)\\(`,
-      'g',
-    )
-    assert.doesNotMatch(edge, mutating, `a IA não pode modificar ${table}`)
+    for (const quote of ['"', "'"]) {
+      const needle = `.from(${quote}${table}${quote})`
+      let start = 0
+
+      while (true) {
+        const index = edge.indexOf(needle, start)
+        if (index === -1) break
+
+        const chain = edge.slice(index, index + 700)
+        assert.doesNotMatch(
+          chain,
+          /\.(insert|update|upsert|delete)\s*\(/,
+          `a IA não pode modificar ${table}`,
+        )
+        start = index + needle.length
+      }
+    }
   }
 })
 

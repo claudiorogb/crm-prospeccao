@@ -17,7 +17,7 @@ import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, EmailProspecting, AdminEmailMarketing } from './email-marketing'
 import DashboardVisual from './dashboard-visual'
 import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
-import AiAssistant from './ai-assistant'
+import AiAssistant, { AiFloatingAssistant } from './ai-assistant'
 import whatsappIcon from './whatsapp-icon.png'
 
 
@@ -8902,6 +8902,10 @@ export default function App() {
             <AdminTestSettings organization={sandboxOrganization} userEmail={userEmail} userId={session.user.id} />
           )}
         </main>
+
+        {commercialMode && sandboxOrganization && adminSandboxSettings?.feature_flags?.ai_assistant === true && (
+          <AiFloatingAssistant userEmail={userEmail} />
+        )}
       </div>
     )
   }
@@ -9049,6 +9053,10 @@ export default function App() {
           />
         )}
       </main>
+
+      {settings?.feature_flags?.ai_assistant === true && (
+        <AiFloatingAssistant userEmail={userLabel} />
+      )}
     </div>
   )
 }

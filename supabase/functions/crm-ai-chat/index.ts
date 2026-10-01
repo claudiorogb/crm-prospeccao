@@ -39,7 +39,17 @@ function normalize(value: unknown) {
 }
 
 function containsOrganizationName(message: string, organizationName: string) {
-  const haystack = ` ${normalize(message).replace(/[^a-z0-9]+/g, " ").trim()} `;
+  let normalizedMessage = normalize(message).replace(/[^a-z0-9]+/g, " ").trim();
+
+  // "AXIVA CRM" é o nome do produto/sistema e não uma referência ao tenant Axiva.
+  // Removemos apenas a expressão do produto antes de comparar nomes de organizações.
+  normalizedMessage = normalizedMessage
+    .replace(/\baxiva crm\b/g, " ")
+    .replace(/\bcrm axiva\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const haystack = ` ${normalizedMessage} `;
   const needleCore = normalize(organizationName).replace(/[^a-z0-9]+/g, " ").trim();
   if (needleCore.length < 3) return false;
   return haystack.includes(` ${needleCore} `);

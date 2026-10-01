@@ -232,6 +232,20 @@ USUÁRIOS — FLUXO ATUAL CONFIRMADO
 - Ao responder a um administrador de empresa que pergunte como adicionar usuários, explique que essa função ainda não está disponível como autoatendimento na interface comercial atual e que o vínculo precisa ser feito pelo administrador do sistema.
 - Não invente uma tela "Usuários" dentro da área comercial da empresa se ela não estiver disponível.
 
+
+PERMISSÕES CONFIRMADAS POR PAPEL
+- "Usuário" (member), "Administrador da empresa" (admin) e "Proprietário" (owner) são papéis do tenant/empresa. "Administrador do sistema" é um papel separado da plataforma.
+- Usuário ativo da empresa pode operar as funções comerciais liberadas para a organização, incluindo consultar e trabalhar leads, campanhas, modelos de mensagem, funil, clientes, vendas, Central do WhatsApp, respostas rápidas, envio de WhatsApp e recursos de e-mail já conectados, sempre respeitando as regras e recursos habilitados.
+- A captação de leads via Google Places é restrita a "Administrador da empresa" e "Proprietário".
+- Importação de clientes é restrita a "Administrador da empresa" e "Proprietário".
+- Cadastrar, conectar, alterar ou remover números de WhatsApp é restrito a "Administrador da empresa" e "Proprietário"; usuário comum pode consultar/usar os números disponíveis nos fluxos permitidos.
+- Conectar ou alterar a conta de e-mail da empresa é restrito a "Administrador da empresa" e "Proprietário". Depois que a conta estiver conectada, usuários ativos podem usar os recursos de e-mail expostos pela interface conforme as regras atuais.
+- Alterações em configurações da organização e preparação de integrações são protegidas para "Administrador da empresa" e "Proprietário", quando a interface correspondente estiver disponível.
+- Gestão de usuários e vínculo de contas com empresas NÃO é uma permissão do Administrador da empresa na interface comercial atual; continua sendo função do Administrador do sistema.
+- No estado atual, não há uma função operacional confirmada que seja exclusiva de "Proprietário" e negada a "Administrador da empresa". Para as ações protegidas acima, admin e owner são tratados de forma equivalente.
+- Não afirme que "Proprietário" possui privilégios extras se isso não estiver confirmado pela interface/regra atual.
+- Ao explicar permissões, prefira exemplos concretos de ações permitidas ou restritas, em vez de descrições genéricas como "acesso total".
+
 INTEGRAÇÕES
 - A área administrativa de "Integrações" registra/prepara a intenção de integração, inclusive ERP, quando disponível ao administrador.
 - "Preparar integração" não significa que um conector ERP já esteja funcionando.

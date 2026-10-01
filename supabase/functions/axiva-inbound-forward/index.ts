@@ -101,11 +101,31 @@ Deno.serve(async (request: Request) => {
 
   try {
     const { data: received, error: receivingError } = await resend.emails.receiving.get(receivedId);
-    if (receivingError || !received?.raw?.download_url) throw new Error("Unable to retrieve original email");
-    const raw = await fetch(received.raw.download_url);
-    if (!raw.ok) throw new Error("Unable to download original email");
-    const original = await PostalMime.parse(await raw.arrayBuffer(), { attachmentEncoding: "base64" });
-    const sender = original.from && "address" in original.from ? original.from.address : undefined;
+    if (receivingError || !received) throw new Error("Unable to retrieve original email");
+    const eventFromRaw = String(event?.data?.from || "").trim();
+    const eventSender = eventFromRaw.match(/<([^<>]+)>\s*$/)?.[1] || eventFromRaw;
+    let original:any = {
+      from: validAddress(eventSender) ? { address: eventSender } : undefined,
+      replyTo: [],
+      attachments: [],
+      subject: received.subject || event?.data?.subject || "",
+      text: received.text || "",
+      html: received.html || "",
+      headers: received.headers || []
+    };
+    if (received?.raw?.download_url) {
+      try {
+        const raw = await fetch(received.raw.download_url);
+        if (raw.ok) {
+          const parsed = await PostalMime.parse(await raw.arrayBuffer(), { attachmentEncoding: "base64" });
+          if (parsed) original = parsed;
+        }
+      } catch (parseError) {
+        console.error("Inbound raw parse fallback", parseError);
+      }
+    }
+    const parsedSender = original.from && "address" in original.from ? original.from.address : undefined;
+    const sender = validAddress(parsedSender) ? parsedSender : eventSender;
     if (!validAddress(sender)) throw new Error("Original sender address is missing or invalid");
     const preferredReply = original.replyTo?.find((address) => "address" in address && validAddress(address.address));
     const replyAddress = preferredReply && "address" in preferredReply ? preferredReply.address : sender;
@@ -154,16 +174,21 @@ Deno.serve(async (request: Request) => {
       if (markError) throw markError;
       const { data: connection, error: connectionError } = await admin
         .from("email_connections")
-        .select("sender_email,email_address")
+        .select("sender_email,email_address,reply_forward_email,connected_by")
         .eq("organization_id", matchedRecipient.organization_id)
         .maybeSingle();
       if (connectionError) throw connectionError;
-      const configuredTarget = String(connection?.sender_email || connection?.email_address || "").trim().toLowerCase();
+      let configuredTarget = String(connection?.reply_forward_email || "").trim().toLowerCase();
+      if (!validAddress(configuredTarget) && connection?.connected_by) {
+        const { data: connectedUser } = await admin.auth.admin.getUserById(connection.connected_by);
+        configuredTarget = String(connectedUser?.user?.email || "").trim().toLowerCase();
+      }
+      if (!validAddress(configuredTarget)) configuredTarget = String(connection?.sender_email || connection?.email_address || "").trim().toLowerCase();
       if (validAddress(configuredTarget) && !INBOUND_ADDRESSES.has(configuredTarget)) target = configuredTarget;
     }
 
     const display = sender.replace(/["\\\r\n<>]/g, "").slice(0, 200);
-    const attachments = original.attachments.map((attachment) => ({
+    const attachments = (original.attachments || []).map((attachment:any) => ({
       filename: attachment.filename || "anexo",
       content: String(attachment.content),
       content_type: attachment.mimeType,
@@ -184,7 +209,9 @@ Deno.serve(async (request: Request) => {
     if (saveError) throw new Error("Unable to record successful forwarding");
     return json({ ok: true, prospecting_reply: Boolean(replyToken||isSystemReply||isCustomReply) });
   } catch (error) {
-    await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: error instanceof Error ? error.message.slice(0, 160) : "Forwarding failed" }).eq("received_email_id", receivedId);
+    console.error("Inbound forwarding error", error);
+    const failureMessage = error instanceof Error ? error.message : String((error as any)?.message || error || "Forwarding failed");
+    await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: failureMessage.slice(0, 160) }).eq("received_email_id", receivedId);
     return json({ error: "Forwarding failed, retry requested" }, 503);
   }
 });

@@ -111,3 +111,10 @@ test('tentativa explícita a outra empresa é bloqueada antes de leitura comerci
   assert.match(edge, /records_considered: 0/)
   assert.match(edge, /Não acesso, confirmo ou listo dados de outras empresas/)
 })
+
+
+test('base operacional define BRL para valores monetários de vendas', () => {
+  const knowledge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/knowledge.ts', import.meta.url), 'utf8')
+  assert.match(knowledge, /Valores monetários de vendas no AXIVA CRM são tratados em reais \(BRL\)/)
+  assert.match(knowledge, /apresente em R\$/)
+})

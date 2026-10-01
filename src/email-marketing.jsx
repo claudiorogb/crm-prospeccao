@@ -540,6 +540,7 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
   const [replyLocalPart, setReplyLocalPart] = useState('resposta')
   const [replyLoading, setReplyLoading] = useState(false)
   const [showCustomDomainConfig, setShowCustomDomainConfig] = useState(false)
+  const [showDnsGuide, setShowDnsGuide] = useState(false)
 
   function insertCampaignToken(token) {
     const ref = activeCampaignField === 'subject' ? campaignSubjectRef : campaignBodyRef
@@ -1129,9 +1130,12 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
                   <label>
                     Domínio
                     <input value={replyDomain} onChange={e => setReplyDomain(e.target.value)} placeholder="empresa.com.br" disabled={Boolean(connection?.custom_reply_domain_id)} />
+                    {replyDomain.trim().toLowerCase() === 'axiva.com.br' && (
+                      <small className="muted">axiva.com.br já é o domínio padrão do sistema. Para domínio próprio, informe o domínio da sua empresa.</small>
+                    )}
                   </label>
                   {!connection?.custom_reply_domain_id ? (
-                    <button type="button" className="secondary" onClick={startCustomReplyDomain} disabled={replyLoading || !replyDomain.trim()}>
+                    <button type="button" className="secondary" onClick={startCustomReplyDomain} disabled={replyLoading || !replyDomain.trim() || replyDomain.trim().toLowerCase() === 'axiva.com.br'}>
                       Gerar configuração DNS
                     </button>
                   ) : (
@@ -1139,6 +1143,12 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
                       {connection?.custom_reply_status === 'verified' ? 'DNS verificado' : 'Verificar DNS'}
                     </button>
                   )}
+                </div>
+
+                <div className="form-actions email-dns-preview-actions">
+                  <button type="button" className="secondary" onClick={() => setShowDnsGuide(value => !value)}>
+                    {showDnsGuide ? 'Ocultar passo a passo' : 'Ver passo a passo'}
+                  </button>
                 </div>
 
                 {Array.isArray(connection?.custom_reply_dns) && connection.custom_reply_dns.length > 0 && connection?.custom_reply_status !== 'verified' && (
@@ -1171,50 +1181,58 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
                       </div>
                     </div>
 
-                    <div className="email-dns-guide">
-                      <h3>Passo a passo para configurar</h3>
-                      <p className="muted">A configuração é feita no painel onde o DNS do seu domínio é administrado. Pode ser Registro.br, Cloudflare, Hostinger, GoDaddy ou outro provedor. Normalmente não é necessário alterar nada no seu servidor de e-mail.</p>
 
-                      <ol>
-                        <li>
-                          <strong>Entre no painel do seu domínio.</strong>
-                          <span>Procure por uma opção chamada <b>DNS</b>, <b>Zona DNS</b>, <b>Gerenciar DNS</b> ou <b>Registros DNS</b>.</span>
-                        </li>
-                        <li>
-                          <strong>Não apague os registros que já existem.</strong>
-                          <span>Você só precisa adicionar os registros mostrados pelo CRM acima.</span>
-                        </li>
-                        <li>
-                          <strong>Crie cada registro separadamente.</strong>
-                          <span>Escolha o mesmo <b>Tipo</b> mostrado no CRM e copie exatamente o <b>Nome / Host</b> e o <b>Valor / Destino</b>.</span>
-                        </li>
-                        <li>
-                          <strong>Se aparecer Prioridade, informe o mesmo número.</strong>
-                          <span>Esse campo costuma aparecer em registros MX. Se o CRM mostrar “Não se aplica”, deixe o campo vazio.</span>
-                        </li>
-                        <li>
-                          <strong>No campo TTL, deixe Automático ou Padrão.</strong>
-                          <span>Se o seu provedor exigir um número, use o valor padrão sugerido pelo próprio provedor.</span>
-                        </li>
-                        <li>
-                          <strong>Salve as alterações no seu provedor de DNS.</strong>
-                          <span>A atualização pode levar alguns minutos e, em alguns casos, algumas horas para ficar disponível.</span>
-                        </li>
-                        <li>
-                          <strong>Volte para o AXIVA CRM.</strong>
-                          <span>Clique em <b>Verificar DNS</b>. Se ainda aparecer como pendente, aguarde um pouco e tente novamente.</span>
-                        </li>
-                        <li>
-                          <strong>Quando aparecer “DNS verificado”, a configuração terminou.</strong>
-                          <span>O CRM passará a oferecer o endereço do seu próprio domínio como opção de resposta.</span>
-                        </li>
-                      </ol>
-
-                      <div className="notice">
-                        <strong>Importante:</strong> se você não encontrar a área de DNS ou tiver dúvida sobre algum campo, não altere registros existentes. Envie estes dados ao suporte da empresa onde seu domínio está hospedado e peça para adicionar os registros exatamente como aparecem acima.
-                      </div>
-                    </div>
                   </>
+                )}
+
+                {showDnsGuide && (
+                  <div className="email-dns-guide">
+                    <h3>Passo a passo para configurar</h3>
+                    <p className="muted">A configuração é feita no painel onde o DNS do seu domínio é administrado. Pode ser Registro.br, Cloudflare, Hostinger, GoDaddy ou outro provedor. Normalmente não é necessário alterar nada no seu servidor de e-mail.</p>
+
+                    <ol>
+                      <li>
+                        <strong>Entre no painel do seu domínio.</strong>
+                        <span>Procure por uma opção chamada <b>DNS</b>, <b>Zona DNS</b>, <b>Gerenciar DNS</b> ou <b>Registros DNS</b>.</span>
+                      </li>
+                      <li>
+                        <strong>Não apague os registros que já existem.</strong>
+                        <span>Você só precisa adicionar os registros que o AXIVA CRM gerar para o seu domínio.</span>
+                      </li>
+                      <li>
+                        <strong>Clique em “Gerar configuração DNS”.</strong>
+                        <span>O CRM exibirá os registros exatos necessários para o domínio informado.</span>
+                      </li>
+                      <li>
+                        <strong>Crie cada registro separadamente no seu provedor.</strong>
+                        <span>Escolha o mesmo <b>Tipo</b> e copie exatamente o <b>Nome / Host</b> e o <b>Valor / Destino</b> apresentados pelo CRM.</span>
+                      </li>
+                      <li>
+                        <strong>Se aparecer Prioridade, informe o mesmo número.</strong>
+                        <span>Esse campo costuma aparecer em registros MX. Se o CRM mostrar “Não se aplica”, deixe o campo vazio.</span>
+                      </li>
+                      <li>
+                        <strong>No campo TTL, deixe Automático ou Padrão.</strong>
+                        <span>Se o seu provedor exigir um número, use o valor padrão sugerido pelo próprio provedor.</span>
+                      </li>
+                      <li>
+                        <strong>Salve as alterações no seu provedor de DNS.</strong>
+                        <span>A atualização pode levar alguns minutos e, em alguns casos, algumas horas para ficar disponível.</span>
+                      </li>
+                      <li>
+                        <strong>Volte para o AXIVA CRM.</strong>
+                        <span>Clique em <b>Verificar DNS</b>. Se ainda aparecer como pendente, aguarde um pouco e tente novamente.</span>
+                      </li>
+                      <li>
+                        <strong>Quando aparecer “DNS verificado”, a configuração terminou.</strong>
+                        <span>O endereço do seu próprio domínio poderá ser usado nas respostas.</span>
+                      </li>
+                    </ol>
+
+                    <div className="notice">
+                      <strong>Importante:</strong> se você não encontrar a área de DNS ou tiver dúvida sobre algum campo, não altere registros existentes. Envie os dados gerados pelo CRM ao suporte da empresa onde seu domínio está hospedado e peça para adicioná-los exatamente como aparecem.
+                    </div>
+                  </div>
                 )}
 
                 {connection?.custom_reply_status === 'verified' && connection?.custom_reply_email && (

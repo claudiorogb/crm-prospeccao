@@ -149,3 +149,19 @@ test('base de suporte contém fluxo confirmado de campanha e captação', () => 
   assert.match(knowledge, /clique em "Captar automaticamente"/)
   assert.match(knowledge, /Criar a campanha não executa a captação e não envia mensagens/)
 })
+
+
+test('base contém mapa completo de suporte operacional confirmado', () => {
+  const knowledge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/knowledge.ts', import.meta.url), 'utf8')
+  assert.match(knowledge, /MAPA CONFIRMADO DE SUPORTE — INTERFACE ATUAL/)
+  assert.match(knowledge, /Campanhas > "Enviar mensagens"/)
+  assert.match(knowledge, /"Prospecção por e-mail"/)
+  assert.match(knowledge, /"E-mail marketing"/)
+  assert.match(knowledge, /WhatsApp > "Cadastrar WhatsApp"/)
+  assert.match(knowledge, /Funil de vendas > "Clientes"/)
+  assert.match(knowledge, /"Importar clientes"/)
+  assert.match(knowledge, /RETORNOS ATRASADOS/)
+  assert.match(knowledge, /USUÁRIOS E PERMISSÕES/)
+  assert.match(knowledge, /INTEGRAÇÕES/)
+  assert.match(knowledge, /Não descreva código, banco, funções internas, tabelas ou arquitetura/)
+})

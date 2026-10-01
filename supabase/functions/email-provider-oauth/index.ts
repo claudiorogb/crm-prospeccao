@@ -67,6 +67,9 @@ Deno.serve(async(req)=>{
         if(!r.ok)throw new Error(t?.message||t?.error||"Falha ao conectar Resend");
         await storeTokens({p_organization_id:st.organization_id,p_provider:"resend",p_email_address:st.sender_email,p_sender_email:st.sender_email,p_sender_name:st.sender_name||null,p_access_token:t.access_token,p_refresh_token:t.refresh_token||"",p_expires_at:new Date(Date.now()+Number(t.expires_in||900)*1000).toISOString(),p_provider_account_id:null,p_connected_by:st.user_id});
         await admin.from("email_connections").update({resend_full_access:true,updated_at:new Date().toISOString()}).eq("organization_id",st.organization_id);
+        const { data: ownerUser } = await admin.auth.admin.getUserById(st.user_id);
+        const ownerEmail = String(ownerUser?.user?.email || "").trim().toLowerCase();
+        if(ownerEmail) await admin.from("email_connections").update({reply_forward_email:ownerEmail,updated_at:new Date().toISOString()}).eq("organization_id",st.organization_id);
       }else{
         const g=await googleCredentials();if(!g.clientId||!g.clientSecret)throw new Error("Integração Gmail ainda não configurada pelo administrador da plataforma.");
         const body=new URLSearchParams({code,client_id:g.clientId,client_secret:g.clientSecret,redirect_uri:GMAIL_CALLBACK,grant_type:"authorization_code"});
@@ -77,6 +80,9 @@ Deno.serve(async(req)=>{
         if(!refresh)throw new Error("O Google não retornou autorização permanente. Desconecte o acesso anterior e tente novamente.");
         await storeTokens({p_organization_id:st.organization_id,p_provider:"gmail",p_email_address:profile.email,p_sender_email:profile.email,p_sender_name:profile.name||st.sender_name||null,p_access_token:t.access_token,p_refresh_token:refresh,p_expires_at:new Date(Date.now()+Number(t.expires_in||3600)*1000).toISOString(),p_provider_account_id:profile.sub||null,p_connected_by:st.user_id});
         await admin.from("email_connections").update({resend_full_access:false,updated_at:new Date().toISOString()}).eq("organization_id",st.organization_id);
+        const { data: ownerUser } = await admin.auth.admin.getUserById(st.user_id);
+        const ownerEmail = String(ownerUser?.user?.email || "").trim().toLowerCase();
+        if(ownerEmail) await admin.from("email_connections").update({reply_forward_email:ownerEmail,updated_at:new Date().toISOString()}).eq("organization_id",st.organization_id);
       }
       return redirect(`${returnUrl}/?email_oauth=success&provider=${provider}`);
     }catch(e){return redirect(`${returnUrl}/?email_oauth=error&provider=${provider}&message=${encodeURIComponent(e instanceof Error?e.message:String(e))}`)}

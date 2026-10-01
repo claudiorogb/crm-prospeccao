@@ -10,6 +10,48 @@ const UNSUBSCRIBE_BASE=`${SUPABASE_URL}/functions/v1/email-unsubscribe`;
 const TRACK_BASE=`${SUPABASE_URL}/functions/v1/email-campaign-track`;
 
 function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json"}})}
+function randomIndex(length:number){if(length<=1)return 0;const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);return Number(bytes[0]%length)}
+function applySpintax(value:string){
+ let output=String(value||"");const pattern=/\{([^{}]*\|[^{}]*)\}/g;
+ for(let pass=0;pass<12;pass+=1){
+  let changed=false;
+  output=output.replace(pattern,(_m,inner)=>{const options=String(inner).split("|").map((v:string)=>v.trim());if(options.length<2)return _m;changed=true;return options[randomIndex(options.length)]??""});
+  if(!changed)break;
+ }
+ return output;
+}
+function applyVariables(value:string,ctx:any){
+ return String(value||"")
+  .replaceAll("{nome}",ctx?.nome||"")
+  .replaceAll("{empresa}",ctx?.empresa||"")
+  .replaceAll("{cidade}",ctx?.cidade||"")
+  .replaceAll("{uf}",ctx?.uf||"")
+  .replaceAll("{telefone}",ctx?.telefone||"")
+  .replaceAll("{segmento}",ctx?.segmento||"")
+  .replaceAll("{email}",ctx?.email||"");
+}
+async function recipientContext(recipient:any){
+ const base={nome:recipient?.recipient_name||"",empresa:"",cidade:"",uf:"",telefone:"",segmento:"",email:recipient?.recipient_email||""};
+ if(recipient?.lead_id){
+  const {data}=await admin.from("leads").select("business_name,contact_name,city,state,phone,whatsapp_phone,segment,email").eq("id",recipient.lead_id).maybeSingle();
+  if(data)return {nome:data.contact_name||base.nome,empresa:data.business_name||"",cidade:data.city||"",uf:data.state||"",telefone:data.whatsapp_phone||data.phone||"",segmento:data.segment||"",email:data.email||base.email};
+ }
+ if(recipient?.marketing_contact_id){
+  const {data}=await admin.from("email_marketing_contacts").select("contact_name,company_name,email").eq("id",recipient.marketing_contact_id).maybeSingle();
+  if(data)return {...base,nome:data.contact_name||base.nome,empresa:data.company_name||"",email:data.email||base.email};
+ }
+ return base;
+}
+async function renderEmail(campaign:any,recipient:any){
+ const ctx=await recipientContext(recipient);
+ return {
+  ...campaign,
+  subject:applySpintax(applyVariables(campaign.subject,ctx)),
+  body_text:applySpintax(applyVariables(campaign.body_text,ctx)),
+  followup1_body:campaign.followup1_body?applySpintax(applyVariables(campaign.followup1_body,ctx)):campaign.followup1_body,
+  followup2_body:campaign.followup2_body?applySpintax(applyVariables(campaign.followup2_body,ctx)):campaign.followup2_body,
+ };
+}
 function escapeHtml(v:string){return v.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function bytesToBase64(bytes:Uint8Array){let out="";const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk)out+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));return btoa(out)}
 function base64urlText(value:string){const b64=bytesToBase64(new TextEncoder().encode(value));return b64.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
@@ -104,7 +146,7 @@ Deno.serve(async(req)=>{
    processed++;
    try{
     const [{data:recipient,error:rErr},{data:campaign,error:cErr},attachments,creds]=await Promise.all([
-     admin.from("email_campaign_recipients").select("id,recipient_email,recipient_name,unsubscribe_token,gmail_thread_id,sequence_step,replied_at").eq("id",c.recipient_id).single(),
+     admin.from("email_campaign_recipients").select("id,recipient_email,recipient_name,unsubscribe_token,gmail_thread_id,sequence_step,replied_at,lead_id,marketing_contact_id").eq("id",c.recipient_id).single(),
      admin.from("email_campaigns").select("id,organization_id,subject,body_text,followup1_body,followup2_body,from_email,from_name,provider,status,metrics_enabled,sequence_mode").eq("id",c.campaign_id).single(),
      signedAttachments(c.campaign_id),usableCreds(c.organization_id),
     ]);
@@ -113,7 +155,8 @@ Deno.serve(async(req)=>{
     if(campaign.sequence_mode&&creds.provider!=="gmail")throw new Error("Sequências automáticas de prospecção exigem Gmail.");
     if(recipient.replied_at){await admin.rpc("email_mark_prospecting_reply",{p_recipient_id:recipient.id});continue;}
     const step=Number(recipient.sequence_step||1);
-    const sendCampaign=campaign.sequence_mode?{...campaign,body_text:step===2?campaign.followup1_body:step===3?campaign.followup2_body:campaign.body_text}:campaign;
+    const personalizedCampaign=await renderEmail(campaign,recipient);
+    const sendCampaign=personalizedCampaign.sequence_mode?{...personalizedCampaign,body_text:step===2?personalizedCampaign.followup1_body:step===3?personalizedCampaign.followup2_body:personalizedCampaign.body_text}:personalizedCampaign;
     let trackingToken:string|null=null;
     if(campaign.metrics_enabled){const {data,error}=await admin.rpc("email_tracking_prepare",{p_recipient_id:recipient.id});if(error||!data)throw new Error("Não foi possível preparar o acompanhamento seguro deste e-mail.");trackingToken=String(data);}
     const result=creds.provider==="resend"?await sendResend(creds,recipient,sendCampaign,attachments,trackingToken):await sendGmail(creds,recipient,sendCampaign,attachments,trackingToken);

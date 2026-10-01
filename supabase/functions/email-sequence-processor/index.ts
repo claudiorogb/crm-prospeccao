@@ -8,6 +8,24 @@ const OAUTH_BASE=`${SUPABASE_URL}/functions/v1/email-provider-oauth`;
 const RESEND_CLIENT_ID=`${OAUTH_BASE}/client-metadata`;
 const UNSUBSCRIBE_BASE=`${SUPABASE_URL}/functions/v1/email-unsubscribe`;
 const REPLY_DOMAIN="auth.axiva.com.br";
+async function platformReplyAddress(){
+  const {data}=await admin.from("email_platform_config").select("generic_reply_address,generic_reply_status").eq("singleton",true).maybeSingle();
+  const address=String(data?.generic_reply_address||"").trim().toLowerCase();
+  return data?.generic_reply_status==="verified"&&address.includes("@")?address:"";
+}
+function replyAddressFor(r:any,settings:any,systemAddress:string){
+  if(settings?.resend_full_access&&settings?.reply_mode==="custom"&&settings?.custom_reply_status==="verified"&&String(settings?.custom_reply_email||"").includes("@"))return String(settings.custom_reply_email).trim().toLowerCase();
+  if(settings?.resend_full_access&&systemAddress)return systemAddress;
+  return `reply-${r.reply_token}@${REPLY_DOMAIN}`;
+}
+async function resendMessageId(accessToken:string,emailId:string){
+  for(let attempt=0;attempt<2;attempt+=1){
+    const res=await fetch(`https://api.resend.com/emails/${encodeURIComponent(emailId)}`,{headers:{Authorization:`Bearer ${accessToken}`}});
+    if(res.ok){const d=await res.json();const value=String(d?.message_id||"").trim();if(value)return value;}
+    if(attempt===0)await new Promise(resolve=>setTimeout(resolve,250));
+  }
+  return "";
+}
 
 function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json"}})}
 function bytesToBase64(bytes:Uint8Array){let out="";for(let i=0;i<bytes.length;i+=0x8000)out+=String.fromCharCode(...bytes.subarray(i,Math.min(i+0x8000,bytes.length)));return btoa(out)}
@@ -122,10 +140,9 @@ async function sendGmail(creds:any,r:any,c:any){
   const res=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{Authorization:`Bearer ${creds.access_token}`,"Content-Type":"application/json"},body:JSON.stringify(payload)});
   const d=await res.json();return {ok:res.ok,status:res.status,id:d?.id||null,threadId:d?.threadId||r.gmail_thread_id||null,error:d?.error?.message||(!res.ok?`Gmail HTTP ${res.status}`:null)};
 }
-async function sendResend(creds:any,r:any,c:any){
+async function sendResend(creds:any,r:any,c:any,replyAddress:string){
   const body=sequenceBody(r,c);
   const unsubscribe=`${UNSUBSCRIBE_BASE}?token=${r.unsubscribe_token}`;
-  const replyAddress=`reply-${r.reply_token}@${REPLY_DOMAIN}`;
   const from=c.from_name?`${c.from_name} <${c.from_email}>`:c.from_email;
   const payload:any={
     from,
@@ -145,15 +162,17 @@ Deno.serve(async(req)=>{
   try{
     const expected=await processorSecret();
     if(!expected||req.headers.get("X-Processor-Secret")!==expected)return json({error:"Unauthorized"},401);
+    const systemReplyAddress=await platformReplyAddress();
     let processed=0,sent=0,stopped=0,retried=0,failed=0;
     for(let i=0;i<20;i++){
       const {data:claim,error:claimError}=await admin.rpc("email_claim_next_sequence_recipient");
       if(claimError)throw claimError;const x=claim?.[0];if(!x)break;processed++;
       try{
-        const [{data:r,error:re},{data:c,error:ce},creds]=await Promise.all([
-          admin.from("email_campaign_recipients").select("id,recipient_email,recipient_name,unsubscribe_token,reply_token,gmail_thread_id,sequence_step,replied_at,lead_id,marketing_contact_id").eq("id",x.recipient_id).single(),
+        const [{data:r,error:re},{data:c,error:ce},creds,{data:replySettings}]=await Promise.all([
+          admin.from("email_campaign_recipients").select("id,recipient_email,recipient_name,unsubscribe_token,reply_token,gmail_thread_id,sequence_step,replied_at,lead_id,marketing_contact_id,resend_message_ids").eq("id",x.recipient_id).single(),
           admin.from("email_campaigns").select("id,subject,body_text,followup1_body,followup2_body,from_email,from_name,provider,sequence_mode").eq("id",x.campaign_id).single(),
-          usableCreds(x.organization_id)
+          usableCreds(x.organization_id),
+          admin.from("email_connections").select("reply_mode,custom_reply_email,custom_reply_status,resend_full_access").eq("organization_id",x.organization_id).maybeSingle()
         ]);
         if(re)throw re;if(ce)throw ce;if(!r||!c||!c.sequence_mode)throw new Error("Sequência inválida.");
         if(creds.provider!==c.provider)throw new Error("O provedor conectado mudou após a criação da sequência. Cancele e recrie a sequência.");
@@ -168,9 +187,17 @@ Deno.serve(async(req)=>{
         if(gateError)throw gateError;
         if(gate?.status!=="sending"||gate?.replied_at){stopped++;continue;}
         const renderedCampaign=await renderSequence(c,r);
-        const result=creds.provider==="resend"?await sendResend(creds,r,renderedCampaign):await sendGmail(creds,r,renderedCampaign);
+        const selectedReplyAddress=creds.provider==="resend"?replyAddressFor(r,replySettings,systemReplyAddress):"";
+        const result=creds.provider==="resend"?await sendResend(creds,r,renderedCampaign,selectedReplyAddress):await sendGmail(creds,r,renderedCampaign);
         if(result.ok){
           if(result.threadId)await admin.from("email_campaign_recipients").update({gmail_thread_id:result.threadId,updated_at:new Date().toISOString()}).eq("id",r.id);
+          if(creds.provider==="resend"&&replySettings?.resend_full_access&&result.id){
+            const messageId=await resendMessageId(creds.access_token,result.id);
+            if(messageId){
+              const ids=Array.from(new Set([...(Array.isArray(r.resend_message_ids)?r.resend_message_ids:[]),messageId]));
+              await admin.from("email_campaign_recipients").update({resend_message_ids:ids,updated_at:new Date().toISOString()}).eq("id",r.id);
+            }
+          }
           await admin.rpc("email_complete_recipient",{p_recipient_id:r.id,p_success:true,p_provider_message_id:result.id,p_error:null,p_retry_after_seconds:null});sent++;
         }else{
           const retry=[401,403,429,500,502,503,504].includes(Number(result.status))?3600:null;

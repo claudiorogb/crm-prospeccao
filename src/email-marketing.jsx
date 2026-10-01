@@ -30,7 +30,7 @@ function EmailVariableButtons({ onInsert }) {
             {label}
           </button>
         ))}
-        <button type="button" className="email-variable-token" onClick={() => onInsert('{opção 1|opção 2|opção 3}')} title="Inserir exemplo de Spintax">
+        <button type="button" className="email-variable-token" onClick={() => onInsert('{quero te apresentar|gostaria de apresentar|posso te mostrar}')} title="Inserir exemplo de Spintax">
           Spintax
         </button>
       </div>
@@ -287,6 +287,10 @@ function EmailProspectingSequence({ organization, connection }) {
 
   async function startSequence(event) {
     event.preventDefault()
+    if ([form.subject, form.first, form.followup1, form.followup2].some(value => String(value || '').includes('{opção 1|opção 2|opção 3}'))) {
+      setMessage('Edite o Spintax antes de iniciar. Substitua opção 1, opção 2 e opção 3 por frases reais.')
+      return
+    }
     if (connection?.status !== 'connected' || !['gmail', 'resend'].includes(connection?.provider)) return setMessage('Conecte uma conta Gmail ou Resend antes de iniciar a prospecção.')
     if (!basisConfirmed) return setMessage('Confirme a base legítima e a relevância comercial dos destinatários.')
     if (!selected.size) return setMessage('Selecione pelo menos um lead com e-mail.')
@@ -758,6 +762,10 @@ export function EmailMarketing({ organization, userEmail }) {
 
   async function createCampaign(event) {
     event.preventDefault()
+    if ([form.subject, form.body].some(value => String(value || '').includes('{opção 1|opção 2|opção 3}'))) {
+      setMessage('Edite o Spintax antes de salvar. Substitua opção 1, opção 2 e opção 3 por frases reais.')
+      return
+    }
     if (draftCampaignId) return setMessage('Esta campanha já foi salva. Escolha os destinatários e depois inicie o envio.')
     if (connection?.status !== 'connected') return setMessage('Conecte uma conta Gmail ou Resend antes de criar uma campanha.')
     if (!form.name.trim() || !form.subject.trim() || !form.body.trim()) return setMessage('Nome da campanha, assunto e mensagem são obrigatórios.')

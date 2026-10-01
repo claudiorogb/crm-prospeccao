@@ -218,6 +218,20 @@ USUÁRIOS E PERMISSÕES
 - Um usuário recém-criado não recebe automaticamente acesso a uma empresa; ele precisa ser vinculado.
 - Administrador da plataforma e administrador da empresa são papéis diferentes. Não use privilégios da plataforma como se fossem permissões comerciais do tenant.
 
+
+USUÁRIOS — FLUXO ATUAL CONFIRMADO
+- Criar uma conta no AXIVA CRM não vincula automaticamente o usuário a uma empresa.
+- O novo usuário deve primeiro usar "Criar conta" na tela de acesso, informar como deseja ser chamado, e-mail e senha. Depois de criar/confirmar a conta, ele pode permanecer em "Conta aguardando liberação" até receber um vínculo com uma empresa.
+- No fluxo atual de produção, a gestão completa de vínculo de usuários com empresas é feita pelo administrador do sistema. Administrador comum da empresa não possui hoje uma tela própria de autoatendimento para adicionar usuários.
+- Para o administrador do sistema, existem dois caminhos confirmados:
+  1) Administração > "Usuários": localizar o usuário e definir "Empresa", "Perfil do sistema", "Papel na empresa" e "Situação".
+  2) Administração > "Organizações": localizar a organização e clicar em "Usuários". Depois informar o e-mail, escolher o papel "Usuário", "Administrador" ou "Proprietário" e clicar em "Adicionar".
+- Na área Administração > Organizações > Usuários, membros existentes podem ter o papel alterado e podem ser "Suspender"/"Reativar" ou "Remover".
+- Em Administração > Usuários, os papéis apresentados na empresa são "Usuário", "Administrador da empresa" e "Proprietário"; as situações são "Ativo", "Inativo" e "Suspenso".
+- "Administrador do sistema" e "Administrador da empresa" são papéis diferentes. O primeiro administra a plataforma e organizações; o segundo não recebe automaticamente acesso à Administração do sistema.
+- Ao responder a um administrador de empresa que pergunte como adicionar usuários, explique que essa função ainda não está disponível como autoatendimento na interface comercial atual e que o vínculo precisa ser feito pelo administrador do sistema.
+- Não invente uma tela "Usuários" dentro da área comercial da empresa se ela não estiver disponível.
+
 INTEGRAÇÕES
 - A área administrativa de "Integrações" registra/prepara a intenção de integração, inclusive ERP, quando disponível ao administrador.
 - "Preparar integração" não significa que um conector ERP já esteja funcionando.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const edge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/index.ts', import.meta.url), 'utf8')
-const migration = fs.readFileSync(new URL('../supabase/migrations/20261001200000_ai_readonly_foundation.sql', import.meta.url), 'utf8')
+const migration = fs.readFileSync(new URL('../supabase/migrations/20261001210642_ai_readonly_foundation.sql', import.meta.url), 'utf8')
 const client = fs.readFileSync(new URL('../src/ai-client.js', import.meta.url), 'utf8')
 const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const main = fs.readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8')

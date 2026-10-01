@@ -24,6 +24,16 @@ const UF_OPTIONS = [
   'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'
 ]
 
+function previewSmartGreeting() {
+  const hour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    hourCycle: 'h23'
+  }).format(new Date()))
+  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
+  return `${greeting}, tudo bem?`
+}
+
 function previewSpintax(value) {
   let output = String(value || '')
   const pattern = /\{([^{}]*\|[^{}]*)\}/g
@@ -41,8 +51,7 @@ function previewSpintax(value) {
 }
 
 function renderTemplate(body, lead) {
-  const rendered = String(body || '')
-    .replaceAll('{nome}', lead?.contact_name || '')
+  const rendered = String(body || '').replaceAll('{saudacao}', previewSmartGreeting()).replaceAll('{nome}', '')
     .replaceAll('{empresa}', lead?.business_name || '')
     .replaceAll('{cidade}', lead?.city || '')
     .replaceAll('{uf}', lead?.state || '')
@@ -4266,8 +4275,9 @@ function Messages({ organization, userEmail }) {
             <label>Mensagem<textarea className="message-textarea" rows="7" value={form.body} onChange={e=>setForm({...form,body:e.target.value})} required/></label>
             <div className="variable-help">
               <strong>Variáveis:</strong>
-              <span>{'{nome}'}</span><span>{'{empresa}'}</span><span>{'{cidade}'}</span><span>{'{uf}'}</span><span>{'{telefone}'}</span><span>{'{segmento}'}</span><span>{'{email}'}</span>
-              <span>Spintax: {'{Olá|Oi|Bom dia}'}</span>
+              <span>{'{saudacao}'}</span><span>{'{empresa}'}</span><span>{'{cidade}'}</span><span>{'{uf}'}</span><span>{'{telefone}'}</span><span>{'{segmento}'}</span><span>{'{email}'}</span>
+              <span>Spintax: {'{opção 1|opção 2|opção 3}'}</span>
+              <span>{'{saudacao}'} usa o horário de São Paulo e alterna entre “tudo bem?”, “como vai?”, “como está?” e “tudo certo?”.</span>
             </div>
             <div className="message-preview"><span>Pré-visualização</span><p>{renderTemplate(form.body,preview)}</p></div>
             <div className="form-actions">

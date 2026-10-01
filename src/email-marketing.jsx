@@ -1063,31 +1063,26 @@ export function EmailMarketing({ organization, userEmail }) {
           </div>
         )}
 
-        {connection?.status === 'connected' && connection?.provider === 'resend' && (
+        {((connection?.status === 'connected' && connection?.provider === 'resend') || (connection?.status !== 'connected' && providerChoice === 'resend')) && (
           <div className="email-reply-settings">
             <div className="email-reply-settings-head">
               <div>
                 <strong>Respostas da prospecção</strong>
                 <span>Escolha como o endereço de resposta será apresentado ao destinatário.</span>
               </div>
-              <span className="email-reply-status">{connection.reply_mode === 'custom' ? 'Personalizado' : 'Padrão'}</span>
+              <span className="email-reply-status">{connection?.reply_mode === 'custom' ? 'Personalizado' : 'Padrão'}</span>
             </div>
 
-            {!connection.resend_full_access && (
-              <div className="notice">
-                Para usar o novo controle de respostas, atualize uma vez a autorização do E-mail corporativo.
-                <button type="button" className="secondary email-reply-inline-button" onClick={() => connectProvider('resend')} disabled={loading || replyLoading}>
-                  Atualizar autorização
-                </button>
-              </div>
+            {connection?.status !== 'connected' && (
+              <div className="notice">Conecte o E-mail corporativo acima para ativar ou configurar um domínio próprio para respostas.</div>
             )}
 
             <div className="email-reply-mode-grid">
               <button
                 type="button"
-                className={`email-reply-mode-card ${connection.reply_mode !== 'custom' ? 'selected' : ''}`}
+                className={`email-reply-mode-card ${connection?.reply_mode !== 'custom' ? 'selected' : ''}`}
                 onClick={() => changeReplyMode('system')}
-                disabled={replyLoading}
+                disabled={replyLoading || connection?.status !== 'connected'}
               >
                 <strong>Endereço padrão</strong>
                 <span>{replyConfig.system_reply_ready && replyConfig.system_reply_address
@@ -1096,13 +1091,13 @@ export function EmailMarketing({ organization, userEmail }) {
               </button>
               <button
                 type="button"
-                className={`email-reply-mode-card ${connection.reply_mode === 'custom' ? 'selected' : ''}`}
-                onClick={() => connection.custom_reply_status === 'verified' && changeReplyMode('custom')}
-                disabled={replyLoading || connection.custom_reply_status !== 'verified'}
+                className={`email-reply-mode-card ${connection?.reply_mode === 'custom' ? 'selected' : ''}`}
+                onClick={() => connection?.custom_reply_status === 'verified' && changeReplyMode('custom')}
+                disabled={replyLoading || connection?.status !== 'connected' || connection?.custom_reply_status !== 'verified'}
               >
                 <strong>Meu próprio domínio</strong>
-                <span>{connection.custom_reply_status === 'verified' && connection.custom_reply_email
-                  ? connection.custom_reply_email
+                <span>{connection?.custom_reply_status === 'verified' && connection?.custom_reply_email
+                  ? connection?.custom_reply_email
                   : 'Opcional. Requer configuração DNS uma única vez.'}</span>
               </button>
             </div>
@@ -1111,30 +1106,30 @@ export function EmailMarketing({ organization, userEmail }) {
               <div className="email-custom-reply-fields">
                 <label>
                   Endereço
-                  <input value={replyLocalPart} onChange={e => setReplyLocalPart(e.target.value)} placeholder="resposta" disabled={Boolean(connection.custom_reply_domain_id)} />
+                  <input value={replyLocalPart} onChange={e => setReplyLocalPart(e.target.value)} placeholder="resposta" disabled={connection?.status !== 'connected' || Boolean(connection?.custom_reply_domain_id)} />
                 </label>
                 <span className="email-reply-at">@</span>
                 <label>
                   Domínio
-                  <input value={replyDomain} onChange={e => setReplyDomain(e.target.value)} placeholder="empresa.com.br" disabled={Boolean(connection.custom_reply_domain_id)} />
+                  <input value={replyDomain} onChange={e => setReplyDomain(e.target.value)} placeholder="empresa.com.br" disabled={Boolean(connection?.custom_reply_domain_id)} />
                 </label>
-                {!connection.custom_reply_domain_id ? (
-                  <button type="button" className="secondary" onClick={startCustomReplyDomain} disabled={replyLoading || !replyDomain.trim()}>
+                {!connection?.custom_reply_domain_id ? (
+                  <button type="button" className="secondary" onClick={startCustomReplyDomain} disabled={replyLoading || connection?.status !== 'connected' || !replyDomain.trim()}>
                     Configurar domínio
                   </button>
                 ) : (
-                  <button type="button" className="secondary" onClick={verifyCustomReplyDomain} disabled={replyLoading || connection.custom_reply_status === 'verified'}>
-                    {connection.custom_reply_status === 'verified' ? 'DNS verificado' : 'Verificar DNS'}
+                  <button type="button" className="secondary" onClick={verifyCustomReplyDomain} disabled={replyLoading || connection?.status !== 'connected' || connection?.custom_reply_status === 'verified'}>
+                    {connection?.custom_reply_status === 'verified' ? 'DNS verificado' : 'Verificar DNS'}
                   </button>
                 )}
               </div>
 
-              {Array.isArray(connection.custom_reply_dns) && connection.custom_reply_dns.length > 0 && connection.custom_reply_status !== 'verified' && (
+              {Array.isArray(connection?.custom_reply_dns) && connection?.custom_reply_dns.length > 0 && connection?.custom_reply_status !== 'verified' && (
                 <div className="email-dns-records">
                   <strong>Registros DNS</strong>
                   <span>Adicione estes registros no provedor do seu domínio. Depois clique em Verificar DNS.</span>
                   <div className="email-dns-table">
-                    {connection.custom_reply_dns.map((record, index) => (
+                    {connection?.custom_reply_dns.map((record, index) => (
                       <div className="email-dns-row" key={`${record?.type || 'dns'}-${index}`}>
                         <span>{record?.type || '—'}</span>
                         <code>{record?.name || '—'}</code>

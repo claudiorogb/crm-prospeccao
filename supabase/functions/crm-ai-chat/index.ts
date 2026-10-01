@@ -38,6 +38,13 @@ function normalize(value: unknown) {
     .toLowerCase();
 }
 
+function containsOrganizationName(message: string, organizationName: string) {
+  const haystack = ` ${normalize(message).replace(/[^a-z0-9]+/g, " ").trim()} `;
+  const needleCore = normalize(organizationName).replace(/[^a-z0-9]+/g, " ").trim();
+  if (needleCore.length < 3) return false;
+  return haystack.includes(` ${needleCore} `);
+}
+
 function getPublishableKey() {
   const legacy = Deno.env.get("SUPABASE_ANON_KEY");
   if (legacy) return legacy;
@@ -358,6 +365,47 @@ Deno.serve(async (req) => {
     return json({ error: "IA não habilitada para esta empresa." }, 403);
   }
 
+  const scopes = inferScopes(message);
+
+  // Bloqueio preventivo de tentativa explícita de consultar outra organização.
+  // Apenas nomes são comparados no backend; nenhum dado da outra organização é carregado
+  // nem enviado ao modelo.
+  if (scopes.length) {
+    const { data: otherOrganizations, error: organizationGuardError } = await admin
+      .from("organizations")
+      .select("id,name")
+      .eq("is_active", true)
+      .neq("id", organizationId)
+      .limit(500);
+
+    if (organizationGuardError) {
+      return json({ error: "Não foi possível validar o escopo da empresa com segurança." }, 500);
+    }
+
+    const targetedOtherOrganization = (otherOrganizations || []).some((row: any) =>
+      containsOrganizationName(message, String(row?.name || ""))
+    );
+
+    if (targetedOtherOrganization) {
+      await admin.from("ai_request_audit").insert({
+        organization_id: organizationId,
+        user_id: user.id,
+        model,
+        data_scopes: [],
+        records_considered: 0,
+        duration_ms: Date.now() - startedAt,
+        success: true,
+        error_code: "cross_tenant_request_blocked",
+      });
+
+      return json({
+        answer: "Só posso consultar dados da empresa atual. Não acesso, confirmo ou listo dados de outras empresas.",
+        conversation_id: null,
+        data_scopes: [],
+      });
+    }
+  }
+
   const envDailyLimit = Number(Deno.env.get("AI_DAILY_MESSAGE_LIMIT") || DEFAULT_DAILY_LIMIT);
   const dailyLimit = Math.max(1, Math.min(
     Number(aiSetting.daily_message_limit || DEFAULT_DAILY_LIMIT),
@@ -418,7 +466,6 @@ Deno.serve(async (req) => {
     content: row.content,
   }));
 
-  const scopes = inferScopes(message);
   let crmContext: Record<string, unknown> = {};
   let recordsConsidered = 0;
 

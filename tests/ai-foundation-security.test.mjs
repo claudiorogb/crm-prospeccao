@@ -176,3 +176,14 @@ test('base de suporte documenta fluxo atual de usuários e permissões', () => {
   assert.match(knowledge, /Administrador comum da empresa não possui hoje uma tela própria/)
   assert.match(knowledge, /Não invente uma tela "Usuários" dentro da área comercial/)
 })
+
+
+test('base de suporte documenta permissões confirmadas por papel', () => {
+  const knowledge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/knowledge.ts', import.meta.url), 'utf8')
+  assert.match(knowledge, /PERMISSÕES CONFIRMADAS POR PAPEL/)
+  assert.match(knowledge, /captação de leads via Google Places é restrita/)
+  assert.match(knowledge, /Importação de clientes é restrita/)
+  assert.match(knowledge, /Cadastrar, conectar, alterar ou remover números de WhatsApp é restrito/)
+  assert.match(knowledge, /Conectar ou alterar a conta de e-mail da empresa é restrito/)
+  assert.match(knowledge, /não há uma função operacional confirmada que seja exclusiva de "Proprietário"/)
+})

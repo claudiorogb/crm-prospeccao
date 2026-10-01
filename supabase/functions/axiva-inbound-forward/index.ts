@@ -9,6 +9,22 @@ const FORWARD_FROM = "encaminhamento@axiva.com.br";
 const TECHNICAL_REPLY = /^reply-([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})@auth\.axiva\.com\.br$/i;
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 const validAddress = (address: unknown): address is string => typeof address === "string" && address.length <= 254 && /^[^\s<>@\r\n]+@[^\s<>@\r\n]+\.[^\s<>@\r\n]+$/.test(address);
+const normalizeMessageId=(value:unknown)=>String(value||"").trim();
+function replyReferences(original:any){
+  const values:string[]=[];
+  const add=(v:unknown)=>{
+    if(Array.isArray(v)){for(const x of v)add(x);return;}
+    const s=String(v||"").trim();if(!s)return;
+    const matches=s.match(/<[^<>]+>/g);
+    if(matches?.length)values.push(...matches.map(normalizeMessageId));else values.push(normalizeMessageId(s));
+  };
+  add(original?.inReplyTo);add(original?.references);
+  for(const h of original?.headers||[]){
+    const name=String(h?.key||h?.name||"").toLowerCase();
+    if(name==="in-reply-to"||name==="references")add(h?.value);
+  }
+  return Array.from(new Set(values.filter(Boolean))).slice(0,50);
+}
 
 Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -64,9 +80,21 @@ Deno.serve(async (request: Request) => {
     if (match) { replyToken = match[1]; break; }
   }
   const isMailboxInbound = recipients.some((value:string) => INBOUND_ADDRESSES.has(value));
-  if (!replyToken && !isMailboxInbound) return json({ ok: true, ignored: true });
-
   const admin = createClient(dbUrl, dbKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const {data:platformReply}=await admin.from("email_platform_config").select("generic_reply_address,generic_reply_status").eq("singleton",true).maybeSingle();
+  const systemReply=platformReply?.generic_reply_status==="verified"?String(platformReply?.generic_reply_address||"").trim().toLowerCase():"";
+  let customReplyConnection:any=null;
+  if(!replyToken&&!isMailboxInbound&&recipients.length){
+    const {data}=await admin.from("email_connections")
+      .select("organization_id,custom_reply_email,custom_reply_status")
+      .eq("reply_mode","custom").eq("custom_reply_status","verified")
+      .in("custom_reply_email",recipients).limit(2);
+    if(Array.isArray(data)&&data.length===1)customReplyConnection=data[0];
+  }
+  const isSystemReply=Boolean(systemReply&&recipients.includes(systemReply));
+  const isCustomReply=Boolean(customReplyConnection);
+  if (!replyToken && !isMailboxInbound && !isSystemReply && !isCustomReply) return json({ ok: true, ignored: true });
+
   const { data: claimed, error: claimError } = await admin.rpc("axiva_claim_inbound_forward", { p_email_id: receivedId });
   if (claimError) return json({ error: "Unable to claim email" }, 503);
   if (!claimed) return json({ ok: true, duplicate: true });
@@ -83,6 +111,7 @@ Deno.serve(async (request: Request) => {
     const replyAddress = preferredReply && "address" in preferredReply ? preferredReply.address : sender;
 
     let target = DESTINATION;
+    let matchedRecipient:any=null;
     if (replyToken) {
       const { data: recipient, error: recipientError } = await admin
         .from("email_campaign_recipients")
@@ -90,30 +119,43 @@ Deno.serve(async (request: Request) => {
         .eq("reply_token", replyToken)
         .maybeSingle();
       if (recipientError) throw recipientError;
-      if (!recipient) {
-        await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: "Unknown prospecting reply token" }).eq("received_email_id", receivedId);
+      matchedRecipient=recipient;
+    } else if(isSystemReply||isCustomReply) {
+      const refs=replyReferences(original);
+      if(refs.length){
+        let query=admin.from("email_campaign_recipients")
+          .select("id,organization_id,campaign_id,recipient_email")
+          .eq("recipient_email",sender.toLowerCase())
+          .overlaps("resend_message_ids",refs)
+          .limit(2);
+        if(isCustomReply&&customReplyConnection?.organization_id)query=query.eq("organization_id",customReplyConnection.organization_id);
+        const {data:matches,error:matchError}=await query;
+        if(matchError)throw matchError;
+        if(Array.isArray(matches)&&matches.length===1)matchedRecipient=matches[0];
+      }
+    }
+    if(replyToken||isSystemReply||isCustomReply){
+      if(!matchedRecipient){
+        await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: "Prospecting reply could not be matched safely" }).eq("received_email_id", receivedId);
         return json({ ok: true, ignored: true });
       }
-
       const { data: campaign, error: campaignError } = await admin
         .from("email_campaigns")
         .select("provider,sequence_mode")
-        .eq("id", recipient.campaign_id)
-        .eq("organization_id", recipient.organization_id)
+        .eq("id", matchedRecipient.campaign_id)
+        .eq("organization_id", matchedRecipient.organization_id)
         .maybeSingle();
       if (campaignError) throw campaignError;
       if (!campaign?.sequence_mode || campaign?.provider !== "resend") {
-        await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: "Reply token is not attached to an active Resend prospecting sequence" }).eq("received_email_id", receivedId);
+        await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: "Reply is not attached to an active Resend prospecting sequence" }).eq("received_email_id", receivedId);
         return json({ ok: true, ignored: true });
       }
-
-      const { error: markError } = await admin.rpc("email_mark_prospecting_reply", { p_recipient_id: recipient.id });
+      const { error: markError } = await admin.rpc("email_mark_prospecting_reply", { p_recipient_id: matchedRecipient.id });
       if (markError) throw markError;
-
       const { data: connection, error: connectionError } = await admin
         .from("email_connections")
         .select("sender_email,email_address")
-        .eq("organization_id", recipient.organization_id)
+        .eq("organization_id", matchedRecipient.organization_id)
         .maybeSingle();
       if (connectionError) throw connectionError;
       const configuredTarget = String(connection?.sender_email || connection?.email_address || "").trim().toLowerCase();
@@ -140,7 +182,7 @@ Deno.serve(async (request: Request) => {
     if (error || !data?.id) throw new Error(`Resend forward failed: ${error?.name || "provider error"}`);
     const { error: saveError } = await admin.from("axiva_inbound_forwarding").update({ status: "forwarded", forwarded_email_id: data.id, updated_at: new Date().toISOString(), last_error: null }).eq("received_email_id", receivedId);
     if (saveError) throw new Error("Unable to record successful forwarding");
-    return json({ ok: true, prospecting_reply: Boolean(replyToken) });
+    return json({ ok: true, prospecting_reply: Boolean(replyToken||isSystemReply||isCustomReply) });
   } catch (error) {
     await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: error instanceof Error ? error.message.slice(0, 160) : "Forwarding failed" }).eq("received_email_id", receivedId);
     return json({ error: "Forwarding failed, retry requested" }, 503);

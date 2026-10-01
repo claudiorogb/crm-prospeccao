@@ -5302,6 +5302,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['messages','Mensagens'],
     ['sending','Enviar mensagens'],
     ['email-prospecting','Prospecção por e-mail'],
+    ['email-connection','Cadastrar e-mail'],
     ['email','E-mail marketing']
   ]
 
@@ -5320,7 +5321,8 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
       {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
       {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'email-prospecting' && <EmailProspecting organization={organization} userEmail={userEmail} />}
-      {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} />}
+      {section === 'email-connection' && <EmailMarketing organization={organization} userEmail={userEmail} mode="connection" />}
+      {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} mode="marketing" />}
     </>
   )
 }

@@ -78,7 +78,13 @@ test('contexto padrão exclui conteúdo de mensagem, email e dados pessoais sens
 })
 
 
-test('interface da IA permanece escondida sem feature flag', () => {
-  assert.match(app, /const AI_UI_ENABLED = import\.meta\.env\.VITE_AI_UI_ENABLED === 'true'/)
-  assert.match(app, /AI_UI_ENABLED &&/)
+test('interface da IA é habilitada somente por feature flag da organização', () => {
+  assert.doesNotMatch(app, /VITE_AI_UI_ENABLED/)
+  assert.match(app, /settings\?\.feature_flags\?\.ai_assistant === true/)
+  assert.match(app, /adminSandboxSettings\?\.feature_flags\?\.ai_assistant === true/)
+})
+
+test('modelo inicial incorreto é normalizado para o identificador atual', () => {
+  assert.match(edge, /configuredModel === "gpt-5\.6-luna"/)
+  assert.match(edge, /"gpt-6-luna"/)
 })

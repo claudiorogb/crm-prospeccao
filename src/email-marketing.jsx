@@ -589,7 +589,7 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
     if (connectionResult.data?.sender_email) setSenderEmail(connectionResult.data.sender_email)
     if (connectionResult.data?.sender_name) setSenderName(connectionResult.data.sender_name)
     if (connectionResult.data?.custom_reply_domain) setReplyDomain(connectionResult.data.custom_reply_domain)
-    if (!connectionResult.error && connectionResult.data?.provider === 'resend') {
+    if (!connectionResult.error && (mode === 'connection' || connectionResult.data?.provider === 'resend')) {
       try {
         const settings = await invokeReplySettings({ action: 'get', organization_id: organization.id })
         if (sequence === loadSequence.current) {
@@ -598,7 +598,9 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
             system_reply_address: settings?.system_reply_address || null
           })
         }
-      } catch {}
+      } catch {
+        if (sequence === loadSequence.current) setReplyConfig({ system_reply_ready: false, system_reply_address: null })
+      }
     } else if (sequence === loadSequence.current) {
       setReplyConfig({ system_reply_ready: false, system_reply_address: null })
     }
@@ -1066,7 +1068,7 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
           </div>
         )}
 
-        {((connection?.status === 'connected' && connection?.provider === 'resend') || (connection?.status !== 'connected' && providerChoice === 'resend')) && (
+        {((connection?.status === 'connected' && connection?.provider === 'resend') || (mode === 'connection' && connection?.status !== 'connected')) && (
           <div className="email-reply-settings">
             <div className="email-reply-settings-head">
               <div>
@@ -1077,7 +1079,7 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
             </div>
 
             {connection?.status !== 'connected' && (
-              <div className="notice">Conecte o E-mail corporativo acima para ativar ou configurar um domínio próprio para respostas.</div>
+              <div className="notice">Para usar domínio próprio nas respostas, conecte primeiro o E-mail corporativo. O endereço padrão do CRM é `resposta@axiva.com.br`.</div>
             )}
 
             <div className="email-reply-mode-grid">

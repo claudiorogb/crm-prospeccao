@@ -10,6 +10,39 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024
 const MAX_TOTAL_BYTES = 15 * 1024 * 1024
 const CAMPAIGN_PAGE_SIZE = 20
 
+const EMAIL_VARIABLE_TOKENS = [
+  ['{saudacao}', 'Saudação'],
+  ['{empresa}', 'Empresa'],
+  ['{cidade}', 'Cidade'],
+  ['{uf}', 'UF'],
+  ['{telefone}', 'Telefone'],
+  ['{segmento}', 'Segmento'],
+  ['{email}', 'E-mail'],
+]
+
+function EmailVariableButtons({ onInsert }) {
+  return (
+    <>
+      <div className="email-variable-buttons">
+        <strong>Adicionar ao texto:</strong>
+        {EMAIL_VARIABLE_TOKENS.map(([token, label]) => (
+          <button key={token} type="button" className="email-variable-token" onClick={() => onInsert(token)} title={`Inserir ${token}`}>
+            {label}
+          </button>
+        ))}
+        <button type="button" className="email-variable-token" onClick={() => onInsert('{opção 1|opção 2|opção 3}')} title="Inserir exemplo de Spintax">
+          Spintax
+        </button>
+      </div>
+      <div className="email-variable-explanation">
+        <span><strong>Saudação:</strong> usa o horário de São Paulo e alterna a pergunta final.</span>
+        <span><strong>Demais botões:</strong> inserem os dados do contato automaticamente.</span>
+        <span><strong>Spintax:</strong> cria variações, por exemplo {'{quero te mostrar|gostaria de apresentar|posso te apresentar}'}.</span>
+      </div>
+    </>
+  )
+}
+
 function providerLabel(provider) {
   if (provider === 'gmail') return 'Gmail'
   if (provider === 'resend') return 'E-mail corporativo'
@@ -82,6 +115,30 @@ function EmailProspectingSequence({ organization, connection }) {
   const [prospectingRecipients, setProspectingRecipients] = useState([])
   const [openProspectingId, setOpenProspectingId] = useState(null)
   const [recipientActionId, setRecipientActionId] = useState(null)
+  const subjectRef = useRef(null)
+  const firstRef = useRef(null)
+  const followup1Ref = useRef(null)
+  const followup2Ref = useRef(null)
+  const [activeComposeField, setActiveComposeField] = useState('first')
+
+  function insertSequenceToken(token) {
+    const refs = { subject: subjectRef, first: firstRef, followup1: followup1Ref, followup2: followup2Ref }
+    const ref = refs[activeComposeField] || firstRef
+    const node = ref.current
+    const value = String(form[activeComposeField] || '')
+    const start = node?.selectionStart ?? value.length
+    const end = node?.selectionEnd ?? value.length
+    const next = value.slice(0, start) + token + value.slice(end)
+    setForm(current => ({ ...current, [activeComposeField]: next }))
+
+    requestAnimationFrame(() => {
+      const target = ref.current
+      if (!target) return
+      const cursor = start + token.length
+      target.focus()
+      target.setSelectionRange(cursor, cursor)
+    })
+  }
 
   async function loadProspects() {
     if (!organization?.id) return
@@ -287,13 +344,13 @@ function EmailProspectingSequence({ organization, connection }) {
       <form onSubmit={startSequence}>
         <div className="field-grid two">
           <label>Nome da prospecção<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Prospecção contabilidades Campinas" /></label>
-          <label>Assunto<input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Assunto do e-mail" /></label>
+          <label>Assunto<input ref={subjectRef} value={form.subject} onFocus={() => setActiveComposeField('subject')} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Assunto do e-mail" /></label>
         </div>
-        <div className="muted">Spintax: <strong>{'{opção 1|opção 2|opção 3}'}</strong> • Variáveis: {'{saudacao}'} {'{empresa}'} {'{cidade}'} {'{uf}'} {'{telefone}'} {'{segmento}'} {'{email}'} • {'{saudacao}'} usa o horário de São Paulo e alterna a pergunta final.</div>
+        <EmailVariableButtons onInsert={insertSequenceToken} />
         <div className="field-grid three">
-          <label>Dia 1 — primeiro contato<textarea rows="6" value={form.first} onChange={e => setForm({ ...form, first: e.target.value })} /></label>
-          <label>Dia 4 — follow-up<textarea rows="6" value={form.followup1} onChange={e => setForm({ ...form, followup1: e.target.value })} /></label>
-          <label>Dia 8 — último contato<textarea rows="6" value={form.followup2} onChange={e => setForm({ ...form, followup2: e.target.value })} /></label>
+          <label>Dia 1 — primeiro contato<textarea ref={firstRef} rows="6" value={form.first} onFocus={() => setActiveComposeField('first')} onChange={e => setForm({ ...form, first: e.target.value })} /></label>
+          <label>Dia 4 — follow-up<textarea ref={followup1Ref} rows="6" value={form.followup1} onFocus={() => setActiveComposeField('followup1')} onChange={e => setForm({ ...form, followup1: e.target.value })} /></label>
+          <label>Dia 8 — último contato<textarea ref={followup2Ref} rows="6" value={form.followup2} onFocus={() => setActiveComposeField('followup2')} onChange={e => setForm({ ...form, followup2: e.target.value })} /></label>
         </div>
 
         <div className="email-manual-prospect-add">
@@ -454,6 +511,27 @@ export function EmailMarketing({ organization, userEmail }) {
   const [loading, setLoading] = useState(false)
   const [draftCampaignId, setDraftCampaignId] = useState(null)
   const [commercialConsentConfirmed, setCommercialConsentConfirmed] = useState(false)
+  const campaignSubjectRef = useRef(null)
+  const campaignBodyRef = useRef(null)
+  const [activeCampaignField, setActiveCampaignField] = useState('body')
+
+  function insertCampaignToken(token) {
+    const ref = activeCampaignField === 'subject' ? campaignSubjectRef : campaignBodyRef
+    const value = String(form[activeCampaignField] || '')
+    const node = ref.current
+    const start = node?.selectionStart ?? value.length
+    const end = node?.selectionEnd ?? value.length
+    const next = value.slice(0, start) + token + value.slice(end)
+    setForm(current => ({ ...current, [activeCampaignField]: next }))
+
+    requestAnimationFrame(() => {
+      const target = ref.current
+      if (!target) return
+      const cursor = start + token.length
+      target.focus()
+      target.setSelectionRange(cursor, cursor)
+    })
+  }
 
   async function loadData(nextCampaignPage = campaignPage) {
     if (!organization?.id) return
@@ -905,10 +983,10 @@ export function EmailMarketing({ organization, userEmail }) {
 
         <div className="field-grid">
           <label>Nome da campanha<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Novidades de setembro" required /></label>
-          <label>Assunto<input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Assunto do e-mail" required /></label>
+          <label>Assunto<input ref={campaignSubjectRef} value={form.subject} onFocus={() => setActiveCampaignField('subject')} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Assunto do e-mail" required /></label>
         </div>
-        <div className="muted">Spintax: <strong>{'{opção 1|opção 2|opção 3}'}</strong> • Variáveis: {'{saudacao}'} {'{empresa}'} {'{cidade}'} {'{uf}'} {'{telefone}'} {'{segmento}'} {'{email}'} • {'{saudacao}'} usa o horário de São Paulo e alterna a pergunta final.</div>
-        <label>Mensagem<textarea className="email-body-textarea" value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} placeholder="Escreva a mensagem da campanha..." required /></label>
+        <EmailVariableButtons onInsert={insertCampaignToken} />
+        <label>Mensagem<textarea ref={campaignBodyRef} className="email-body-textarea" value={form.body} onFocus={() => setActiveCampaignField('body')} onChange={e => setForm({ ...form, body: e.target.value })} placeholder="Escreva a mensagem da campanha..." required /></label>
 
         <div className="email-attachments-box">
           <div><strong>Anexos</strong><span>Até 10 MB por arquivo e 15 MB no total.</span></div>

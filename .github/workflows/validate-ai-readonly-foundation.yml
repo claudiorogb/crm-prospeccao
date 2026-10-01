@@ -9,7 +9,7 @@ on:
       - 'src/App.jsx'
       - 'src/styles.css'
       - 'supabase/functions/crm-ai-chat/**'
-      - 'supabase/migrations/20261001200000_ai_readonly_foundation.sql'
+      - 'supabase/migrations/20261001210642_ai_readonly_foundation.sql'
       - 'tests/ai-foundation-security.test.mjs'
       - '.github/workflows/validate-ai-readonly-foundation.yml'
   workflow_dispatch:

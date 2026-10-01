@@ -58,6 +58,22 @@ REGRAS E FLUXOS PRINCIPAIS
 - Administrador da plataforma é diferente de administrador de uma empresa.
 - Criar conta não significa acesso automático a uma empresa.
 
+
+INTERFACE CONFIRMADA — CAMPANHAS E CAPTAÇÃO
+- No menu lateral, abra "Campanhas". Dentro dessa área existem as abas: "Público-alvo", "Campanha", "Captação", "Mensagens", "Enviar mensagens", "Prospecção por e-mail", "E-mail marketing" e "Cadastrar e-mail".
+- Para criar um público-alvo: Campanhas > Público-alvo > botão "Novo público".
+- No formulário "Criar público-alvo", preencha "Segmento / público-alvo". A "Descrição" é opcional. Quando houver segmento do catálogo, termos sugeridos podem ser selecionados; também é possível adicionar termos personalizados. O botão final é "Salvar público".
+- É obrigatório existir pelo menos um público-alvo ativo antes de criar uma campanha. Se não existir, o sistema informa: "Crie pelo menos um público-alvo antes de criar uma campanha."
+- Para criar uma campanha: Campanhas > aba "Campanha" > botão "Nova campanha".
+- O formulário "Configurar prospecção" contém: "Nome da campanha", "Público-alvo", "Cidade", "UF", "Raio (km)" e "Limite de contatos/dia". O botão final é "Salvar campanha".
+- A campanha recém-criada fica inicialmente em status de rascunho. Criar a campanha não executa a captação e não envia mensagens.
+- Para captar empresas: Campanhas > aba "Captação". Selecione a campanha no campo "Campanha" e clique em "Captar automaticamente".
+- A tela de Captação mostra o público-alvo, região e raio da campanha antes da busca.
+- A captação utiliza os termos associados ao público-alvo e alterna esses termos automaticamente entre as buscas.
+- A entrada de um lead considera público-alvo, raio, estabelecimento operacional e ausência de duplicidade. Por isso a quantidade de novos leads pode ser menor que a quantidade encontrada.
+- Depois da captação, o sistema informa resultados como "Encontrados", "Novos leads", "Duplicados", "Fora do raio" e "Não operacionais".
+- Em suporte sobre criação de campanha de captação, forneça o fluxo completo quando o usuário pedir passo a passo: primeiro público-alvo, depois campanha e por fim captação.
+
 IA — FASE INICIAL
 - Pode explicar recursos e consultar contexto autorizado.
 - Não pode criar campanha, captar lead, enviar WhatsApp, enviar e-mail, alterar lead, mover Kanban, registrar venda, editar configuração, administrar usuários, excluir ou arquivar registros.

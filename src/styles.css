@@ -3886,3 +3886,76 @@ button:not(:disabled):active,
   .manual-recipient-form-v73{grid-template-columns:1fr}
   .manual-recipient-form-v73 .inline-btn{width:100%}
 }
+
+
+/* AI assistant — hidden unless VITE_AI_UI_ENABLED=true */
+.ai-assistant-panel {
+  display: grid;
+  gap: 16px;
+  max-width: 980px;
+}
+
+.ai-assistant-messages {
+  min-height: 320px;
+  max-height: 58vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px;
+}
+
+.ai-assistant-empty {
+  margin: auto;
+  text-align: center;
+  max-width: 520px;
+}
+
+.ai-message {
+  max-width: 82%;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--panel, #fff);
+}
+
+.ai-message.user {
+  align-self: flex-end;
+}
+
+.ai-message.assistant {
+  align-self: flex-start;
+}
+
+.ai-message strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.ai-message p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.ai-assistant-form {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-assistant-form textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 88px;
+}
+
+@media (max-width: 720px) {
+  .ai-message {
+    max-width: 94%;
+  }
+
+  .ai-assistant-messages {
+    min-height: 260px;
+  }
+}

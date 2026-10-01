@@ -20,7 +20,6 @@ import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
 import AiAssistant from './ai-assistant'
 import whatsappIcon from './whatsapp-icon.png'
 
-const AI_UI_ENABLED = import.meta.env.VITE_AI_UI_ENABLED === 'true'
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
@@ -8781,6 +8780,14 @@ export default function App() {
                   active={adminCommercialPage === 'overdue-returns'}
                   onOpen={() => { setAdminCommercialPage('overdue-returns'); setMobileMenuOpen(false) }}
                 />}
+                {adminSandboxSettings?.feature_flags?.ai_assistant === true && (
+                  <button
+                    className={`nav-item ${adminCommercialPage === 'ai-assistant' ? 'active' : ''}`}
+                    onClick={() => { setAdminCommercialPage('ai-assistant'); setMobileMenuOpen(false) }}
+                  >
+                    <MessageSquareText size={18}/> Assistente IA
+                  </button>
+                )}
                 <button
                   className={`nav-item ${adminCommercialPage === 'test-settings' ? 'active' : ''}`}
                   onClick={() => { setAdminCommercialPage('test-settings'); setMobileMenuOpen(false) }}
@@ -8888,6 +8895,9 @@ export default function App() {
                 setAdminCommercialPage('sales-funnel')
               }} />
           )}
+          {commercialMode && sandboxOrganization && adminSandboxSettings?.feature_flags?.ai_assistant === true && adminCommercialPage === 'ai-assistant' && (
+            <AiAssistant userEmail={userEmail} />
+          )}
           {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'test-settings' && (
             <AdminTestSettings organization={sandboxOrganization} userEmail={userEmail} userId={session.user.id} />
           )}
@@ -8959,7 +8969,7 @@ export default function App() {
           <button className={`nav-item ${page === 'sales' ? 'active' : ''}`} onClick={() => { setPage('sales'); setMobileMenuOpen(false) }}>
             <Activity size={18}/> Vendas
           </button>
-          {AI_UI_ENABLED && (
+          {settings?.feature_flags?.ai_assistant === true && (
             <button className={`nav-item ${page === 'ai-assistant' ? 'active' : ''}`} onClick={() => { setPage('ai-assistant'); setMobileMenuOpen(false) }}>
               <MessageSquareText size={18}/> Assistente IA
             </button>
@@ -9024,7 +9034,7 @@ export default function App() {
             }}
           />
         )}
-        {AI_UI_ENABLED && page === 'ai-assistant' && (
+        {settings?.feature_flags?.ai_assistant === true && page === 'ai-assistant' && (
           <AiAssistant userEmail={userLabel} />
         )}
         {page === 'platform-sales' && isSystemAdmin && (

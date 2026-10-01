@@ -76,3 +76,9 @@ test('função falha fechada sem habilitação explícita', () => {
 test('contexto padrão exclui conteúdo de mensagem, email e dados pessoais sensíveis', () => {
   assert.doesNotMatch(edge, /select\(["'][^"']*(phone|email|cnpj|commercial_notes|text_body|rendered_message)[^"']*["']\)/)
 })
+
+
+test('interface da IA permanece escondida sem feature flag', () => {
+  assert.match(app, /const AI_UI_ENABLED = import\.meta\.env\.VITE_AI_UI_ENABLED === 'true'/)
+  assert.match(app, /AI_UI_ENABLED &&/)
+})

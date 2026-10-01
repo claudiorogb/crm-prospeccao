@@ -139,3 +139,13 @@ test('bloqueio cross-tenant continua existindo após exceção do nome do produt
   assert.match(edge, /cross_tenant_request_blocked/)
   assert.match(edge, /containsOrganizationName\(message, String\(row\?\.name \|\| ""\)\)/)
 })
+
+
+test('base de suporte contém fluxo confirmado de campanha e captação', () => {
+  const knowledge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/knowledge.ts', import.meta.url), 'utf8')
+  assert.match(knowledge, /INTERFACE CONFIRMADA — CAMPANHAS E CAPTAÇÃO/)
+  assert.match(knowledge, /Campanhas > Público-alvo > botão "Novo público"/)
+  assert.match(knowledge, /Campanhas > aba "Campanha" > botão "Nova campanha"/)
+  assert.match(knowledge, /clique em "Captar automaticamente"/)
+  assert.match(knowledge, /Criar a campanha não executa a captação e não envia mensagens/)
+})

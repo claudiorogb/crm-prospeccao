@@ -19,7 +19,7 @@ Esta fundação é deliberadamente aditiva e permanece dormente até ativação 
 7. **Minimização de dados.** Telefone, e-mail, CNPJ, observações, textos de WhatsApp/e-mail e credenciais não entram no contexto padrão.
 8. **Falha fechada.** A IA só funciona quando `AI_ENABLED=true` e a organização possuir configuração própria `enabled=true`.
 9. **Sem chave no navegador.** `OPENAI_API_KEY` é segredo exclusivo da Edge Function. Nunca deve existir variável `VITE_OPENAI_*`.
-10. **Responses API.** A integração é preparada para a API Responses. O modelo é configurável por segredo/variável de backend.
+10. **Responses API.** A integração é preparada para a API Responses. O modelo é configurável por segredo/variável de backend. No piloto atual, o identificador usado é `gpt-6-luna`.
 
 ## Componentes preparados
 
@@ -83,7 +83,7 @@ Obrigatórias na ativação:
 
 Opcionais:
 
-- `OPENAI_MODEL` — se ausente, a fundação usa `gpt-5.6-luna`.
+- `OPENAI_MODEL` — se ausente, a fundação usa `gpt-6-luna`.
 - `AI_DAILY_MESSAGE_LIMIT` — limite de segurança global; o valor por organização pode ser menor.
 
 As variáveis são segredos da Edge Function/Supabase. Não criar equivalentes com prefixo `VITE_`.

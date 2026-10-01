@@ -11,8 +11,11 @@ const TRACK_BASE=`${SUPABASE_URL}/functions/v1/email-campaign-track`;
 
 function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json"}})}
 function randomIndex(length:number){if(length<=1)return 0;const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);return Number(bytes[0]%length)}
+function normalizeLegacySpintax(value:string){
+ return String(value||"").replace(/\{\s*op(?:ç|c)ão\s*1\s*\|\s*op(?:ç|c)ão\s*2\s*\|\s*op(?:ç|c)ão\s*3\s*\}/gi,"{Quero te apresentar|Gostaria de apresentar|Posso te mostrar}");
+}
 function applySpintax(value:string){
- let output=String(value||"");const pattern=/\{([^{}]*\|[^{}]*)\}/g;
+ let output=normalizeLegacySpintax(value);const pattern=/\{([^{}]*\|[^{}]*)\}/g;
  for(let pass=0;pass<12;pass+=1){
   let changed=false;
   output=output.replace(pattern,(_m,inner)=>{const options=String(inner).split("|").map((v:string)=>v.trim());if(options.length<2)return _m;changed=true;return options[randomIndex(options.length)]??""});

@@ -16,8 +16,11 @@ function clean(v:string){return String(v||"").replace(/[\r\n]+/g," ").trim()}
 function enc(v:string){return `=?UTF-8?B?${bytesToBase64(new TextEncoder().encode(v))}?=`}
 function html(v:string){return String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/\n/g,"<br>")}
 function randomIndex(length:number){if(length<=1)return 0;const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);return Number(bytes[0]%length)}
+function normalizeLegacySpintax(value:string){
+ return String(value||"").replace(/\{\s*op(?:ç|c)ão\s*1\s*\|\s*op(?:ç|c)ão\s*2\s*\|\s*op(?:ç|c)ão\s*3\s*\}/gi,"{Quero te apresentar|Gostaria de apresentar|Posso te mostrar}");
+}
 function applySpintax(value:string){
-  let output=String(value||"");const pattern=/\{([^{}]*\|[^{}]*)\}/g;
+  let output=normalizeLegacySpintax(value);const pattern=/\{([^{}]*\|[^{}]*)\}/g;
   for(let pass=0;pass<12;pass+=1){
     let changed=false;
     output=output.replace(pattern,(_m,inner)=>{const options=String(inner).split("|").map((v:string)=>v.trim());if(options.length<2)return _m;changed=true;return options[randomIndex(options.length)]??""});

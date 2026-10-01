@@ -539,6 +539,7 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
   const [replyDomain, setReplyDomain] = useState('')
   const [replyLocalPart, setReplyLocalPart] = useState('resposta')
   const [replyLoading, setReplyLoading] = useState(false)
+  const [showCustomDomainConfig, setShowCustomDomainConfig] = useState(false)
 
   function insertCampaignToken(token) {
     const ref = activeCampaignField === 'subject' ? campaignSubjectRef : campaignBodyRef
@@ -1024,129 +1025,179 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
       {message && <div className="notice">{message}</div>}
 
       {mode === 'connection' && <section className="panel email-connection-panel">
-        <div className="email-section-title">
-          <div><span className="eyebrow">CONTA DE ENVIO</span><h2>Escolha como enviar</h2></div>
-          {connection?.status === 'connected' && <span className="email-connected-badge">Conectado</span>}
-        </div>
+        {connection?.status !== 'connected' ? (
+          <>
+            <div className="email-section-title">
+              <div><span className="eyebrow">CONTA DE ENVIO</span><h2>Escolha como enviar</h2></div>
+            </div>
 
-        {connection?.status === 'connected' ? (
-          <div className="email-connected-grid">
-            <div><span>Provedor</span><strong>{providerLabel(connection.provider)}</strong></div>
-            <div><span>Remetente</span><strong>{connection.sender_email || connection.email_address}</strong></div>
-            <div><span>Limite diário AXIVA</span><strong>{todayUsage} / {dailyLimit || '—'}</strong></div>
-            <div><span>Fila</span><strong>{limits?.sending_paused ? 'Pausada pelo administrador' : 'Ativa'}</strong></div>
-          </div>
-        ) : (
-          <div className="email-provider-grid">
-            <article className={`email-provider-card ${providerChoice === 'gmail' ? 'selected' : ''}`}>
-              <button type="button" className="email-provider-select" onClick={() => setProviderChoice('gmail')}>
-                <strong>Gmail</strong><span>Conecte sua conta Google.</span>
-              </button>
-              <button type="button" className="primary" disabled={loading} onClick={() => connectProvider('gmail')}>Conectar Gmail</button>
-            </article>
-            <article className={`email-provider-card ${providerChoice === 'resend' ? 'selected' : ''}`}>
-              <button type="button" className="email-provider-select" onClick={() => setProviderChoice('resend')}>
-                <strong>E-mail corporativo</strong><span>Conecte com seu e-mail corporativo</span>
-              </button>
-              <label>Nome do remetente<input value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Ex.: AXIVA" /></label>
-              <label>E-mail remetente<input type="email" value={senderEmail} onChange={e => setSenderEmail(e.target.value)} placeholder="contato@empresa.com.br" /></label>
-              <button type="button" className="primary" disabled={loading} onClick={() => connectProvider('resend')}>Conectar E-mail corporativo</button>
-            </article>
-          </div>
-        )}
+            <div className="email-provider-grid">
+              <article className="email-provider-card">
+                <div className="email-provider-select">
+                  <strong>Gmail</strong>
+                  <span>Conecte sua conta Google.</span>
+                </div>
+                <button type="button" className="primary" disabled={loading} onClick={() => connectProvider('gmail')}>
+                  Conectar Gmail
+                </button>
+              </article>
 
-        {connection?.status === 'connected' && (
-          <div className="form-actions email-connection-actions">
-            {connection.provider === 'resend' && (
-              <>
-                <input value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Nome do remetente" />
-                <input type="email" value={senderEmail} onChange={e => setSenderEmail(e.target.value)} placeholder="remetente@empresa.com.br" />
-                <button type="button" className="secondary" onClick={saveResendSender} disabled={loading}>Salvar remetente</button>
-              </>
-            )}
-            <button type="button" className="secondary" onClick={disconnectProvider} disabled={loading}>Desconectar conta</button>
-          </div>
-        )}
-
-        {((connection?.status === 'connected' && connection?.provider === 'resend') || (mode === 'connection' && connection?.status !== 'connected')) && (
-          <div className="email-reply-settings">
-            <div className="email-reply-settings-head">
+              <article className="email-provider-card">
+                <div className="email-provider-select">
+                  <strong>E-mail corporativo</strong>
+                  <span>Conecte com seu e-mail corporativo</span>
+                </div>
+                <label>Nome do remetente
+                  <input value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Ex.: AXIVA" />
+                </label>
+                <label>E-mail remetente
+                  <input type="email" value={senderEmail} onChange={e => setSenderEmail(e.target.value)} placeholder="contato@empresa.com.br" />
+                </label>
+                <button type="button" className="primary" disabled={loading} onClick={() => connectProvider('resend')}>
+                  Conectar E-mail corporativo
+                </button>
+              </article>
+            </div>
+          </>
+        ) : connection?.provider === 'resend' ? (
+          <>
+            <div className="email-section-title">
               <div>
-                <strong>Respostas da prospecção</strong>
-                <span>Escolha como o endereço de resposta será apresentado ao destinatário.</span>
+                <span className="eyebrow">E-MAIL CORPORATIVO CONECTADO</span>
+                <h2>Escolha como o endereço de resposta será apresentado ao destinatário</h2>
               </div>
-              <span className="email-reply-status">{connection?.reply_mode === 'custom' ? 'Personalizado' : 'Padrão'}</span>
+              <span className="email-connected-badge">Conectado</span>
             </div>
 
-            {connection?.status !== 'connected' && (
-              <div className="notice">Para usar domínio próprio nas respostas, conecte primeiro o E-mail corporativo. O endereço padrão do CRM é `resposta@axiva.com.br`.</div>
-            )}
+            <div className="email-reply-choice-grid">
+              <article className={`email-reply-choice-card ${connection?.reply_mode !== 'custom' ? 'selected' : ''}`}>
+                <div>
+                  <span className="email-reply-option-number">Opção 1</span>
+                  <h3>Endereço padrão</h3>
+                  <p><strong>Não requer configuração.</strong></p>
+                  <p>O endereço padrão de resposta é <strong>resposta@axiva.com.br</strong>.</p>
+                  <p>Seus clientes vão ver esse endereço na hora de responder seus e-mails enviados nas campanhas.</p>
+                  <p>Os e-mails serão enviados normalmente para sua caixa de entrada.</p>
+                </div>
+                <button
+                  type="button"
+                  className={connection?.reply_mode !== 'custom' ? 'secondary' : 'primary'}
+                  onClick={() => changeReplyMode('system')}
+                  disabled={replyLoading || connection?.reply_mode !== 'custom'}
+                >
+                  {connection?.reply_mode !== 'custom' ? 'Em uso' : 'Usar endereço padrão'}
+                </button>
+              </article>
 
-            <div className="email-reply-mode-grid">
-              <button
-                type="button"
-                className={`email-reply-mode-card ${connection?.reply_mode !== 'custom' ? 'selected' : ''}`}
-                onClick={() => changeReplyMode('system')}
-                disabled={replyLoading || connection?.status !== 'connected'}
-              >
-                <strong>Endereço padrão</strong>
-                <span>{replyConfig.system_reply_ready && replyConfig.system_reply_address
-                  ? replyConfig.system_reply_address
-                  : 'O endereço neutro da plataforma ainda não foi ativado.'}</span>
-              </button>
-              <button
-                type="button"
-                className={`email-reply-mode-card ${connection?.reply_mode === 'custom' ? 'selected' : ''}`}
-                onClick={() => connection?.custom_reply_status === 'verified' && changeReplyMode('custom')}
-                disabled={replyLoading || connection?.status !== 'connected' || connection?.custom_reply_status !== 'verified'}
-              >
-                <strong>Meu próprio domínio</strong>
-                <span>{connection?.custom_reply_status === 'verified' && connection?.custom_reply_email
-                  ? connection?.custom_reply_email
-                  : 'Opcional. Requer configuração DNS uma única vez.'}</span>
-              </button>
+              <article className={`email-reply-choice-card ${connection?.reply_mode === 'custom' ? 'selected' : ''}`}>
+                <div>
+                  <span className="email-reply-option-number">Opção 2</span>
+                  <h3>Usar um domínio próprio nas respostas</h3>
+                  <p>Seus clientes vão ver o endereço da sua empresa na hora de responder seus e-mails enviados nas campanhas.</p>
+                  <p><strong>Requer configuração de DNS no seu provedor.</strong></p>
+                  {connection?.custom_reply_status === 'verified' && connection?.custom_reply_email && (
+                    <p>Domínio configurado: <strong>{connection.custom_reply_email}</strong></p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => setShowCustomDomainConfig(true)}
+                  disabled={replyLoading}
+                >
+                  Configurar domínio
+                </button>
+              </article>
             </div>
 
-            <div className="email-custom-reply-box">
-              <div className="email-custom-reply-fields">
-                <label>
-                  Endereço
-                  <input value={replyLocalPart} onChange={e => setReplyLocalPart(e.target.value)} placeholder="resposta" disabled={connection?.status !== 'connected' || Boolean(connection?.custom_reply_domain_id)} />
-                </label>
-                <span className="email-reply-at">@</span>
-                <label>
-                  Domínio
-                  <input value={replyDomain} onChange={e => setReplyDomain(e.target.value)} placeholder="empresa.com.br" disabled={Boolean(connection?.custom_reply_domain_id)} />
-                </label>
-                {!connection?.custom_reply_domain_id ? (
-                  <button type="button" className="secondary" onClick={startCustomReplyDomain} disabled={replyLoading || connection?.status !== 'connected' || !replyDomain.trim()}>
-                    Configurar domínio
-                  </button>
-                ) : (
-                  <button type="button" className="secondary" onClick={verifyCustomReplyDomain} disabled={replyLoading || connection?.status !== 'connected' || connection?.custom_reply_status === 'verified'}>
-                    {connection?.custom_reply_status === 'verified' ? 'DNS verificado' : 'Verificar DNS'}
-                  </button>
+            {showCustomDomainConfig && (
+              <div className="email-custom-reply-box email-custom-reply-expanded">
+                <div className="email-reply-settings-head">
+                  <div>
+                    <strong>Configuração do domínio próprio</strong>
+                    <span>Informe o endereço que será usado e siga os registros DNS exibidos abaixo.</span>
+                  </div>
+                  <button type="button" className="secondary" onClick={() => setShowCustomDomainConfig(false)}>Fechar</button>
+                </div>
+
+                <div className="email-custom-reply-fields">
+                  <label>
+                    Endereço
+                    <input value={replyLocalPart} onChange={e => setReplyLocalPart(e.target.value)} placeholder="resposta" disabled={Boolean(connection?.custom_reply_domain_id)} />
+                  </label>
+                  <span className="email-reply-at">@</span>
+                  <label>
+                    Domínio
+                    <input value={replyDomain} onChange={e => setReplyDomain(e.target.value)} placeholder="empresa.com.br" disabled={Boolean(connection?.custom_reply_domain_id)} />
+                  </label>
+                  {!connection?.custom_reply_domain_id ? (
+                    <button type="button" className="secondary" onClick={startCustomReplyDomain} disabled={replyLoading || !replyDomain.trim()}>
+                      Gerar configuração DNS
+                    </button>
+                  ) : (
+                    <button type="button" className="secondary" onClick={verifyCustomReplyDomain} disabled={replyLoading || connection?.custom_reply_status === 'verified'}>
+                      {connection?.custom_reply_status === 'verified' ? 'DNS verificado' : 'Verificar DNS'}
+                    </button>
+                  )}
+                </div>
+
+                {Array.isArray(connection?.custom_reply_dns) && connection.custom_reply_dns.length > 0 && connection?.custom_reply_status !== 'verified' && (
+                  <div className="email-dns-records">
+                    <strong>Registros DNS</strong>
+                    <span>Adicione estes registros no seu provedor de domínio. Depois clique em Verificar DNS.</span>
+                    <div className="email-dns-table">
+                      {connection.custom_reply_dns.map((record, index) => (
+                        <div className="email-dns-row" key={`${record?.type || 'dns'}-${index}`}>
+                          <span>{record?.type || '—'}</span>
+                          <code>{record?.name || '—'}</code>
+                          <code>{record?.value || record?.content || '—'}</code>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {connection?.custom_reply_status === 'verified' && connection?.custom_reply_email && (
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => changeReplyMode('custom')}
+                      disabled={replyLoading || connection?.reply_mode === 'custom'}
+                    >
+                      {connection?.reply_mode === 'custom' ? 'Domínio próprio em uso' : 'Usar domínio próprio'}
+                    </button>
+                  </div>
                 )}
               </div>
+            )}
 
-              {Array.isArray(connection?.custom_reply_dns) && connection?.custom_reply_dns.length > 0 && connection?.custom_reply_status !== 'verified' && (
-                <div className="email-dns-records">
-                  <strong>Registros DNS</strong>
-                  <span>Adicione estes registros no provedor do seu domínio. Depois clique em Verificar DNS.</span>
-                  <div className="email-dns-table">
-                    {connection?.custom_reply_dns.map((record, index) => (
-                      <div className="email-dns-row" key={`${record?.type || 'dns'}-${index}`}>
-                        <span>{record?.type || '—'}</span>
-                        <code>{record?.name || '—'}</code>
-                        <code>{record?.value || record?.content || '—'}</code>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="form-actions email-connection-actions email-connection-footer">
+              <span className="muted">Remetente conectado: {connection.sender_email || connection.email_address}</span>
+              <button type="button" className="secondary" onClick={disconnectProvider} disabled={loading}>Desconectar conta</button>
             </div>
-          </div>
+          </>
+        ) : (
+          <>
+            <div className="email-section-title">
+              <div>
+                <span className="eyebrow">GMAIL CONECTADO</span>
+                <h2>Conta de e-mail conectada</h2>
+              </div>
+              <span className="email-connected-badge">Conectado</span>
+            </div>
+            <div className="email-connected-grid">
+              <div><span>Provedor</span><strong>Gmail</strong></div>
+              <div><span>Remetente</span><strong>{connection.sender_email || connection.email_address}</strong></div>
+              <div><span>Limite diário AXIVA</span><strong>{todayUsage} / {dailyLimit || '—'}</strong></div>
+              <div><span>Fila</span><strong>{limits?.sending_paused ? 'Pausada pelo administrador' : 'Ativa'}</strong></div>
+            </div>
+            <div className="form-actions email-connection-actions">
+              <button type="button" className="secondary" onClick={disconnectProvider} disabled={loading}>Desconectar conta</button>
+            </div>
+          </>
         )}
+
         {connection?.status === 'error' && <div className="notice error">A conexão precisa de atenção: {connection.last_error || 'reconecte a conta.'}</div>}
       </section>}
 

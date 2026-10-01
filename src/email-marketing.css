@@ -382,3 +382,27 @@
   .email-reply-choice-grid{grid-template-columns:1fr}
   .email-connection-footer{align-items:stretch}
 }
+
+
+/* Guia didático para configuração de DNS do endereço de resposta */
+.email-dns-record-card{display:grid;grid-template-columns:90px minmax(130px,.8fr) minmax(220px,1.7fr) 110px 110px 150px auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #e2e8f0}
+.email-dns-record-card>div{display:grid;gap:3px;min-width:0}
+.email-dns-record-card span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
+.email-dns-record-card code{font-size:11px;white-space:normal;overflow-wrap:anywhere}
+.email-dns-value{min-width:0}
+.email-dns-guide{margin-top:14px;padding:16px;border:1px solid #dbe4ee;border-radius:12px;background:#fff}
+.email-dns-guide h3{margin:0 0 6px}
+.email-dns-guide>p{margin:0 0 14px;line-height:1.5}
+.email-dns-guide ol{margin:0;padding-left:22px;display:grid;gap:12px}
+.email-dns-guide li{padding-left:4px}
+.email-dns-guide li strong,.email-dns-guide li span{display:block}
+.email-dns-guide li span{margin-top:3px;font-size:13px;line-height:1.45;color:#475569}
+.email-dns-guide .notice{margin-top:16px}
+@media(max-width:1100px){
+  .email-dns-record-card{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .email-dns-record-card .email-dns-value{grid-column:1/-1}
+}
+@media(max-width:760px){
+  .email-dns-record-card{grid-template-columns:1fr}
+  .email-dns-record-card .email-dns-value{grid-column:auto}
+}

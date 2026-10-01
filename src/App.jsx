@@ -4191,6 +4191,10 @@ function Messages({ organization, userEmail }) {
 
   async function saveTemplate(e) {
     e.preventDefault()
+    if (form.body.includes('{opção 1|opção 2|opção 3}')) {
+      setMessage('Edite o Spintax antes de salvar. Substitua opção 1, opção 2 e opção 3 por frases reais.')
+      return
+    }
     setLoading(true)
     setMessage('')
     const target = segments.find(s=>s.id===form.target_segment_id)
@@ -4306,7 +4310,7 @@ function Messages({ organization, userEmail }) {
                   {label}
                 </button>
               ))}
-              <button type="button" className="variable-token-button" onClick={() => insertMessageToken('{opção 1|opção 2|opção 3}')} title="Inserir exemplo de Spintax">
+              <button type="button" className="variable-token-button" onClick={() => insertMessageToken('{quero te apresentar|gostaria de apresentar|posso te mostrar}')} title="Inserir exemplo de Spintax">
                 Spintax
               </button>
             </div>

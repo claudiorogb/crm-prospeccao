@@ -193,7 +193,7 @@ test('análise comercial não carrega manual completo por padrão', () => {
   assert.match(edge, /function isSupportQuestion\(message: string\)/)
   assert.match(edge, /buildInstructions\(isSupportQuestion\(message\)\)/)
   assert.match(edge, /if \(includeSupportKnowledge\) base\.push\("", AXIVA_AI_KNOWLEDGE\)/)
-  assert.match(edge, /max_output_tokens: 1400/)
+  assert.match(edge, /max_output_tokens: 2400/)
 })
 
 test('resposta incompleta do provedor recebe diagnóstico específico', () => {

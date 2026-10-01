@@ -17,13 +17,39 @@ function normalizePhone(value: string | null) {
   return digits.startsWith("55") ? digits : `55${digits}`;
 }
 
+function randomIndex(length: number) {
+  if (length <= 1) return 0;
+  const bytes = new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  return Number(bytes[0] % length);
+}
+
+function applySpintax(value: string) {
+  let output = String(value || "");
+  const pattern = /\{([^{}]*\|[^{}]*)\}/g;
+  for (let pass = 0; pass < 12; pass += 1) {
+    let changed = false;
+    output = output.replace(pattern, (_match, inner) => {
+      const options = String(inner).split("|").map((item) => item.trim());
+      if (options.length < 2) return _match;
+      changed = true;
+      return options[randomIndex(options.length)] ?? "";
+    });
+    if (!changed) break;
+  }
+  return output;
+}
+
 function renderTemplate(body: string, lead: any) {
-  return String(body || "")
+  const withVariables = String(body || "")
+    .replaceAll("{nome}", lead?.contact_name || "")
     .replaceAll("{empresa}", lead?.business_name || "")
     .replaceAll("{cidade}", lead?.city || "")
     .replaceAll("{uf}", lead?.state || "")
-    .replaceAll("{telefone}", lead?.phone || "")
-    .replaceAll("{segmento}", lead?.segment || "");
+    .replaceAll("{telefone}", lead?.whatsapp_phone || lead?.phone || "")
+    .replaceAll("{segmento}", lead?.segment || "")
+    .replaceAll("{email}", lead?.email || "");
+  return applySpintax(withVariables);
 }
 
 function localDateKey(date: Date) {
@@ -183,7 +209,7 @@ Deno.serve(async (req) => {
 
     const { data: leads, error: leadsError } = await admin
       .from("leads")
-      .select("id,campaign_id,target_segment_id,business_name,segment,phone,city,state,status")
+      .select("id,campaign_id,target_segment_id,business_name,contact_name,segment,phone,whatsapp_phone,email,city,state,status")
       .eq("organization_id", organizationId)
       .in("id", leadIds);
     if (leadsError) throw leadsError;

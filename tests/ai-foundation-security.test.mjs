@@ -118,3 +118,13 @@ test('base operacional define BRL para valores monetários de vendas', () => {
   assert.match(knowledge, /Valores monetários de vendas no AXIVA CRM são tratados em reais \(BRL\)/)
   assert.match(knowledge, /apresente em R\$/)
 })
+
+
+test('base operacional define suporte online do CRM com passo a passo seguro', () => {
+  const knowledge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/knowledge.ts', import.meta.url), 'utf8')
+  assert.match(knowledge, /SUPORTE ONLINE DO AXIVA CRM/)
+  assert.match(knowledge, /passo a passo curto/)
+  assert.match(knowledge, /nomes reais das áreas e botões conhecidos/)
+  assert.match(knowledge, /Nunca invente botão, menu, campo, página, status, integração ou comportamento/)
+  assert.match(knowledge, /suporte significa orientar e consultar; não significa executar alterações/)
+})

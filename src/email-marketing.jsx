@@ -101,6 +101,23 @@ async function invokeEmailProvider(body) {
   return data || {}
 }
 
+async function invokeReplySettings(body) {
+  const { data, error } = await supabase.functions.invoke('email-reply-settings', { body })
+  if (error) {
+    let message = error.message || 'Não foi possível atualizar o endereço de resposta.'
+    try {
+      const context = error.context
+      if (context?.json) {
+        const payload = await context.json()
+        if (payload?.error) message = payload.error
+      }
+    } catch {}
+    throw new Error(data?.error || message)
+  }
+  if (data?.error) throw new Error(data.error)
+  return data || {}
+}
+
 
 function EmailProspectingSequence({ organization, connection }) {
   const [leads, setLeads] = useState([])
@@ -518,6 +535,10 @@ export function EmailMarketing({ organization, userEmail }) {
   const campaignSubjectRef = useRef(null)
   const campaignBodyRef = useRef(null)
   const [activeCampaignField, setActiveCampaignField] = useState('body')
+  const [replyConfig, setReplyConfig] = useState({ system_reply_ready: false, system_reply_address: null })
+  const [replyDomain, setReplyDomain] = useState('')
+  const [replyLocalPart, setReplyLocalPart] = useState('resposta')
+  const [replyLoading, setReplyLoading] = useState(false)
 
   function insertCampaignToken(token) {
     const ref = activeCampaignField === 'subject' ? campaignSubjectRef : campaignBodyRef
@@ -542,7 +563,7 @@ export function EmailMarketing({ organization, userEmail }) {
     const sequence = ++loadSequence.current
     setCampaignListLoading(true)
     const [connectionResult, limitResult, clientsResult, marketingResult, campaignResult] = await Promise.all([
-      supabase.from('email_connections').select('organization_id,provider,email_address,sender_email,sender_name,status,last_error,connected_at').eq('organization_id', organization.id).maybeSingle(),
+      supabase.from('email_connections').select('organization_id,provider,email_address,sender_email,sender_name,status,last_error,connected_at,reply_mode,custom_reply_domain,custom_reply_email,custom_reply_domain_id,custom_reply_status,custom_reply_dns,resend_full_access').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('organization_email_limits').select('*').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('leads').select('id,business_name,contact_name,email,city,state,status,email_marketing_opt_out').eq('organization_id', organization.id).is('deleted_at', null).order('business_name'),
       supabase.from('email_marketing_contacts').select('id,email,contact_name,company_name,source,status,consent_confirmed,unsubscribed_at').eq('organization_id', organization.id).order('email'),
@@ -567,6 +588,20 @@ export function EmailMarketing({ organization, userEmail }) {
     }
     if (connectionResult.data?.sender_email) setSenderEmail(connectionResult.data.sender_email)
     if (connectionResult.data?.sender_name) setSenderName(connectionResult.data.sender_name)
+    if (connectionResult.data?.custom_reply_domain) setReplyDomain(connectionResult.data.custom_reply_domain)
+    if (!connectionResult.error && connectionResult.data?.provider === 'resend') {
+      try {
+        const settings = await invokeReplySettings({ action: 'get', organization_id: organization.id })
+        if (sequence === loadSequence.current) {
+          setReplyConfig({
+            system_reply_ready: Boolean(settings?.system_reply_ready),
+            system_reply_address: settings?.system_reply_address || null
+          })
+        }
+      } catch {}
+    } else if (sequence === loadSequence.current) {
+      setReplyConfig({ system_reply_ready: false, system_reply_address: null })
+    }
   }
 
   useEffect(() => {
@@ -746,6 +781,55 @@ export function EmailMarketing({ organization, userEmail }) {
       setMessage(error.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function changeReplyMode(mode) {
+    setReplyLoading(true); setMessage('')
+    try {
+      await invokeReplySettings({ action: 'set_mode', organization_id: organization.id, mode })
+      setMessage(mode === 'custom' ? 'Endereço de resposta personalizado ativado.' : 'Endereço de resposta padrão ativado.')
+      await loadData()
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível alterar o endereço de resposta.')
+    } finally {
+      setReplyLoading(false)
+    }
+  }
+
+  async function startCustomReplyDomain() {
+    const domain = replyDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '')
+    const localPart = replyLocalPart.trim().toLowerCase() || 'resposta'
+    if (!domain) return setMessage('Informe o domínio que será usado nas respostas.')
+    setReplyLoading(true); setMessage('')
+    try {
+      const data = await invokeReplySettings({
+        action: 'start_custom_domain',
+        organization_id: organization.id,
+        domain,
+        local_part: localPart
+      })
+      setMessage(data?.status === 'verified'
+        ? 'Domínio de resposta verificado.'
+        : 'Configuração criada. Adicione os registros DNS abaixo e depois clique em Verificar DNS.')
+      await loadData()
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível iniciar a configuração do domínio.')
+    } finally {
+      setReplyLoading(false)
+    }
+  }
+
+  async function verifyCustomReplyDomain() {
+    setReplyLoading(true); setMessage('')
+    try {
+      const data = await invokeReplySettings({ action: 'verify_custom_domain', organization_id: organization.id })
+      setMessage(data?.verified ? 'DNS verificado. O endereço personalizado já está ativo.' : 'DNS ainda não foi verificado. Confira os registros e tente novamente.')
+      await loadData()
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível verificar o DNS.')
+    } finally {
+      setReplyLoading(false)
     }
   }
 
@@ -976,6 +1060,91 @@ export function EmailMarketing({ organization, userEmail }) {
               </>
             )}
             <button type="button" className="secondary" onClick={disconnectProvider} disabled={loading}>Desconectar conta</button>
+          </div>
+        )}
+
+        {connection?.status === 'connected' && connection?.provider === 'resend' && (
+          <div className="email-reply-settings">
+            <div className="email-reply-settings-head">
+              <div>
+                <strong>Respostas da prospecção</strong>
+                <span>Escolha como o endereço de resposta será apresentado ao destinatário.</span>
+              </div>
+              <span className="email-reply-status">{connection.reply_mode === 'custom' ? 'Personalizado' : 'Padrão'}</span>
+            </div>
+
+            {!connection.resend_full_access && (
+              <div className="notice">
+                Para usar o novo controle de respostas, atualize uma vez a autorização do E-mail corporativo.
+                <button type="button" className="secondary email-reply-inline-button" onClick={() => connectProvider('resend')} disabled={loading || replyLoading}>
+                  Atualizar autorização
+                </button>
+              </div>
+            )}
+
+            <div className="email-reply-mode-grid">
+              <button
+                type="button"
+                className={`email-reply-mode-card ${connection.reply_mode !== 'custom' ? 'selected' : ''}`}
+                onClick={() => changeReplyMode('system')}
+                disabled={replyLoading}
+              >
+                <strong>Endereço padrão</strong>
+                <span>{replyConfig.system_reply_ready && replyConfig.system_reply_address
+                  ? replyConfig.system_reply_address
+                  : 'O endereço neutro da plataforma ainda não foi ativado.'}</span>
+              </button>
+              <button
+                type="button"
+                className={`email-reply-mode-card ${connection.reply_mode === 'custom' ? 'selected' : ''}`}
+                onClick={() => connection.custom_reply_status === 'verified' && changeReplyMode('custom')}
+                disabled={replyLoading || connection.custom_reply_status !== 'verified'}
+              >
+                <strong>Meu próprio domínio</strong>
+                <span>{connection.custom_reply_status === 'verified' && connection.custom_reply_email
+                  ? connection.custom_reply_email
+                  : 'Opcional. Requer configuração DNS uma única vez.'}</span>
+              </button>
+            </div>
+
+            <div className="email-custom-reply-box">
+              <div className="email-custom-reply-fields">
+                <label>
+                  Endereço
+                  <input value={replyLocalPart} onChange={e => setReplyLocalPart(e.target.value)} placeholder="resposta" disabled={Boolean(connection.custom_reply_domain_id)} />
+                </label>
+                <span className="email-reply-at">@</span>
+                <label>
+                  Domínio
+                  <input value={replyDomain} onChange={e => setReplyDomain(e.target.value)} placeholder="empresa.com.br" disabled={Boolean(connection.custom_reply_domain_id)} />
+                </label>
+                {!connection.custom_reply_domain_id ? (
+                  <button type="button" className="secondary" onClick={startCustomReplyDomain} disabled={replyLoading || !replyDomain.trim()}>
+                    Configurar domínio
+                  </button>
+                ) : (
+                  <button type="button" className="secondary" onClick={verifyCustomReplyDomain} disabled={replyLoading || connection.custom_reply_status === 'verified'}>
+                    {connection.custom_reply_status === 'verified' ? 'DNS verificado' : 'Verificar DNS'}
+                  </button>
+                )}
+              </div>
+
+              {Array.isArray(connection.custom_reply_dns) && connection.custom_reply_dns.length > 0 && connection.custom_reply_status !== 'verified' && (
+                <div className="email-dns-records">
+                  <strong>Registros DNS</strong>
+                  <span>Adicione estes registros no provedor do seu domínio. Depois clique em Verificar DNS.</span>
+                  <div className="email-dns-table">
+                    {connection.custom_reply_dns.map((record, index) => (
+                      <div className="email-dns-row" key={`${record?.type || 'dns'}-${index}`}>
+                        <span>{record?.type || '—'}</span>
+                        <code>{record?.name || '—'}</code>
+                        <code>{record?.value || record?.content || '—'}</code>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
         {connection?.status === 'error' && <div className="notice error">A conexão precisa de atenção: {connection.last_error || 'reconecte a conta.'}</div>}

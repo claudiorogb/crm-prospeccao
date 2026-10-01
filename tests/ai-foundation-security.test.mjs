@@ -128,3 +128,14 @@ test('base operacional define suporte online do CRM com passo a passo seguro', (
   assert.match(knowledge, /Nunca invente botão, menu, campo, página, status, integração ou comportamento/)
   assert.match(knowledge, /suporte significa orientar e consultar; não significa executar alterações/)
 })
+
+
+test('nome do produto AXIVA CRM não dispara falso bloqueio de tenant', () => {
+  assert.match(edge, /replace\(\/\\baxiva crm\\b\/g, " "\)/)
+  assert.match(edge, /replace\(\/\\bcrm axiva\\b\/g, " "\)/)
+})
+
+test('bloqueio cross-tenant continua existindo após exceção do nome do produto', () => {
+  assert.match(edge, /cross_tenant_request_blocked/)
+  assert.match(edge, /containsOrganizationName\(message, String\(row\?\.name \|\| ""\)\)/)
+})

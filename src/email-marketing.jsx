@@ -1142,19 +1142,79 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
                 </div>
 
                 {Array.isArray(connection?.custom_reply_dns) && connection.custom_reply_dns.length > 0 && connection?.custom_reply_status !== 'verified' && (
-                  <div className="email-dns-records">
-                    <strong>Registros DNS</strong>
-                    <span>Adicione estes registros no seu provedor de domínio. Depois clique em Verificar DNS.</span>
-                    <div className="email-dns-table">
-                      {connection.custom_reply_dns.map((record, index) => (
-                        <div className="email-dns-row" key={`${record?.type || 'dns'}-${index}`}>
-                          <span>{record?.type || '—'}</span>
-                          <code>{record?.name || '—'}</code>
-                          <code>{record?.value || record?.content || '—'}</code>
-                        </div>
-                      ))}
+                  <>
+                    <div className="email-dns-records">
+                      <strong>Dados para configurar no DNS</strong>
+                      <span>Cadastre exatamente os registros abaixo no painel DNS do seu domínio. Não apague registros que já existem.</span>
+                      <div className="email-dns-table">
+                        {connection.custom_reply_dns.map((record, index) => {
+                          const dnsValue = record?.value || record?.content || '—'
+                          const dnsName = record?.name || '@'
+                          return (
+                            <div className="email-dns-record-card" key={`${record?.type || 'dns'}-${index}`}>
+                              <div><span>Tipo</span><strong>{record?.type || '—'}</strong></div>
+                              <div><span>Nome / Host</span><code>{dnsName}</code></div>
+                              <div className="email-dns-value"><span>Valor / Destino</span><code>{dnsValue}</code></div>
+                              <div><span>Prioridade</span><strong>{record?.priority ?? 'Não se aplica'}</strong></div>
+                              <div><span>TTL</span><strong>{record?.ttl || 'Auto / padrão'}</strong></div>
+                              <div><span>Status</span><strong>{record?.status === 'verified' ? 'Verificado' : 'Aguardando configuração'}</strong></div>
+                              <button
+                                type="button"
+                                className="secondary mini"
+                                onClick={() => navigator.clipboard?.writeText(String(dnsValue))}
+                              >
+                                Copiar valor
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
+
+                    <div className="email-dns-guide">
+                      <h3>Passo a passo para configurar</h3>
+                      <p className="muted">A configuração é feita no painel onde o DNS do seu domínio é administrado. Pode ser Registro.br, Cloudflare, Hostinger, GoDaddy ou outro provedor. Normalmente não é necessário alterar nada no seu servidor de e-mail.</p>
+
+                      <ol>
+                        <li>
+                          <strong>Entre no painel do seu domínio.</strong>
+                          <span>Procure por uma opção chamada <b>DNS</b>, <b>Zona DNS</b>, <b>Gerenciar DNS</b> ou <b>Registros DNS</b>.</span>
+                        </li>
+                        <li>
+                          <strong>Não apague os registros que já existem.</strong>
+                          <span>Você só precisa adicionar os registros mostrados pelo CRM acima.</span>
+                        </li>
+                        <li>
+                          <strong>Crie cada registro separadamente.</strong>
+                          <span>Escolha o mesmo <b>Tipo</b> mostrado no CRM e copie exatamente o <b>Nome / Host</b> e o <b>Valor / Destino</b>.</span>
+                        </li>
+                        <li>
+                          <strong>Se aparecer Prioridade, informe o mesmo número.</strong>
+                          <span>Esse campo costuma aparecer em registros MX. Se o CRM mostrar “Não se aplica”, deixe o campo vazio.</span>
+                        </li>
+                        <li>
+                          <strong>No campo TTL, deixe Automático ou Padrão.</strong>
+                          <span>Se o seu provedor exigir um número, use o valor padrão sugerido pelo próprio provedor.</span>
+                        </li>
+                        <li>
+                          <strong>Salve as alterações no seu provedor de DNS.</strong>
+                          <span>A atualização pode levar alguns minutos e, em alguns casos, algumas horas para ficar disponível.</span>
+                        </li>
+                        <li>
+                          <strong>Volte para o AXIVA CRM.</strong>
+                          <span>Clique em <b>Verificar DNS</b>. Se ainda aparecer como pendente, aguarde um pouco e tente novamente.</span>
+                        </li>
+                        <li>
+                          <strong>Quando aparecer “DNS verificado”, a configuração terminou.</strong>
+                          <span>O CRM passará a oferecer o endereço do seu próprio domínio como opção de resposta.</span>
+                        </li>
+                      </ol>
+
+                      <div className="notice">
+                        <strong>Importante:</strong> se você não encontrar a área de DNS ou tiver dúvida sobre algum campo, não altere registros existentes. Envie estes dados ao suporte da empresa onde seu domínio está hospedado e peça para adicionar os registros exatamente como aparecem acima.
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 {connection?.custom_reply_status === 'verified' && connection?.custom_reply_email && (

@@ -4374,6 +4374,7 @@ function MessageSending({ organization, settings, userEmail }) {
   const [whatsappNumbers, setWhatsappNumbers] = useState([])
   const disconnectAlertedRef = useRef(false)
   const [selected, setSelected] = useState(new Set())
+  const selectedCountRef = useRef(0)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [manualRecipient, setManualRecipient] = useState({
@@ -4475,6 +4476,9 @@ function MessageSending({ organization, settings, userEmail }) {
     let active = true
     async function refresh() {
       if (!active) return
+      // Não recarregue a lista enquanto o usuário estiver montando uma seleção.
+      // A atualização completa altera blocos acima da lista e pode deslocar a rolagem.
+      if (selectedCountRef.current > 0) return
       await loadData()
     }
     refresh()
@@ -4484,6 +4488,10 @@ function MessageSending({ organization, settings, userEmail }) {
       clearInterval(timer)
     }
   }, [organization.id])
+
+  useEffect(() => {
+    selectedCountRef.current = selected.size
+  }, [selected])
 
   useEffect(() => {
     const timer = setInterval(() => setScheduleClock(Date.now()), 30000)

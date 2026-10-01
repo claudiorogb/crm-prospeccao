@@ -187,3 +187,16 @@ test('base de suporte documenta permissões confirmadas por papel', () => {
   assert.match(knowledge, /Conectar ou alterar a conta de e-mail da empresa é restrito/)
   assert.match(knowledge, /não há uma função operacional confirmada que seja exclusiva de "Proprietário"/)
 })
+
+
+test('análise comercial não carrega manual completo por padrão', () => {
+  assert.match(edge, /function isSupportQuestion\(message: string\)/)
+  assert.match(edge, /buildInstructions\(isSupportQuestion\(message\)\)/)
+  assert.match(edge, /if \(includeSupportKnowledge\) base\.push\("", AXIVA_AI_KNOWLEDGE\)/)
+  assert.match(edge, /max_output_tokens: 1400/)
+})
+
+test('resposta incompleta do provedor recebe diagnóstico específico', () => {
+  assert.match(edge, /provider_incomplete_/)
+  assert.match(edge, /incomplete_details/)
+})

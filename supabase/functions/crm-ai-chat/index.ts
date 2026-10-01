@@ -55,6 +55,23 @@ function getPublishableKey() {
   }
 }
 
+function getAdminKey() {
+  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.default) return String(parsed.default);
+    } catch {
+      // fallback para chave legada abaixo
+    }
+  }
+
+  const single = Deno.env.get("SUPABASE_SECRET_KEY");
+  if (single) return single;
+
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+}
+
 function inferScopes(message: string): Scope[] {
   const value = normalize(message);
   const scopes = new Set<Scope>();
@@ -259,12 +276,12 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const adminKey = getAdminKey();
   const publishableKey = getPublishableKey();
   const openaiKey = Deno.env.get("OPENAI_API_KEY") || "";
   const model = Deno.env.get("OPENAI_MODEL") || "gpt-5.6-luna";
 
-  if (!supabaseUrl || !serviceRole || !publishableKey || !openaiKey) {
+  if (!supabaseUrl || !adminKey || !publishableKey || !openaiKey) {
     return json({ error: "IA não configurada no servidor." }, 503);
   }
 
@@ -276,7 +293,7 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const admin = createClient(supabaseUrl, serviceRole, {
+  const admin = createClient(supabaseUrl, adminKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 

@@ -15,6 +15,48 @@ function b64url(value:string){return bytesToBase64(new TextEncoder().encode(valu
 function clean(v:string){return String(v||"").replace(/[\r\n]+/g," ").trim()}
 function enc(v:string){return `=?UTF-8?B?${bytesToBase64(new TextEncoder().encode(v))}?=`}
 function html(v:string){return String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/\n/g,"<br>")}
+function randomIndex(length:number){if(length<=1)return 0;const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);return Number(bytes[0]%length)}
+function applySpintax(value:string){
+  let output=String(value||"");const pattern=/\{([^{}]*\|[^{}]*)\}/g;
+  for(let pass=0;pass<12;pass+=1){
+    let changed=false;
+    output=output.replace(pattern,(_m,inner)=>{const options=String(inner).split("|").map((v:string)=>v.trim());if(options.length<2)return _m;changed=true;return options[randomIndex(options.length)]??""});
+    if(!changed)break;
+  }
+  return output;
+}
+function applyVariables(value:string,ctx:any){
+  return String(value||"")
+    .replaceAll("{nome}",ctx?.nome||"")
+    .replaceAll("{empresa}",ctx?.empresa||"")
+    .replaceAll("{cidade}",ctx?.cidade||"")
+    .replaceAll("{uf}",ctx?.uf||"")
+    .replaceAll("{telefone}",ctx?.telefone||"")
+    .replaceAll("{segmento}",ctx?.segmento||"")
+    .replaceAll("{email}",ctx?.email||"");
+}
+async function recipientContext(recipient:any){
+  const base={nome:recipient?.recipient_name||"",empresa:"",cidade:"",uf:"",telefone:"",segmento:"",email:recipient?.recipient_email||""};
+  if(recipient?.lead_id){
+    const {data}=await admin.from("leads").select("business_name,contact_name,city,state,phone,whatsapp_phone,segment,email").eq("id",recipient.lead_id).maybeSingle();
+    if(data)return {nome:data.contact_name||base.nome,empresa:data.business_name||"",cidade:data.city||"",uf:data.state||"",telefone:data.whatsapp_phone||data.phone||"",segmento:data.segment||"",email:data.email||base.email};
+  }
+  if(recipient?.marketing_contact_id){
+    const {data}=await admin.from("email_marketing_contacts").select("contact_name,company_name,email").eq("id",recipient.marketing_contact_id).maybeSingle();
+    if(data)return {...base,nome:data.contact_name||base.nome,empresa:data.company_name||"",email:data.email||base.email};
+  }
+  return base;
+}
+async function renderSequence(c:any,r:any){
+  const ctx=await recipientContext(r);
+  return {
+    ...c,
+    subject:applySpintax(applyVariables(c.subject,ctx)),
+    body_text:applySpintax(applyVariables(c.body_text,ctx)),
+    followup1_body:c.followup1_body?applySpintax(applyVariables(c.followup1_body,ctx)):c.followup1_body,
+    followup2_body:c.followup2_body?applySpintax(applyVariables(c.followup2_body,ctx)):c.followup2_body,
+  };
+}
 async function processorSecret(){const {data,error}=await admin.rpc("email_get_processor_secret");if(error)throw error;return String(data||"")}
 async function googleCredentials(){const {data,error}=await admin.rpc("email_get_google_platform_credentials");if(error)throw error;const r=data?.[0]||{};return {clientId:r.client_id||"",clientSecret:r.client_secret||""}}
 async function getCreds(orgId:string){const {data,error}=await admin.rpc("email_get_connection_credentials",{p_organization_id:orgId});if(error)throw error;return data?.[0]||null}
@@ -101,7 +143,7 @@ Deno.serve(async(req)=>{
       if(claimError)throw claimError;const x=claim?.[0];if(!x)break;processed++;
       try{
         const [{data:r,error:re},{data:c,error:ce},creds]=await Promise.all([
-          admin.from("email_campaign_recipients").select("id,recipient_email,recipient_name,unsubscribe_token,reply_token,gmail_thread_id,sequence_step,replied_at").eq("id",x.recipient_id).single(),
+          admin.from("email_campaign_recipients").select("id,recipient_email,recipient_name,unsubscribe_token,reply_token,gmail_thread_id,sequence_step,replied_at,lead_id,marketing_contact_id").eq("id",x.recipient_id).single(),
           admin.from("email_campaigns").select("id,subject,body_text,followup1_body,followup2_body,from_email,from_name,provider,sequence_mode").eq("id",x.campaign_id).single(),
           usableCreds(x.organization_id)
         ]);
@@ -117,7 +159,8 @@ Deno.serve(async(req)=>{
         const {data:gate,error:gateError}=await admin.from("email_campaign_recipients").select("status,replied_at").eq("id",r.id).single();
         if(gateError)throw gateError;
         if(gate?.status!=="sending"||gate?.replied_at){stopped++;continue;}
-        const result=creds.provider==="resend"?await sendResend(creds,r,c):await sendGmail(creds,r,c);
+        const renderedCampaign=await renderSequence(c,r);
+        const result=creds.provider==="resend"?await sendResend(creds,r,renderedCampaign):await sendGmail(creds,r,renderedCampaign);
         if(result.ok){
           if(result.threadId)await admin.from("email_campaign_recipients").update({gmail_thread_id:result.threadId,updated_at:new Date().toISOString()}).eq("id",r.id);
           await admin.rpc("email_complete_recipient",{p_recipient_id:r.id,p_success:true,p_provider_message_id:result.id,p_error:null,p_retry_after_seconds:null});sent++;

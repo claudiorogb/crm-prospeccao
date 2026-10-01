@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const SUPABASE_URL=Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const AXIVA_RESEND_ADMIN_KEY=Deno.env.get("AXIVA_RESEND_INBOUND_API_KEY")||"";
 const admin=createClient(SUPABASE_URL,SERVICE_ROLE,{auth:{persistSession:false,autoRefreshToken:false}});
 const OAUTH_BASE=`${SUPABASE_URL}/functions/v1/email-provider-oauth`;
 const RESEND_CLIENT_ID=`${OAUTH_BASE}/client-metadata`;
@@ -14,15 +15,18 @@ async function platformReplyAddress(){
   return data?.generic_reply_status==="verified"&&address.includes("@")?address:"";
 }
 function replyAddressFor(r:any,settings:any,systemAddress:string){
-  if(settings?.resend_full_access&&settings?.reply_mode==="custom"&&settings?.custom_reply_status==="verified"&&String(settings?.custom_reply_email||"").includes("@"))return String(settings.custom_reply_email).trim().toLowerCase();
-  if(settings?.resend_full_access&&systemAddress)return systemAddress;
+  if(settings?.reply_mode==="custom"&&settings?.custom_reply_status==="verified"&&String(settings?.custom_reply_email||"").includes("@"))return String(settings.custom_reply_email).trim().toLowerCase();
+  if(systemAddress)return systemAddress;
   return `reply-${r.reply_token}@${REPLY_DOMAIN}`;
 }
 async function resendMessageId(accessToken:string,emailId:string){
-  for(let attempt=0;attempt<2;attempt+=1){
-    const res=await fetch(`https://api.resend.com/emails/${encodeURIComponent(emailId)}`,{headers:{Authorization:`Bearer ${accessToken}`}});
-    if(res.ok){const d=await res.json();const value=String(d?.message_id||"").trim();if(value)return value;}
-    if(attempt===0)await new Promise(resolve=>setTimeout(resolve,250));
+  const keys=Array.from(new Set([accessToken,AXIVA_RESEND_ADMIN_KEY].filter(Boolean)));
+  for(const key of keys){
+    for(let attempt=0;attempt<2;attempt+=1){
+      const res=await fetch(`https://api.resend.com/emails/${encodeURIComponent(emailId)}`,{headers:{Authorization:`Bearer ${key}`}});
+      if(res.ok){const d=await res.json();const value=String(d?.message_id||"").trim();if(value)return value;}
+      if(attempt===0)await new Promise(resolve=>setTimeout(resolve,250));
+    }
   }
   return "";
 }
@@ -191,7 +195,7 @@ Deno.serve(async(req)=>{
         const result=creds.provider==="resend"?await sendResend(creds,r,renderedCampaign,selectedReplyAddress):await sendGmail(creds,r,renderedCampaign);
         if(result.ok){
           if(result.threadId)await admin.from("email_campaign_recipients").update({gmail_thread_id:result.threadId,updated_at:new Date().toISOString()}).eq("id",r.id);
-          if(creds.provider==="resend"&&replySettings?.resend_full_access&&result.id){
+          if(creds.provider==="resend"&&result.id){
             const messageId=await resendMessageId(creds.access_token,result.id);
             if(messageId){
               const ids=Array.from(new Set([...(Array.isArray(r.resend_message_ids)?r.resend_message_ids:[]),messageId]));

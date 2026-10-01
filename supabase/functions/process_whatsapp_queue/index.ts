@@ -15,6 +15,29 @@ async function sha256(value: string) {
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+function randomIndex(length: number) {
+  if (length <= 1) return 0;
+  const bytes = new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  return Number(bytes[0] % length);
+}
+
+function applySpintax(value: string) {
+  let output = String(value || "");
+  const pattern = /\{([^{}]*\|[^{}]*)\}/g;
+  for (let pass = 0; pass < 12; pass += 1) {
+    let changed = false;
+    output = output.replace(pattern, (_match, inner) => {
+      const options = String(inner).split("|").map((item) => item.trim());
+      if (options.length < 2) return _match;
+      changed = true;
+      return options[randomIndex(options.length)] ?? "";
+    });
+    if (!changed) break;
+  }
+  return output;
+}
+
 async function validWorkerToken(req: Request, admin: any) {
   const received = req.headers.get("x-worker-token") || "";
   if (!received) return false;
@@ -215,7 +238,7 @@ Deno.serve(async (req) => {
 
         const result = await evolution(`/message/sendText/${encodeURIComponent(message.evolution_instance_name)}`, {
           method: "POST",
-          body: JSON.stringify({ number: message.recipient, text: message.rendered_message }),
+          body: JSON.stringify({ number: message.recipient, text: applySpintax(message.rendered_message) }),
         });
         const sentAt = new Date().toISOString();
         const providerMessageId = result?.key?.id || result?.messageId || result?.id || null;

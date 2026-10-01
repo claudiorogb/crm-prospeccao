@@ -212,3 +212,17 @@ test('priorização comercial usa oportunidades concretas e rejeita saída incom
   assert.match(edge, /if \(providerStatus === "incomplete" \|\| incompleteReason\)/)
   assert.match(edge, /apresente no máximo 5 prioridades/)
 })
+
+
+test('assistente flutuante permanece disponível nas páginas quando a IA está habilitada', () => {
+  assert.match(app, /AiFloatingAssistant/)
+  assert.match(app, /settings\?\.feature_flags\?\.ai_assistant === true/)
+  assert.match(app, /adminSandboxSettings\?\.feature_flags\?\.ai_assistant === true/)
+})
+
+test('respostas da IA não exibem marcadores markdown de negrito literalmente', () => {
+  const assistant = fs.readFileSync(new URL('../src/ai-assistant.jsx', import.meta.url), 'utf8')
+  assert.match(assistant, /function InlineText/)
+  assert.match(assistant, /part\.slice\(2, -2\)/)
+  assert.doesNotMatch(assistant, /<p>\{item\.content\}<\/p>/)
+})

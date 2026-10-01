@@ -193,10 +193,22 @@ test('análise comercial não carrega manual completo por padrão', () => {
   assert.match(edge, /function isSupportQuestion\(message: string\)/)
   assert.match(edge, /buildInstructions\(isSupportQuestion\(message\)\)/)
   assert.match(edge, /if \(includeSupportKnowledge\) base\.push\("", AXIVA_AI_KNOWLEDGE\)/)
-  assert.match(edge, /max_output_tokens: 1400/)
+  assert.match(edge, /max_output_tokens: 2400/)
 })
 
 test('resposta incompleta do provedor recebe diagnóstico específico', () => {
   assert.match(edge, /provider_incomplete_/)
   assert.match(edge, /incomplete_details/)
+})
+
+
+test('priorização comercial usa oportunidades concretas e rejeita saída incompleta', () => {
+  assert.match(edge, /priority_items/)
+  assert.match(edge, /business_name,status,source,next_contact_date/)
+  assert.match(edge, /negotiation: 1/)
+  assert.match(edge, /proposal: 2/)
+  assert.match(edge, /interested: 3/)
+  assert.match(edge, /max_output_tokens: 2400/)
+  assert.match(edge, /if \(providerStatus === "incomplete" \|\| incompleteReason\)/)
+  assert.match(edge, /apresente no máximo 5 prioridades/)
 })

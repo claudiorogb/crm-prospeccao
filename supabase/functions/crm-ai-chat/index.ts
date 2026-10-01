@@ -147,7 +147,7 @@ async function authorizedContext(userClient: any, organizationId: string, scopes
   if (scopes.includes("lead_summary")) {
     const { data, error } = await userClient
       .from("leads")
-      .select("status,source,next_contact_date")
+      .select("business_name,status,source,next_contact_date")
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .limit(2000);
@@ -159,7 +159,39 @@ async function authorizedContext(userClient: any, organizationId: string, scopes
       const key = String(row.status || "unknown");
       counts[key] = (counts[key] || 0) + 1;
     }
-    context.lead_summary = { total: (data || []).length, by_status: counts };
+
+    const stagePriority: Record<string, number> = {
+      negotiation: 1,
+      proposal: 2,
+      interested: 3,
+      replied: 4,
+      contacted_pending: 5,
+      contacted: 6,
+      new: 7,
+    };
+
+    const priorityItems = (data || [])
+      .filter((row: any) => Object.prototype.hasOwnProperty.call(stagePriority, String(row.status || "")))
+      .sort((a: any, b: any) => {
+        const aOverdue = a.next_contact_date && a.next_contact_date < brazilDate() ? 0 : 1;
+        const bOverdue = b.next_contact_date && b.next_contact_date < brazilDate() ? 0 : 1;
+        if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+        const stageDiff = (stagePriority[String(a.status || "")] || 99) - (stagePriority[String(b.status || "")] || 99);
+        if (stageDiff !== 0) return stageDiff;
+        return String(a.next_contact_date || "9999-12-31").localeCompare(String(b.next_contact_date || "9999-12-31"));
+      })
+      .slice(0, 25)
+      .map((row: any) => ({
+        business_name: row.business_name,
+        status: row.status,
+        next_contact_date: row.next_contact_date,
+      }));
+
+    context.lead_summary = {
+      total: (data || []).length,
+      by_status: counts,
+      priority_items: priorityItems,
+    };
     recordsConsidered += (data || []).length;
   }
 
@@ -283,6 +315,7 @@ function buildInstructions(includeSupportKnowledge = false) {
     "Se faltarem dados para responder com segurança, diga exatamente o que não foi possível confirmar.",
     "Não invente nomes de telas, botões ou estados.",
     "Em análises comerciais, priorize fatos observáveis no contexto, explique por que merecem atenção e sugira uma ordem prática de atuação sem executar ações.",
+    "Quando o usuário pedir prioridades do dia, seja objetivo: apresente no máximo 5 prioridades, cite os nomes dos registros quando disponíveis e evite introduções longas.",
   ];
   if (includeSupportKnowledge) base.push("", AXIVA_AI_KNOWLEDGE);
   return base.join("\n");
@@ -546,7 +579,7 @@ Deno.serve(async (req) => {
         model,
         instructions: buildInstructions(isSupportQuestion(message)),
         input,
-        max_output_tokens: 1400,
+        max_output_tokens: 2400,
         store: false,
       }),
       signal: controller.signal,
@@ -571,14 +604,13 @@ Deno.serve(async (req) => {
     }
 
     const answer = extractOutputText(providerPayload);
-    if (!answer) {
-      const incompleteReason = String(providerPayload?.incomplete_details?.reason || "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
-      const providerStatus = String(providerPayload?.status || "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-      if (providerStatus === "incomplete" || incompleteReason) {
-        throw new Error(`provider_incomplete_${incompleteReason || "unknown"}`);
-      }
-      throw new Error("empty_provider_response");
+    const incompleteReason = String(providerPayload?.incomplete_details?.reason || "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+    const providerStatus = String(providerPayload?.status || "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+
+    if (providerStatus === "incomplete" || incompleteReason) {
+      throw new Error(`provider_incomplete_${incompleteReason || "unknown"}`);
     }
+    if (!answer) throw new Error("empty_provider_response");
 
     const usage = providerPayload?.usage || {};
     const inputTokens = Number(usage.input_tokens || 0) || null;

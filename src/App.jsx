@@ -17,7 +17,10 @@ import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, EmailProspecting, AdminEmailMarketing } from './email-marketing'
 import DashboardVisual from './dashboard-visual'
 import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
+import AiAssistant from './ai-assistant'
 import whatsappIcon from './whatsapp-icon.png'
+
+const AI_UI_ENABLED = import.meta.env.VITE_AI_UI_ENABLED === 'true'
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
@@ -8956,6 +8959,11 @@ export default function App() {
           <button className={`nav-item ${page === 'sales' ? 'active' : ''}`} onClick={() => { setPage('sales'); setMobileMenuOpen(false) }}>
             <Activity size={18}/> Vendas
           </button>
+          {AI_UI_ENABLED && (
+            <button className={`nav-item ${page === 'ai-assistant' ? 'active' : ''}`} onClick={() => { setPage('ai-assistant'); setMobileMenuOpen(false) }}>
+              <MessageSquareText size={18}/> Assistente IA
+            </button>
+          )}
           <OverdueReturnsNavItem
             organization={organization}
             active={page === 'overdue-returns'}
@@ -9015,6 +9023,9 @@ export default function App() {
               setPage('sales-funnel')
             }}
           />
+        )}
+        {AI_UI_ENABLED && page === 'ai-assistant' && (
+          <AiAssistant userEmail={userLabel} />
         )}
         {page === 'platform-sales' && isSystemAdmin && (
           <PlatformSalesOverview userEmail={userEmail} />

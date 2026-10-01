@@ -1,0 +1,48 @@
+name: Validate AI readonly foundation
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ai-implementation.md'
+      - 'src/ai-client.js'
+      - 'src/ai-assistant.jsx'
+      - 'src/App.jsx'
+      - 'src/styles.css'
+      - 'supabase/functions/crm-ai-chat/**'
+      - 'supabase/migrations/20261001200000_ai_readonly_foundation.sql'
+      - 'tests/ai-foundation-security.test.mjs'
+      - '.github/workflows/validate-ai-readonly-foundation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Security invariants
+        run: node --test tests/ai-foundation-security.test.mjs
+
+      - name: Existing frontend build
+        run: npm run build
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Edge Function typecheck
+        run: deno check --node-modules-dir=auto supabase/functions/crm-ai-chat/index.ts

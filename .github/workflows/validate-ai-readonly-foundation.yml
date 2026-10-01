@@ -42,4 +42,4 @@ jobs:
           deno-version: v2.x
 
       - name: Edge Function typecheck
-        run: deno check supabase/functions/crm-ai-chat/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/crm-ai-chat/index.ts

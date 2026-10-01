@@ -5302,8 +5302,8 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['messages','Mensagens'],
     ['sending','Enviar mensagens'],
     ['email-prospecting','Prospecção por e-mail'],
-    ['email-connection','Cadastrar e-mail'],
-    ['email','E-mail marketing']
+    ['email','E-mail marketing'],
+    ['email-connection','Cadastrar e-mail']
   ]
 
   return (

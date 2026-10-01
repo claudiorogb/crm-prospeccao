@@ -165,3 +165,14 @@ test('base contém mapa completo de suporte operacional confirmado', () => {
   assert.match(knowledge, /INTEGRAÇÕES/)
   assert.match(knowledge, /Não descreva código, banco, funções internas, tabelas ou arquitetura/)
 })
+
+
+test('base de suporte documenta fluxo atual de usuários e permissões', () => {
+  const knowledge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/knowledge.ts', import.meta.url), 'utf8')
+  assert.match(knowledge, /USUÁRIOS — FLUXO ATUAL CONFIRMADO/)
+  assert.match(knowledge, /Criar uma conta no AXIVA CRM não vincula automaticamente/)
+  assert.match(knowledge, /Administração > "Usuários"/)
+  assert.match(knowledge, /Administração > "Organizações"/)
+  assert.match(knowledge, /Administrador comum da empresa não possui hoje uma tela própria/)
+  assert.match(knowledge, /Não invente uma tela "Usuários" dentro da área comercial/)
+})

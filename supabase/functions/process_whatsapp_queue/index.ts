@@ -37,8 +37,15 @@ function applySmartGreeting(value: string) {
   return String(value || "").replaceAll("{saudacao}", saoPauloGreeting()).replaceAll("{nome}", "");
 }
 
+function normalizeLegacySpintax(value: string) {
+  return String(value || "").replace(
+    /\{\s*op(?:ç|c)ão\s*1\s*\|\s*op(?:ç|c)ão\s*2\s*\|\s*op(?:ç|c)ão\s*3\s*\}/gi,
+    "{Quero te apresentar|Gostaria de apresentar|Posso te mostrar}"
+  );
+}
+
 function applySpintax(value: string) {
-  let output = String(value || "");
+  let output = normalizeLegacySpintax(value);
   const pattern = /\{([^{}]*\|[^{}]*)\}/g;
   for (let pass = 0; pass < 12; pass += 1) {
     let changed = false;

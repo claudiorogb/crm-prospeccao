@@ -279,7 +279,11 @@ Deno.serve(async (req) => {
   const adminKey = getAdminKey();
   const publishableKey = getPublishableKey();
   const openaiKey = Deno.env.get("OPENAI_API_KEY") || "";
-  const model = Deno.env.get("OPENAI_MODEL") || "gpt-5.6-luna";
+  const configuredModel = Deno.env.get("OPENAI_MODEL") || "";
+  // Compatibilidade com a configuração inicial do piloto. A API atual usa gpt-6-luna.
+  const model = configuredModel === "gpt-5.6-luna"
+    ? "gpt-6-luna"
+    : (configuredModel || "gpt-6-luna");
 
   if (!supabaseUrl || !adminKey || !publishableKey || !openaiKey) {
     return json({ error: "IA não configurada no servidor." }, 503);

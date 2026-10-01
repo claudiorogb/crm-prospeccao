@@ -2165,6 +2165,13 @@ function Leads({ organization, settings, userEmail }) {
     function routeVerticalWheelToPage(event) {
       if (event.ctrlKey || event.metaKey) return
 
+      const history = event.target?.closest?.('.lead-journey-history-v54')
+      if (history && event.deltaY) {
+        const canScrollDown = event.deltaY > 0 && history.scrollTop + history.clientHeight < history.scrollHeight - 1
+        const canScrollUp = event.deltaY < 0 && history.scrollTop > 1
+        if (canScrollDown || canScrollUp) return
+      }
+
       const horizontalIntent = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)
       if (horizontalIntent || !event.deltaY) return
 

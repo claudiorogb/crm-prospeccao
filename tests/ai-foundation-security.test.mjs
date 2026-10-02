@@ -229,15 +229,16 @@ test('respostas da IA não exibem marcadores markdown de negrito literalmente', 
 
 
 test('base de Sales Coach é carregada por intenção sem substituir suporte do CRM', () => {
+  const salesKnowledge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/knowledge.ts', import.meta.url), 'utf8')
   assert.match(edge, /function isSalesCoachingQuestion\(message: string\)/)
   assert.match(edge, /salesCoach: isSalesCoachingQuestion\(message\)/)
   assert.match(edge, /if \(options\.salesCoach\)/)
   assert.match(edge, /else if \(options\.support\)/)
-  assert.match(knowledge, /AXIVA_SALES_COACH_KNOWLEDGE/)
-  assert.match(knowledge, /SPIN SELLING/)
-  assert.match(knowledge, /CHALLENGER SALE/)
-  assert.match(knowledge, /LAER/)
-  assert.match(knowledge, /GPCTBA/)
-  assert.match(knowledge, /ROLEPLAY/)
-  assert.match(knowledge, /REVISÃO DE DISCURSO E SCRIPTS/)
+  assert.match(salesKnowledge, /AXIVA_SALES_COACH_KNOWLEDGE/)
+  assert.match(salesKnowledge, /SPIN SELLING/)
+  assert.match(salesKnowledge, /CHALLENGER SALE/)
+  assert.match(salesKnowledge, /LAER/)
+  assert.match(salesKnowledge, /GPCTBA/)
+  assert.match(salesKnowledge, /ROLEPLAY/)
+  assert.match(salesKnowledge, /REVISÃO DE DISCURSO E SCRIPTS/)
 })

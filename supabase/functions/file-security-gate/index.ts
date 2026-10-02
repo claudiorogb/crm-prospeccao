@@ -10,7 +10,7 @@ const MAX_SIZES: Record<string, number> = {
   "email-campaign-attachments": 10 * 1024 * 1024,
 };
 const ALLOWED_BUCKETS = new Set(Object.keys(MAX_SIZES));
-const DANGEROUS_EXTENSIONS = new Set(atob("ZXhlLGRsbCxjb20sc2NyLG1zaSxtc3AsbXNpeCxhcHB4LGFwayxkbWcsaXNvLGJhdCxjbWQscHMxLHBzbTEsdmJzLHZiZSxqcyxqc2UsbWpzLGNqcyxzaCxiYXNoLHpzaCxmaXNoLHBocCxwaHAzLHBocDUseHRtbCxweSxweWMscmIscGwsLGNnaSxqYXIsY2xhc3MsaHRhLGxuayx1cmwscmVnLHdzZix3c2gsc2N0LGluZixzeXMsa2VybixlbGYsYmlu").split(","));
+const DANGEROUS_EXTENSIONS = new Set(atob("ZXhlLGRsbCxjb20sc2NyLG1zaSxtc3AsbXNpeCxhcHB4LGFwayxkbWcsaXNvLGJhdCxjbWQscHMxLHBzbTEsdmJzLHZiZSxqcyxqc2UsbWpzLGNqcyxzaCxiYXNoLHpzaCxmaXNoLHBocCxwaHAzLHBocDQscGhwNSxwaHRtbCxweSxweWMscmIscGwsY2dpLGphcixjbGFzcyxodGEsbG5rLHVybCxyZWcsd3NmLHdzaCxzY3QsaW5mLHN5cyxkcnYsZWxmLGJpbg==").split(","));
 const BLOCKED_ACTIVE_DOCUMENT_EXTENSIONS = new Set(atob("aHRtbCxodG0seGh0bWwsc3ZnLHhtbCx4c2wseHNsdCxkb2NtLGRvdG0seGxzbSx4bHRtLHBwdG0scG90bSxwcHNtLHBwYW0=").split(","));
 
 function json(data: unknown, status = 200) {

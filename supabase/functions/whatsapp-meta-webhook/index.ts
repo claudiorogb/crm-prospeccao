@@ -52,11 +52,11 @@ function isAutomaticReply(text: string) {
 
   if (explicitAutomationPatterns.some(pattern => pattern.test(t))) return true;
 
-  // Uma apresentação pessoal acompanhada de oferta direta de atendimento não é,
-  // sozinha, evidência de automação (ex.: "sou o Evandro e estarei atendendo").
-  const humanIntroduction =
-    /\bsou (?:o|a) [a-z]{2,}\b.*\b(?:estarei|estou|vou|irei)\b.*\b(?:prestando|realizando|fazendo|dando|atendendo|atendimento)\b/;
-  if (humanIntroduction.test(t)) return false;
+  // Saudações padronizadas que agradecem o contato, identificam um atendente nominalmente
+  // e informam que o atendimento será prestado são tratadas como automáticas.
+  const automatedReceptionPattern =
+    /\\b(?:agradece|agradecemos|agradeco|obrigad[oa] por)\\b.*\\b(?:contato|mensagem)\\b.*\\bsou (?:o|a) [a-z]{2,}\\b.*\\b(?:estarei|estou|vou|irei)\\b.*\\b(?:prestando|realizando|fazendo|dando|atendendo|atendimento)\\b/;
+  if (automatedReceptionPattern.test(t)) return true;
 
   const contextualAutomationPatterns = [
     /nosso horario de atendimento/,

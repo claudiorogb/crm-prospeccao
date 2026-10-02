@@ -125,7 +125,8 @@ function isAutomaticReply(text: string) {
   const t = normalizeText(text);
   if (!t) return false;
 
-  const strongPatterns = [
+  // Sinais explícitos de automação têm prioridade sobre saudações ou frases de cortesia.
+  const explicitAutomationPatterns = [
     /mensagem automatica/,
     /resposta automatica/,
     /atendimento automatico/,
@@ -133,12 +134,9 @@ function isAutomaticReply(text: string) {
     /esta e uma resposta automatica/,
     /nao responda esta mensagem/,
     /assistente virtual/,
-    /sou (o|a) assistente virtual/,
     /robo de atendimento/,
     /bot de atendimento/,
     /fora do horario de atendimento/,
-    /nosso horario de atendimento/,
-    /horario de atendimento e/,
     /no momento estamos (ausentes|indisponiveis|fora do horario)/,
     /nao estamos disponiveis no momento/,
     /retornaremos assim que possivel/,
@@ -156,23 +154,35 @@ function isAutomaticReply(text: string) {
     /digite com qual (departamento|setor).*(deseja|quer).*(falar|atendimento)/,
     /para continuar.*digite/,
     /menu de atendimento/,
+    /numero de ticket/,
+    /ticket (n[ºo.]*)?\s*#?\d+/,
+    /ticket.*foi finalizado/,
+    /nao identificamos seu contato em nossa base/,
+  ];
+
+  if (explicitAutomationPatterns.some(pattern => pattern.test(t))) return true;
+
+  // Uma apresentação pessoal acompanhada de oferta direta de atendimento não é,
+  // sozinha, evidência de automação (ex.: "sou o Evandro e estarei atendendo").
+  const humanIntroduction =
+    /\bsou (?:o|a) [a-z]{2,}\b.*\b(?:estarei|estou|vou|irei)\b.*\b(?:prestando|realizando|fazendo|dando|atendendo|atendimento)\b/;
+  if (humanIntroduction.test(t)) return false;
+
+  const contextualAutomationPatterns = [
+    /nosso horario de atendimento/,
+    /horario de atendimento e/,
     /bem[- ]?vindo.*atendimento/,
     /obrigad[oa] por entrar em contato.*(em breve|horario|atendimento|retorn)/,
     /agradecemos (seu|o) contato.*(em breve|horario|atendimento|retorn)/,
-    /agradece(mos)? (o |seu )?contato/,
     /recebemos sua mensagem.*(em breve|horario|atendimento|retorn)/,
     /sua mensagem (ja )?(chegou|foi recebida).*(em breve|horario|atendimento|retorn|instantes)/,
     /qual seu nome e (sua )?necessidade/,
     /conte (um pouco )?mais sobre o que voce precisa/,
     /para que possamos te ajudar com agilidade/,
-    /numero de ticket/,
-    /ticket (n[ºo.]*)?\s*#?\d+/,
-    /ticket.*foi finalizado/,
     /novo atendimento/,
-    /nao identificamos seu contato em nossa base/,
   ];
 
-  if (strongPatterns.some(pattern => pattern.test(t))) return true;
+  if (contextualAutomationPatterns.some(pattern => pattern.test(t))) return true;
 
   const exactShortReplies = [
     "ola! em que posso ajudar?",
@@ -681,7 +691,7 @@ Deno.serve(async (req) => {
     created_by: null,
   });
 
-  if (classification === "human" && ["new", "queued", "contacted"].includes(lead.status)) {
+  if (classification === "human") {
     const brazilDate = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Sao_Paulo",
       year: "numeric",
@@ -689,16 +699,19 @@ Deno.serve(async (req) => {
       day: "2-digit",
     }).format(new Date(receivedAt));
 
+    const leadUpdate: Record<string, unknown> = {
+      status: "replied",
+      last_contact_date: brazilDate,
+      updated_at: new Date().toISOString(),
+    };
+    if (lead.status === "lost") leadUpdate.lost_from_status = null;
+
     const { error: updateError } = await admin
       .from("leads")
-      .update({
-        status: "replied",
-        last_contact_date: brazilDate,
-        updated_at: new Date().toISOString(),
-      })
+      .update(leadUpdate)
       .eq("id", lead.id)
       .eq("organization_id", numberRow.organization_id)
-      .in("status", ["new", "queued", "contacted"]);
+      .neq("status", "discarded");
 
     if (updateError) return json({ error: "Unable to update lead" }, 503);
   }

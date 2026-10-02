@@ -4188,18 +4188,33 @@ button:not(:disabled):active,
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
-  text-align: left;
+  padding: 10px;
   color: #0b192c;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  cursor: pointer;
 }
 .ai-limits-company-card:hover,
 .ai-limits-company-card.active {
   border-color: #00a88f;
   background: #f3fbf9;
+}
+.ai-limits-company-select {
+  flex: 1 1 180px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.ai-limits-toggle-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .ai-limits-company-icon {
   flex: 0 0 34px;
@@ -4397,5 +4412,11 @@ button:not(:disabled):active,
   }
   .ai-limits-company-card {
     flex-wrap: wrap;
+  }
+  .ai-limits-company-select {
+    flex-basis: 100%;
+  }
+  .ai-limits-toggle-button {
+    margin-left: auto;
   }
 }

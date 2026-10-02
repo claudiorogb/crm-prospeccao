@@ -10,18 +10,86 @@ function json(data: unknown, status = 200) {
 function digits(v: unknown){return String(v||"").replace(/\D/g,"")}
 function normalizePhone(v: unknown){const d=digits(v);if(d.startsWith("55")&&d.length>=12)return d;if(d.length===10||d.length===11)return `55${d}`;return d}
 function normalizeText(value:string){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim()}
-function isAutomaticReply(text:string){
-  const t=normalizeText(text);if(!t)return false;
-  const patterns=[
-    /mensagem automatica/,/resposta automatica/,/atendimento automatico/,/assistente virtual/,
-    /fora do horario de atendimento/,/nosso horario de atendimento/,/retornaremos assim que possivel/,
-    /logo (responderei|responderemos|retornarei|retornaremos)/,/aguarde.*(atendente|atendimento|retorno)/,
-    /direcionad[oa] ao setor responsavel/,/selecione uma opcao/,/escolha uma opcao/,
-    /digite [0-9].*(para|opcao)/,/menu de atendimento/,/agradece(mos)? (o |seu )?contato/,
-    /qual seu nome e (sua )?necessidade/,/numero de ticket/,/ticket.*foi finalizado/
+function isAutomaticReply(text: string) {
+  const t = normalizeText(text);
+  if (!t) return false;
+
+  // Sinais explícitos de automação têm prioridade sobre saudações ou frases de cortesia.
+  const explicitAutomationPatterns = [
+    /mensagem automatica/,
+    /resposta automatica/,
+    /atendimento automatico/,
+    /esta e uma mensagem automatica/,
+    /esta e uma resposta automatica/,
+    /nao responda esta mensagem/,
+    /assistente virtual/,
+    /robo de atendimento/,
+    /bot de atendimento/,
+    /fora do horario de atendimento/,
+    /no momento estamos (ausentes|indisponiveis|fora do horario)/,
+    /nao estamos disponiveis no momento/,
+    /retornaremos assim que possivel/,
+    /retornaremos em instantes/,
+    /logo (responderei|responderemos|retornarei|retornaremos)/,
+    /em breve (um de nossos|nossa equipe|iremos) (atendentes|retornar|responder|entrar em contato)/,
+    /aguarde.*(atendente|atendimento|retorno)/,
+    /sendo transferid[oa].*(fila|atendimento|setor|departamento)/,
+    /transferid[oa] para (a )?fila de atendimento/,
+    /direcionad[oa] ao setor responsavel/,
+    /assunto sera direcionado/,
+    /selecione uma opcao/,
+    /escolha uma opcao/,
+    /digite [0-9].*(para|opcao)/,
+    /digite com qual (departamento|setor).*(deseja|quer).*(falar|atendimento)/,
+    /para continuar.*digite/,
+    /menu de atendimento/,
+    /numero de ticket/,
+    /ticket (n[ºo.]*)?\s*#?\d+/,
+    /ticket.*foi finalizado/,
+    /nao identificamos seu contato em nossa base/,
   ];
-  if(patterns.some(p=>p.test(t)))return true;
-  return ["ola! em que posso ajudar?","ola, em que posso ajudar?","ola! como posso ajudar?","ola, como posso ajudar?"].includes(t);
+
+  if (explicitAutomationPatterns.some(pattern => pattern.test(t))) return true;
+
+  // Uma apresentação pessoal acompanhada de oferta direta de atendimento não é,
+  // sozinha, evidência de automação (ex.: "sou o Evandro e estarei atendendo").
+  const humanIntroduction =
+    /\bsou (?:o|a) [a-z]{2,}\b.*\b(?:estarei|estou|vou|irei)\b.*\b(?:prestando|realizando|fazendo|dando|atendendo|atendimento)\b/;
+  if (humanIntroduction.test(t)) return false;
+
+  const contextualAutomationPatterns = [
+    /nosso horario de atendimento/,
+    /horario de atendimento e/,
+    /bem[- ]?vindo.*atendimento/,
+    /obrigad[oa] por entrar em contato.*(em breve|horario|atendimento|retorn)/,
+    /agradecemos (seu|o) contato.*(em breve|horario|atendimento|retorn)/,
+    /recebemos sua mensagem.*(em breve|horario|atendimento|retorn)/,
+    /sua mensagem (ja )?(chegou|foi recebida).*(em breve|horario|atendimento|retorn|instantes)/,
+    /qual seu nome e (sua )?necessidade/,
+    /conte (um pouco )?mais sobre o que voce precisa/,
+    /para que possamos te ajudar com agilidade/,
+    /novo atendimento/,
+  ];
+
+  if (contextualAutomationPatterns.some(pattern => pattern.test(t))) return true;
+
+  const exactShortReplies = [
+    "ola! em que posso ajudar?",
+    "ola, em que posso ajudar?",
+    "ola! como posso ajudar?",
+    "ola, como posso ajudar?",
+    "oi! em que posso ajudar?",
+    "oi, em que posso ajudar?",
+    "oi! como posso ajudar?",
+    "oi, como posso ajudar?",
+  ];
+
+  if (exactShortReplies.includes(t)) return true;
+
+  const numberedOptions = (t.match(/(?:^|\s)[1-9]\s*[-.)]/g) || []).length;
+  if (numberedOptions >= 3 && /(departamento|setor|atendimento|opcao|digite)/.test(t)) return true;
+
+  return false;
 }
 function messageText(message:any){
   const type=String(message?.type||"");
@@ -152,11 +220,18 @@ Deno.serve(async(req)=>{
             notes:text?`${notePrefix}: ${text.slice(0,3000)}`:notePrefix,occurred_at:receivedAt,created_by:null
           });
 
-          if(classification==="human"&&["new","queued","contacted","contacted_pending"].includes(lead.status)){
+          if(classification==="human"){
             const localDate=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(receivedAt));
-            await admin.from("leads").update({status:"replied",last_contact_date:localDate,updated_at:new Date().toISOString()})
+            const leadUpdate: Record<string, unknown> = {
+              status:"replied",
+              last_contact_date:localDate,
+              updated_at:new Date().toISOString()
+            };
+            if(lead.status==="lost")leadUpdate.lost_from_status=null;
+            const {error:updateError}=await admin.from("leads").update(leadUpdate)
               .eq("id",lead.id).eq("organization_id",numberRow.organization_id)
-              .in("status",["new","queued","contacted","contacted_pending"]);
+              .neq("status","discarded");
+            if(updateError)throw updateError;
           }
         }
       }

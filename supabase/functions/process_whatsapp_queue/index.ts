@@ -127,7 +127,6 @@ async function evolution(path: string, options: RequestInit = {}) {
   return data;
 }
 
-const INBOUND_WEBHOOK_URL = "https://lhnzpxjjfalxmlkjysor.supabase.co/functions/v1/whatsapp-inbound-webhook?token=pJVRbLZllIz2WSSdWtrJV-GVstV33ld7Xix5Mc2PIos";
 
 async function connectionState(instanceName: string) {
   const data = await evolution(`/instance/connectionState/${encodeURIComponent(instanceName)}`);

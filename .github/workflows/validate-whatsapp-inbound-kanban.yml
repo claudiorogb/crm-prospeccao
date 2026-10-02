@@ -1,0 +1,37 @@
+name: Validate WhatsApp inbound Kanban
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/whatsapp-inbound-webhook/**'
+      - 'supabase/functions/whatsapp-meta-webhook/**'
+      - 'tests/whatsapp-inbound-kanban.test.mjs'
+      - '.github/workflows/validate-whatsapp-inbound-kanban.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Test classification and Kanban transitions
+        run: node --test tests/whatsapp-inbound-kanban.test.mjs
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Typecheck WhatsApp webhooks
+        run: deno check --node-modules-dir=auto supabase/functions/whatsapp-inbound-webhook/index.ts supabase/functions/whatsapp-meta-webhook/index.ts

@@ -4428,16 +4428,52 @@ button:not(:disabled):active,
 .sidebar-user {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
   margin-top: auto;
-  padding: 10px 12px;
+  margin-bottom: 4px;
+  padding: 8px 12px;
   border-top: 1px solid rgba(148, 163, 184, .18);
-  color: #64748b;
+  color: #94a3b8;
   font-size: 12px;
+  min-height: 38px;
+}
+.sidebar-user svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
 }
 .sidebar-user span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Menu compacto: mantém o ícone do usuário visível mesmo com a barra fechada. */
+@media (min-width: 901px) {
+  .sidebar:not(:hover) .sidebar-user {
+    justify-content: center;
+    gap: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-top-color: rgba(148, 163, 184, .12);
+  }
+  .sidebar:not(:hover) .sidebar-user span {
+    display: none;
+  }
+  .sidebar:not(:hover) .sidebar-user svg {
+    display: block;
+  }
+  .sidebar:not(:hover) .logout {
+    margin-top: 0;
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* O usuário fica imediatamente acima de Sair, sem criar um segundo espaço automático. */
+.logout {
+  margin-top: 0;
 }

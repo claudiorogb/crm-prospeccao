@@ -297,7 +297,7 @@ Deno.serve(async(req)=>{
       }
     }
 
-    const nextCursor=(startTermIndex+Math.max(nextTermOffset,1))%searchTerms.length;
+    const nextCursor=(startTermIndex+Math.min(nextTermOffset+1,searchTerms.length))%searchTerms.length;
     await admin.from("campaigns").update({search_term_cursor:nextCursor}).eq("id",campaign.id).eq("organization_id",campaign.organization_id).is("deleted_at",null);
 
     const places=Array.from(validPlacesById.values()).slice(0,leadsPerCapture);

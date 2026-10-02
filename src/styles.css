@@ -4420,3 +4420,24 @@ button:not(:disabled):active,
     margin-left: auto;
   }
 }
+
+/* Identificação do usuário permanece na barra lateral. */
+.topbar-actions .user-badge {
+  display: none;
+}
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(148, 163, 184, .18);
+  color: #64748b;
+  font-size: 12px;
+}
+.sidebar-user span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

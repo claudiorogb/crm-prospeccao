@@ -4000,7 +4000,8 @@ button:not(:disabled):active,
   gap: 10px;
 }
 .ai-floating-trigger {
-  min-width: 58px;
+  min-width: 82px;
+  width: 82px;
   height: 58px;
   border: 1px solid #dbe4ee;
   border-radius: 999px;
@@ -4010,21 +4011,43 @@ button:not(:disabled):active,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  padding: 0 14px;
+  gap: 8px;
+  padding: 0 15px;
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+  overflow: hidden;
+  transition: width .22s ease, min-width .22s ease, padding .22s ease, background .18s ease;
 }
-.ai-floating-trigger img {
-  display: block;
+.ai-floating-compact-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: .01em;
+}
+.ai-floating-wordmark {
+  display: none;
   width: 104px;
   height: auto;
   max-height: 42px;
   object-fit: contain;
+  flex: 0 0 auto;
 }
 .ai-floating-trigger:hover {
   background: #f8fafc;
+}
+.ai-floating-root:not(.open) .ai-floating-trigger:hover {
+  width: 160px;
+  min-width: 160px;
+  padding: 0 14px;
+}
+.ai-floating-root:not(.open) .ai-floating-trigger:hover .ai-floating-compact-label {
+  display: none;
+}
+.ai-floating-root:not(.open) .ai-floating-trigger:hover .ai-floating-wordmark {
+  display: block;
 }
 .ai-floating-root.open .ai-floating-trigger {
   width: 48px;

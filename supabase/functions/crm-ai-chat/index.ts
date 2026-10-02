@@ -415,7 +415,7 @@ Deno.serve(async (req) => {
 
   const { data: aiSetting, error: settingError } = await admin
     .from("ai_organization_settings")
-    .select("enabled,daily_message_limit")
+    .select("enabled,daily_message_limit,daily_request_limit")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -464,22 +464,67 @@ Deno.serve(async (req) => {
     }
   }
 
-  const envDailyLimit = Number(Deno.env.get("AI_DAILY_MESSAGE_LIMIT") || DEFAULT_DAILY_LIMIT);
-  const dailyLimit = Math.max(1, Math.min(
-    Number(aiSetting.daily_message_limit || DEFAULT_DAILY_LIMIT),
-    Number.isFinite(envDailyLimit) && envDailyLimit > 0 ? envDailyLimit : DEFAULT_DAILY_LIMIT,
-  ));
-
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count: recentCount } = await admin
-    .from("ai_request_audit")
-    .select("id", { count: "exact", head: true })
+  const { data: userLimitSetting, error: userLimitError } = await admin
+    .from("ai_user_settings")
+    .select("daily_message_limit")
     .eq("organization_id", organizationId)
     .eq("user_id", user.id)
-    .gte("created_at", since);
+    .maybeSingle();
 
-  if (Number(recentCount || 0) >= dailyLimit) {
-    return json({ error: "Limite diário da IA atingido para este usuário." }, 429);
+  if (userLimitError) {
+    return json({ error: "Não foi possível validar o limite diário da IA." }, 500);
+  }
+
+  const dailyLimit = Math.max(1, Math.min(
+    Number(userLimitSetting?.daily_message_limit ?? aiSetting.daily_message_limit ?? DEFAULT_DAILY_LIMIT),
+    1000,
+  ));
+  const companyDailyLimit = Math.max(1, Math.min(
+    Number(aiSetting.daily_request_limit || 1000),
+    100000,
+  ));
+
+  // A contagem diária é reiniciada à meia-noite de Brasília, e não após uma janela móvel de 24 horas.
+  const brazilDateParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const brazilDatePart = (type: string) => brazilDateParts.find((part) => part.type === type)?.value || "";
+  const brazilToday = `${brazilDatePart("year")}-${brazilDatePart("month")}-${brazilDatePart("day")}`;
+  const since = new Date(`${brazilToday}T00:00:00-03:00`).toISOString();
+
+  const [userUsage, companyUsage] = await Promise.all([
+    admin
+      .from("ai_request_audit")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("user_id", user.id)
+      .gte("created_at", since),
+    admin
+      .from("ai_request_audit")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .gte("created_at", since),
+  ]);
+
+  if (userUsage.error || companyUsage.error) {
+    return json({ error: "Não foi possível validar o uso diário da IA." }, 500);
+  }
+
+  if (Number(companyUsage.count || 0) >= companyDailyLimit) {
+    return json({
+      error: "O limite diário de perguntas da IA para esta empresa foi atingido.",
+      error_code: "company_daily_limit_reached",
+    }, 429);
+  }
+
+  if (Number(userUsage.count || 0) >= dailyLimit) {
+    return json({
+      error: "Limite diário da IA atingido para este usuário.",
+      error_code: "user_daily_limit_reached",
+    }, 429);
   }
 
   let conversation: any = null;

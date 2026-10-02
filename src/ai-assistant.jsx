@@ -200,7 +200,7 @@ export function AiFloatingAssistant({ userEmail }) {
         aria-expanded={open}
       >
         {open ? <X size={24} /> : <MessageCircle size={26} />}
-        {!open && <span>AXIVA IA</span>}
+        {!open && <img src="/axiva-ia-wordmark.webp" alt="AXIVA IA" />}
       </button>
     </div>
   )

@@ -4,6 +4,9 @@ import fs from 'node:fs'
 
 const edge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/index.ts', import.meta.url), 'utf8')
 const migration = fs.readFileSync(new URL('../supabase/migrations/20261001210642_ai_readonly_foundation.sql', import.meta.url), 'utf8')
+const aiLimitsMigration = fs.readFileSync(new URL('../supabase/migrations/20261002120000_ai_daily_limits.sql', import.meta.url), 'utf8')
+const adminAiLimits = fs.readFileSync(new URL('../supabase/functions/admin_ai_limits/index.ts', import.meta.url), 'utf8')
+const aiLimitsUi = fs.readFileSync(new URL('../src/admin-ai-limits.jsx', import.meta.url), 'utf8')
 const client = fs.readFileSync(new URL('../src/ai-client.js', import.meta.url), 'utf8')
 const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const main = fs.readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8')
@@ -249,4 +252,31 @@ test('Sales Coach prioriza CTA de baixa fricção em prospecção fria', () => {
   assert.match(salesKnowledge, /CTA de baixa fricção/)
   assert.match(salesKnowledge, /Só proponha reunião, demonstração ou compromisso maior/)
   assert.match(salesKnowledge, /Posso te mandar um resumo curto/)
+})
+
+
+test('limites diários da IA permitem teto por empresa e substituição por usuário', () => {
+  assert.match(aiLimitsMigration, /daily_request_limit integer not null default 1000/)
+  assert.match(aiLimitsMigration, /create table if not exists public\.ai_user_settings/)
+  assert.match(aiLimitsMigration, /revoke all on table public\.ai_user_settings from anon, authenticated/)
+  assert.match(edge, /from\("ai_user_settings"\)/)
+  assert.match(edge, /companyDailyLimit/)
+  assert.match(edge, /userUsage/)
+  assert.match(edge, /companyUsage/)
+  assert.match(edge, /America\/Sao_Paulo/)
+  assert.doesNotMatch(edge, /Date\.now\(\) - 24 \* 60 \* 60 \* 1000/)
+})
+
+test('gestão dos limites da IA exige administrador do sistema no backend', () => {
+  assert.match(adminAiLimits, /from\("system_admins"\)/)
+  assert.match(adminAiLimits, /actorProfile\?\.account_status !== "active"/)
+  assert.match(adminAiLimits, /action === "list_organizations"/)
+  assert.match(adminAiLimits, /action === "list_users"/)
+  assert.match(adminAiLimits, /action === "save_organization_limits"/)
+  assert.match(adminAiLimits, /action === "save_user_limit"/)
+  assert.match(adminAiLimits, /organization_members/)
+  assert.match(aiLimitsUi, /Limite total da empresa por dia/)
+  assert.match(aiLimitsUi, /Perguntas por dia/)
+  assert.match(app, /\['ai', 'IA', Bot\]/)
+  assert.match(app, /section === 'ai' && <AdminAiLimits/)
 })

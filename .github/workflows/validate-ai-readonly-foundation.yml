@@ -6,10 +6,13 @@ on:
       - 'docs/ai-implementation.md'
       - 'src/ai-client.js'
       - 'src/ai-assistant.jsx'
+      - 'src/admin-ai-limits.jsx'
       - 'src/App.jsx'
       - 'src/styles.css'
       - 'supabase/functions/crm-ai-chat/**'
+      - 'supabase/functions/admin_ai_limits/**'
       - 'supabase/migrations/20261001210642_ai_readonly_foundation.sql'
+      - 'supabase/migrations/20261002120000_ai_daily_limits.sql'
       - 'tests/ai-foundation-security.test.mjs'
       - '.github/workflows/validate-ai-readonly-foundation.yml'
   workflow_dispatch:
@@ -45,4 +48,4 @@ jobs:
           deno-version: v2.x
 
       - name: Edge Function typecheck
-        run: deno check --node-modules-dir=auto supabase/functions/crm-ai-chat/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/crm-ai-chat/index.ts supabase/functions/admin_ai_limits/index.ts

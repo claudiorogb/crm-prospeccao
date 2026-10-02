@@ -128,7 +128,7 @@ Deno.serve(async(req)=>{
     const [{data:membership},{data:organization},{data:orgSettings},{data:systemAdmin}] = await Promise.all([
       admin.from("organization_members").select("organization_id,is_active,role,deleted_at").eq("organization_id",campaign.organization_id).eq("user_id",user.id).maybeSingle(),
       admin.from("organizations").select("id,is_active,deleted_at,is_sandbox").eq("id",campaign.organization_id).maybeSingle(),
-      admin.from("organization_settings").select("google_places_leads_per_capture").eq("organization_id",campaign.organization_id).maybeSingle(),
+      admin.from("organization_settings").select("google_places_leads_per_capture,google_places_calls_per_capture").eq("organization_id",campaign.organization_id).maybeSingle(),
       admin.from("system_admins").select("user_id").eq("user_id",user.id).maybeSingle(),
     ]);
 

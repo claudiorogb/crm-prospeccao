@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { AXIVA_AI_KNOWLEDGE } from "./knowledge.ts";
+import { AXIVA_AI_KNOWLEDGE, AXIVA_SALES_COACH_KNOWLEDGE } from "./knowledge.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -301,7 +301,12 @@ function isSupportQuestion(message: string) {
   return /\b(como faco|como fazer|como criar|como cadastrar|como conectar|como configurar|como usar|onde fica|onde encontro|passo a passo|me explique passo a passo|qual a diferenca entre|permissao|permissoes|configuracao|configurar|menu|botao|tela|aba)\b/.test(value);
 }
 
-function buildInstructions(includeSupportKnowledge = false) {
+function isSalesCoachingQuestion(message: string) {
+  const value = normalize(message);
+  return /\b(spin|challenger|solution selling|aida|bant|laer|gpct|gpctba|objecao|objecoes|script|discurso|cold call|cold calling|roleplay|simulacao de vendas|mentor comercial|treinamento de vendas|treinar vendas|vender melhor|tecnica de vendas|tecnicas de vendas|abordagem comercial|melhorar abordagem|melhorar mensagem|revisar mensagem|revisar email|revisar e-mail|revisar whatsapp|qualificacao de lead|qualificar lead|fechamento de venda|negociacao comercial)\b/.test(value);
+}
+
+function buildInstructions(options: { support?: boolean; salesCoach?: boolean } = {}) {
   const base = [
     "Você é a IA do AXIVA CRM.",
     "Responda em português, com linguagem simples, direta e humana.",
@@ -317,7 +322,11 @@ function buildInstructions(includeSupportKnowledge = false) {
     "Em análises comerciais, priorize fatos observáveis no contexto, explique por que merecem atenção e sugira uma ordem prática de atuação sem executar ações.",
     "Quando o usuário pedir prioridades do dia, seja objetivo: apresente no máximo 5 prioridades, cite os nomes dos registros quando disponíveis e evite introduções longas.",
   ];
-  if (includeSupportKnowledge) base.push("", AXIVA_AI_KNOWLEDGE);
+  if (options.salesCoach) {
+    base.push("", AXIVA_SALES_COACH_KNOWLEDGE);
+  } else if (options.support) {
+    base.push("", AXIVA_AI_KNOWLEDGE);
+  }
   return base.join("\n");
 }
 
@@ -577,7 +586,10 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model,
-        instructions: buildInstructions(isSupportQuestion(message)),
+        instructions: buildInstructions({
+          support: isSupportQuestion(message),
+          salesCoach: isSalesCoachingQuestion(message),
+        }),
         input,
         max_output_tokens: 2400,
         store: false,

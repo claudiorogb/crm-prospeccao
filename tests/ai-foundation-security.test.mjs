@@ -192,7 +192,7 @@ test('base de suporte documenta permissões confirmadas por papel', () => {
 test('análise comercial não carrega manual completo por padrão', () => {
   assert.match(edge, /function isSupportQuestion\(message: string\)/)
   assert.match(edge, /support: isSupportQuestion\(message\)/)
-  assert.match(edge, /if \(includeSupportKnowledge\) base\.push\("", AXIVA_AI_KNOWLEDGE\)/)
+  assert.match(edge, /else if \(options\.support\)/)
   assert.match(edge, /max_output_tokens: 2400/)
 })
 

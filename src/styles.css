@@ -4162,3 +4162,240 @@ button:not(:disabled):active,
     width: 100%;
   }
 }
+
+
+/* Administração da AXIVA IA: limites diários por empresa e usuário */
+.ai-limits-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.82fr) minmax(0, 1.5fr);
+  gap: 16px;
+  align-items: start;
+}
+.ai-limits-layout:not(.has-selection) {
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
+}
+.ai-limits-company-panel,
+.ai-limits-detail > .panel {
+  min-width: 0;
+}
+.ai-limits-company-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+.ai-limits-company-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  text-align: left;
+  color: #0b192c;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.ai-limits-company-card:hover,
+.ai-limits-company-card.active {
+  border-color: #00a88f;
+  background: #f3fbf9;
+}
+.ai-limits-company-icon {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #e8f7f4;
+  color: #008e79;
+}
+.ai-limits-company-copy {
+  min-width: 0;
+  flex: 1;
+}
+.ai-limits-company-copy strong,
+.ai-limits-company-copy small {
+  display: block;
+}
+.ai-limits-company-copy strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.ai-limits-company-copy small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
+}
+.ai-limits-status {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 4px 7px;
+}
+.ai-limits-status.enabled {
+  color: #087f6b;
+  background: #e8f7f4;
+}
+.ai-limits-footnote {
+  margin: 14px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #64748b;
+}
+.ai-limits-detail {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.ai-limits-back {
+  justify-self: start;
+}
+.ai-limits-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.ai-limits-settings-grid label,
+.ai-limits-user-control label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.ai-limits-settings-grid input,
+.ai-limits-user-control input {
+  width: 100%;
+  min-width: 0;
+}
+.ai-limits-settings-grid small,
+.ai-limits-user-control small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 400;
+}
+.ai-limits-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 15px;
+}
+.ai-limits-form-footer > .muted {
+  max-width: 380px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.ai-limits-form-footer .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+.ai-limits-users-panel {
+  min-width: 0;
+}
+.ai-limits-user-list {
+  display: grid;
+  margin-top: 8px;
+}
+.ai-limits-user-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.85fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+.ai-limits-user-row:last-child {
+  border-bottom: 0;
+}
+.ai-limits-user-identity {
+  min-width: 0;
+}
+.ai-limits-user-identity strong,
+.ai-limits-user-identity span,
+.ai-limits-user-identity small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.ai-limits-user-identity strong {
+  font-size: 12px;
+}
+.ai-limits-user-identity span {
+  margin-top: 3px;
+  color: #475569;
+  font-size: 11px;
+}
+.ai-limits-user-identity small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 10px;
+}
+.ai-limits-user-control {
+  min-width: 0;
+}
+.ai-limits-user-control > small {
+  display: block;
+  margin-top: 5px;
+}
+.ai-limits-user-row > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.ai-limits-empty {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #64748b;
+}
+.ai-limits-empty h3 {
+  margin: 10px 0 4px;
+  color: #0b192c;
+}
+.ai-limits-empty p {
+  max-width: 320px;
+  font-size: 12px;
+}
+@media (max-width: 1250px) {
+  .ai-limits-layout,
+  .ai-limits-layout:not(.has-selection) {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 700px) {
+  .ai-limits-settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .ai-limits-form-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .ai-limits-user-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .ai-limits-user-control {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .ai-limits-user-row > button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .ai-limits-company-card {
+    flex-wrap: wrap;
+  }
+}

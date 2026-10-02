@@ -37,7 +37,7 @@ async function loadSettings(organizationId) {
   if (!organizationId) return null
   const { data, error } = await supabase
     .from('organization_settings')
-    .select('organization_id,lead_capture_weekly_limit,lead_capture_weekly_usage,lead_capture_week_start,google_places_leads_per_capture')
+    .select('organization_id,lead_capture_weekly_limit,lead_capture_weekly_usage,lead_capture_week_start,google_places_leads_per_capture,google_places_calls_per_capture')
     .eq('organization_id', organizationId)
     .single()
 
@@ -51,12 +51,12 @@ function fieldMarkup(settings) {
   const value = limit == null ? '' : String(limit)
   const displayLimit = limit == null ? 'Ilimitado' : limit
   const leadsPerCapture = Number(settings?.google_places_leads_per_capture || 40)
-  const estimatedCalls = Math.ceil(leadsPerCapture / 20)
+  const callsPerCapture = Number(settings?.google_places_calls_per_capture || 2)
 
   return `
     <span class="eyebrow">PLANO DE CAPTAÇÃO</span>
     <h2>Captações automáticas</h2>
-    <p class="muted">Defina quantas captações esta empresa pode iniciar por semana e quantos leads cada captação pode buscar.</p>
+    <p class="muted">Defina quantas captações esta empresa pode iniciar por semana, quantos leads cada captação deve buscar e quantas chamadas de busca ao Google podem ser usadas em cada captação.</p>
     <div class="campaign-form">
       <div class="field-grid">
         <label>
@@ -67,13 +67,17 @@ function fieldMarkup(settings) {
           Leads por captação
           <input id="axiva-leads-per-capture-input" type="number" min="1" step="1" value="${leadsPerCapture}" />
         </label>
+        <label>
+          Chamadas de busca ao Google por captação
+          <input id="axiva-google-calls-per-capture-input" type="number" min="1" max="20" step="1" value="${callsPerCapture}" />
+        </label>
       </div>
       <div class="settings-preview">
         <div><strong>Uso nesta semana:</strong> ${usage} / ${displayLimit}</div>
         <div><strong>Disponível:</strong> ${remainingText(settings)}</div>
-        <div><strong>Consumo estimado:</strong> a partir de ${estimatedCalls} chamada${estimatedCalls === 1 ? '' : 's'} Enterprise, conforme resultados e termos de busca</div>
+        <div><strong>Máximo de buscas Google por captação:</strong> ${callsPerCapture}</div>
       </div>
-      <small class="muted">Não há teto comercial fixo para leads por captação. O sistema distribui buscas entre os termos cadastrados e sempre respeita os limites mensais da empresa e o limite global AXIVA. Deixe o limite semanal vazio para não limitar a quantidade de captações.</small>
+      <small class="muted">A segunda chamada e as seguintes só são usadas se as chamadas anteriores não produzirem leads válidos suficientes. Cada chamada usa um termo de busca/estratégia disponível e respeita os limites mensais da empresa e o limite global AXIVA. A resolução do centro da cidade, quando necessária, é uma chamada Pro separada. Deixe o limite semanal vazio para não limitar a quantidade de captações.</small>
       <div class="form-actions">
         <button id="axiva-weekly-capture-save" class="primary inline-btn" type="button">Salvar plano de captação</button>
       </div>
@@ -121,12 +125,14 @@ async function renderAdminPanel() {
     const saveButton = panel.querySelector('#axiva-weekly-capture-save')
     const weeklyInput = panel.querySelector('#axiva-weekly-capture-input')
     const leadsInput = panel.querySelector('#axiva-leads-per-capture-input')
+    const callsInput = panel.querySelector('#axiva-google-calls-per-capture-input')
     const notice = panel.querySelector('#axiva-weekly-capture-notice')
 
     saveButton?.addEventListener('click', async () => {
       const rawWeekly = weeklyInput.value.trim()
       const weeklyLimit = rawWeekly === '' ? null : Number(rawWeekly)
       const leadsPerCapture = Number(leadsInput.value)
+      const callsPerCapture = Number(callsInput.value)
 
       if (weeklyLimit !== null && (!Number.isInteger(weeklyLimit) || weeklyLimit < 0)) {
         notice.className = 'notice error'
@@ -140,6 +146,12 @@ async function renderAdminPanel() {
         return
       }
 
+      if (!Number.isInteger(callsPerCapture) || callsPerCapture < 1 || callsPerCapture > 20) {
+        notice.className = 'notice error'
+        notice.textContent = 'Chamadas de busca ao Google por captação deve ser um número inteiro entre 1 e 20.'
+        return
+      }
+
       saveButton.disabled = true
       notice.className = ''
       notice.textContent = ''
@@ -147,7 +159,8 @@ async function renderAdminPanel() {
       const { data, error } = await supabase.rpc('admin_set_lead_capture_settings', {
         p_organization_id: organizationId,
         p_weekly_limit: weeklyLimit,
-        p_leads_per_capture: leadsPerCapture
+        p_leads_per_capture: leadsPerCapture,
+        p_calls_per_capture: callsPerCapture
       })
 
       if (error || !data?.length) {
@@ -224,9 +237,10 @@ async function renderCaptureStatus(force = false) {
     const usage = normalizedUsage(settings)
     const limit = settings?.lead_capture_weekly_limit
     const leadsPerCapture = Number(settings?.google_places_leads_per_capture || 40)
+    const callsPerCapture = Number(settings?.google_places_calls_per_capture || 2)
     const limitText = limit == null ? 'Sem limite' : `${usage} de ${limit} utilizadas`
 
-    box.innerHTML = `<strong>Captações desta semana:</strong> ${limitText}${limit == null ? '' : ` • ${remainingText(settings)}`}<br><strong>Leads por captação:</strong> até ${leadsPerCapture}`
+    box.innerHTML = `<strong>Captações desta semana:</strong> ${limitText}${limit == null ? '' : ` • ${remainingText(settings)}`}<br><strong>Leads por captação:</strong> até ${leadsPerCapture}<br><strong>Chamadas de busca ao Google:</strong> até ${callsPerCapture} por captação`
     box.dataset.loadedAt = String(Date.now())
 
     const button = panel.querySelector('.capture-button')

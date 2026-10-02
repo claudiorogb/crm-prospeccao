@@ -4,7 +4,7 @@ import {
   ChevronRight, Plus, Target, Trash2, ClipboardCopy, Tags, Send,
   Phone, ListChecks, Shield, Database, SlidersHorizontal, History,
   Pause, Play, RefreshCw, XCircle, CheckCircle2, Activity, UserPlus,
-  Save, ChevronDown, Menu, X, CalendarDays, Clock, UserRound
+  Save, ChevronDown, Menu, X, CalendarDays, Clock, UserRound, Bot
 } from 'lucide-react'
 import { Link2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
@@ -18,6 +18,7 @@ import { EmailMarketing, EmailProspecting, AdminEmailMarketing } from './email-m
 import DashboardVisual from './dashboard-visual'
 import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
 import AiAssistant, { AiFloatingAssistant } from './ai-assistant'
+import AdminAiLimits from './admin-ai-limits'
 import whatsappIcon from './whatsapp-icon.png'
 
 
@@ -8468,6 +8469,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
     ['integrations', 'Integrações', Link2],
     ['defaults', 'Padrões', SlidersHorizontal],
     ['messages', 'Mensagens', MessageSquareText],
+    ['ai', 'IA', Bot],
     ['audit', 'Auditoria', History]
   ]
 
@@ -8508,6 +8510,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
           {section === 'integrations' && <AdminIntegrations organizations={organizations} />}
           {section === 'defaults' && <AdminDefaults organizations={organizations} />}
           {section === 'messages' && <AdminMessages organizations={organizations} userEmail={userEmail} />}
+          {section === 'ai' && <AdminAiLimits reloadOrganizations={reloadOrganizations} />}
           {section === 'audit' && <AdminAudit organizations={productionOrganizations} userEmail={userEmail} />}
         </div>
       </div>

@@ -11,11 +11,10 @@ Deno.serve(async (req) => {
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) return json({ error: "Server not configured" }, 503);
 
-  const auth = req.headers.get("Authorization") || "";
-  const apiKey = req.headers.get("apikey") || "";
-  if (!auth.includes(key) && apiKey !== key) return json({ error: "Unauthorized" }, 401);
-
+  const token = req.headers.get("x-cleanup-token") || "";
   const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: valid, error: verifyError } = await admin.rpc("verify_file_security_cleanup_token", { p_token: token });
+  if (verifyError || valid !== true) return json({ error: "Unauthorized" }, 401);
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: rows, error } = await admin.from("file_security_scans")

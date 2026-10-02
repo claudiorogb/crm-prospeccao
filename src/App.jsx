@@ -8817,6 +8817,10 @@ export default function App() {
             )}
           </nav>
 
+          <div className="sidebar-user">
+            <UserRound size={16}/>
+            <span>{userEmail}</span>
+          </div>
           <button className="nav-item logout" onClick={() => { setMobileMenuOpen(false); logout() }}>
             <LogOut size={18}/> Sair
           </button>
@@ -8999,6 +9003,10 @@ export default function App() {
           )}
         </nav>
 
+        <div className="sidebar-user">
+          <UserRound size={16}/>
+          <span>{userLabel}</span>
+        </div>
         <button className="nav-item logout" onClick={() => { setMobileMenuOpen(false); logout() }}>
           <LogOut size={18}/> Sair
         </button>

@@ -242,3 +242,11 @@ test('base de Sales Coach é carregada por intenção sem substituir suporte do 
   assert.match(salesKnowledge, /ROLEPLAY/)
   assert.match(salesKnowledge, /REVISÃO DE DISCURSO E SCRIPTS/)
 })
+
+
+test('Sales Coach prioriza CTA de baixa fricção em prospecção fria', () => {
+  const salesKnowledge = fs.readFileSync(new URL('../supabase/functions/crm-ai-chat/knowledge.ts', import.meta.url), 'utf8')
+  assert.match(salesKnowledge, /CTA de baixa fricção/)
+  assert.match(salesKnowledge, /Só proponha reunião, demonstração ou compromisso maior/)
+  assert.match(salesKnowledge, /Posso te mandar um resumo curto/)
+})

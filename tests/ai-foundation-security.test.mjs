@@ -267,6 +267,15 @@ test('limites diários da IA permitem teto por empresa e substituição por usu�
   assert.doesNotMatch(edge, /Date\.now\(\) - 24 \* 60 \* 60 \* 1000/)
 })
 
+test('ativação e desativação da IA por empresa sincroniza acesso do backend e interface', () => {
+  assert.match(adminAiLimits, /action === "toggle_organization_ai"/)
+  assert.match(adminAiLimits, /typeof enabled !== "boolean"/)
+  assert.match(adminAiLimits, /ai_assistant: enabled/)
+  assert.match(adminAiLimits, /enabled \? "ai_company_enabled" : "ai_company_disabled"/)
+  assert.match(aiLimitsUi, /toggleOrganizationAi/)
+  assert.match(aiLimitsUi, /organization\.ai_enabled \? 'Desativar IA' : 'Ativar IA'/)
+})
+
 test('gestão dos limites da IA exige administrador do sistema no backend', () => {
   assert.match(adminAiLimits, /from\("system_admins"\)/)
   assert.match(adminAiLimits, /actorProfile\?\.account_status !== "active"/)

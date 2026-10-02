@@ -201,6 +201,78 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "toggle_organization_ai") {
+      const organizationId = String(body?.organization_id || "");
+      const enabled = body?.enabled;
+      if (!organizationId || typeof enabled !== "boolean") {
+        return json({ error: "Informe a empresa e o estado desejado da IA." }, 400);
+      }
+
+      const { data: organization, error: orgError } = await admin
+        .from("organizations")
+        .select("id,name")
+        .eq("id", organizationId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (orgError) throw orgError;
+      if (!organization) return json({ error: "Empresa não encontrada." }, 404);
+
+      const [{ data: currentAiSetting, error: aiSettingError }, { data: organizationSettings, error: organizationSettingsError }] = await Promise.all([
+        admin.from("ai_organization_settings")
+          .select("daily_message_limit,daily_request_limit")
+          .eq("organization_id", organizationId)
+          .maybeSingle(),
+        admin.from("organization_settings")
+          .select("feature_flags")
+          .eq("organization_id", organizationId)
+          .maybeSingle(),
+      ]);
+      if (aiSettingError) throw aiSettingError;
+      if (organizationSettingsError) throw organizationSettingsError;
+      if (!organizationSettings) {
+        return json({ error: "A empresa não possui configurações gerais para habilitar a interface da IA." }, 409);
+      }
+
+      const currentFlags = organizationSettings.feature_flags &&
+        typeof organizationSettings.feature_flags === "object" &&
+        !Array.isArray(organizationSettings.feature_flags)
+        ? organizationSettings.feature_flags
+        : {};
+      const nextFlags = { ...currentFlags, ai_assistant: enabled };
+
+      const { error: uiFlagError } = await admin
+        .from("organization_settings")
+        .update({ feature_flags: nextFlags })
+        .eq("organization_id", organizationId);
+      if (uiFlagError) throw uiFlagError;
+
+      const { error: aiSaveError } = await admin.from("ai_organization_settings").upsert({
+        organization_id: organizationId,
+        enabled,
+        daily_message_limit: Number(currentAiSetting?.daily_message_limit || DEFAULT_USER_LIMIT),
+        daily_request_limit: Number(currentAiSetting?.daily_request_limit || DEFAULT_COMPANY_LIMIT),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "organization_id" });
+
+      if (aiSaveError) {
+        await admin.from("organization_settings")
+          .update({ feature_flags: currentFlags })
+          .eq("organization_id", organizationId);
+        throw aiSaveError;
+      }
+
+      await writeAudit(
+        admin,
+        user.id,
+        organizationId,
+        enabled ? "ai_company_enabled" : "ai_company_disabled",
+        organizationId,
+        { enabled, organization_name: organization.name },
+      );
+
+      return json({ ok: true, enabled });
+    }
+
     if (action === "save_organization_limits") {
       const organizationId = String(body?.organization_id || "");
       const dailyMessageLimit = validInteger(body?.daily_message_limit, 1, 1000);

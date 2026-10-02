@@ -22,7 +22,7 @@
 .wa-message small{display:flex;gap:4px;align-items:center;justify-content:flex-end;color:#6d777d;margin-top:5px;font-size:11px}
 .wa-auto{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;margin-top:6px;color:#8a6400}
 .wa-compose{border-top:1px solid #edf0f2;padding:12px;display:flex;gap:10px;align-items:flex-end}
-.wa-compose textarea{flex:1;min-height:44px;max-height:120px;resize:vertical}
+.wa-compose textarea{flex:1;min-height:112px;max-height:160px;resize:vertical;line-height:1.4;padding:10px 12px}
 .wa-empty{min-height:180px;display:grid;place-items:center;align-content:center;gap:8px;color:#69767d;text-align:center;padding:20px}
 .wa-connections{display:grid;gap:14px}
 .wa-provider-card{display:flex;align-items:center;justify-content:space-between;gap:20px}
@@ -55,7 +55,7 @@
 .wa-compose-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .wa-compose-tools select{max-width:230px}
 .wa-compose-row{display:flex;gap:10px;align-items:flex-end}
-.wa-compose-row textarea{flex:1;min-height:44px;max-height:120px;resize:vertical}
+.wa-compose-row textarea{flex:1;min-height:112px;max-height:160px;resize:vertical;line-height:1.4;padding:10px 12px}
 .wa-file-input{display:none}
 .wa-attachment-chip{display:flex;align-items:center;gap:7px;width:max-content;max-width:100%;padding:6px 9px;border-radius:9px;background:#eef4f2;border:1px solid #d8e4df}
 .wa-attachment-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:360px}

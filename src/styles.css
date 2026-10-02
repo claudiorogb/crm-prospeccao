@@ -4002,22 +4002,29 @@ button:not(:disabled):active,
 .ai-floating-trigger {
   min-width: 58px;
   height: 58px;
-  border: 0;
+  border: 1px solid #dbe4ee;
   border-radius: 999px;
-  background: #0f766e;
-  color: #fff;
+  background: #fff;
+  color: #0b192c;
   box-shadow: 0 12px 32px rgba(15, 23, 42, .22);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
-  padding: 0 17px;
+  padding: 0 14px;
   font: inherit;
   font-weight: 800;
   cursor: pointer;
 }
+.ai-floating-trigger img {
+  display: block;
+  width: 104px;
+  height: auto;
+  max-height: 42px;
+  object-fit: contain;
+}
 .ai-floating-trigger:hover {
-  background: #115e59;
+  background: #f8fafc;
 }
 .ai-floating-root.open .ai-floating-trigger {
   width: 48px;

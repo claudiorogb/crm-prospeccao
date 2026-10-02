@@ -206,7 +206,12 @@ export function AiFloatingAssistant({ userEmail }) {
         aria-expanded={open}
       >
         {open ? <X size={24} /> : <MessageCircle size={26} />}
-        {!open && <img src="/axiva-ia-wordmark.webp" alt="AXIVA IA" />}
+        {!open && (
+          <>
+            <span className="ai-floating-compact-label" aria-hidden="true">IA</span>
+            <img className="ai-floating-wordmark" src="/axiva-ia-wordmark.webp" alt="AXIVA IA" />
+          </>
+        )}
       </button>
     </div>
   )

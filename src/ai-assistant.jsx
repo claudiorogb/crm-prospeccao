@@ -102,7 +102,13 @@ function AiChatBody({ compact = false }) {
   useEffect(() => {
     const element = messagesRef.current
     if (!element) return
-    element.scrollTop = element.scrollHeight
+
+    // Wait until the new question/answer has been laid out before scrolling.
+    const frame = window.requestAnimationFrame(() => {
+      element.scrollTop = element.scrollHeight
+    })
+
+    return () => window.cancelAnimationFrame(frame)
   }, [chat.messages, chat.loading])
 
   return (

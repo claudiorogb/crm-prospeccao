@@ -155,6 +155,16 @@ async function pauseForDisconnectedWhatsApp(admin: any, message: any, detail = "
   }).eq("id", message.id).eq("status", "ready");
 }
 
+async function replenishDailySlot(admin: any, organizationId: string, whatsappNumberId: string, intervalSeconds: number) {
+  const { data, error } = await admin.rpc("replenish_whatsapp_daily_slot", {
+    p_organization_id: organizationId,
+    p_whatsapp_number_id: whatsappNumberId,
+    p_interval_seconds: intervalSeconds,
+  });
+  if (error) return { id: null, error: error.message };
+  return { id: data || null, error: null };
+}
+
 async function releaseLeadFromQueueIfNoActiveMessage(admin: any, organizationId: string, leadId: string) {
   if (!leadId) return;
   const { data: active } = await admin
@@ -210,6 +220,19 @@ async function markStaleReadyAsFailed(admin: any) {
   }).in("id", ids).eq("status", "ready");
   for (const item of stale) {
     await releaseLeadFromQueueIfNoActiveMessage(admin, String(item.organization_id), String(item.lead_id));
+    const { data: messageInfo } = await admin
+      .from("outbound_messages")
+      .select("whatsapp_number_id,interval_seconds")
+      .eq("id", item.id)
+      .maybeSingle();
+    if (messageInfo?.whatsapp_number_id) {
+      await replenishDailySlot(
+        admin,
+        String(item.organization_id),
+        String(messageInfo.whatsapp_number_id),
+        Number(messageInfo.interval_seconds || 120),
+      );
+    }
   }
   const batchIds = [...new Set(stale.map((m: any) => m.batch_id).filter(Boolean))];
   for (const batchId of batchIds) await refreshBatch(admin, String(batchId));
@@ -292,9 +315,20 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq("id", message.id).eq("status", "ready");
         await releaseLeadFromQueueIfNoActiveMessage(admin, String(message.organization_id), String(message.lead_id));
+        const replenished = await replenishDailySlot(
+          admin,
+          String(message.organization_id),
+          String(message.whatsapp_number_id),
+          Number(message.interval_seconds || 120),
+        );
         await refreshBatch(admin, message.batch_id);
         processed++;
-        results.push({ id: message.id, status: "failed", error: detail });
+        results.push({
+          id: message.id,
+          status: "failed",
+          error: detail,
+          replenished_message_id: replenished.id,
+        });
       }
     }
     return json({ ok: true, processed, stale_failed: staleFailed, results });

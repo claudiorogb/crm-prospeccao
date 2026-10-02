@@ -176,83 +176,137 @@ Deno.serve(async(req)=>{
     const center=await resolveCampaignCenter(admin,campaign,googleApiKey);
     const radiusKm=Math.max(1,Math.min(Number(campaign.radius_km||30),50));
     const leadsPerCapture=Math.max(1,Math.trunc(Number(orgSettings?.google_places_leads_per_capture||40)));
+    const googleCallsPerCapture=Math.max(1,Math.min(20,Math.trunc(Number(orgSettings?.google_places_calls_per_capture||2))));
 
     const fieldMask=["places.id","places.displayName","places.formattedAddress","places.location","places.nationalPhoneNumber","places.websiteUri","places.rating","places.userRatingCount","places.primaryType","places.businessStatus","nextPageToken"].join(",");
     const placesById=new Map<string,any>();
+    const validPlacesById=new Map<string,any>();
+    const existingIds=new Set<string>();
     const queriesUsed:string[]=[];
-    let pagesUsed=0;
+    let searchCallsUsed=0;
     let termsUsed=0;
     let quotaStopped=false;
     let enterpriseUsage=0;
     let enterpriseQuota=0;
     let pageErrorStatus:number|null=null;
+    let duplicates=0;
+    let outsideRadius=0;
+    let nonOperational=0;
+    let missingLocation=0;
 
-    for(let offset=0; offset<searchTerms.length && placesById.size<leadsPerCapture; offset++){
-      const termIndex=(startTermIndex+offset)%searchTerms.length;
+    const isValidPlace=(place:any)=>{
+      if(!place?.id) return false;
+      if(existingIds.has(place.id)) return false;
+      if(place.businessStatus&&place.businessStatus!=="OPERATIONAL") return false;
+      const lat=Number(place.location?.latitude),lon=Number(place.location?.longitude);
+      if(!Number.isFinite(lat)||!Number.isFinite(lon)) return false;
+      return haversineKm(center.latitude,center.longitude,lat,lon)<=radiusKm;
+    };
+
+    let nextPageToken:string|null=null;
+    let nextTermOffset=0;
+
+    while(searchCallsUsed<googleCallsPerCapture && validPlacesById.size<leadsPerCapture){
+      const termIndex=(startTermIndex+nextTermOffset)%searchTerms.length;
       const selectedTerm=searchTerms[termIndex];
-      queriesUsed.push(selectedTerm.term);
-      termsUsed++;
-      let nextPageToken:string|null=null;
-
-      for(let page=0; page<3 && placesById.size<leadsPerCapture; page++){
-        try{
-          const enterprise=await reserveQuota(admin,campaign.organization_id,"enterprise");
-          enterpriseUsage=enterprise.usage;
-          enterpriseQuota=enterprise.quota;
-        }catch(error:any){
-          if(pagesUsed>0 && Number(error?.status||0)===429){
-            quotaStopped=true;
-            break;
-          }
-          throw error;
-        }
-
-        const pageSize=Math.min(20,leadsPerCapture-placesById.size);
-        const requestBody:any={
-          textQuery:selectedTerm.term,
-          languageCode:"pt-BR",
-          regionCode:"BR",
-          pageSize,
-          locationBias:{circle:{center:{latitude:center.latitude,longitude:center.longitude},radius:radiusKm*1000}}
-        };
-        if(nextPageToken) requestBody.pageToken=nextPageToken;
-
-        const googleResponse=await fetch("https://places.googleapis.com/v1/places:searchText",{
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json",
-            "X-Goog-Api-Key":googleApiKey,
-            "X-Goog-FieldMask":fieldMask,
-          },
-          body:JSON.stringify(requestBody),
-        });
-        const googlePayload=await googleResponse.json();
-
-        if(!googleResponse.ok){
-          if(pagesUsed===0){
-            await admin.rpc("finish_lead_capture_run",{p_run_id:captureRunId,p_success:false,p_result:{google_status:googleResponse.status}});
-            captureRunId=null;
-            return json({error:"Google Places request failed",google_status:googleResponse.status,details:googlePayload},502);
-          }
-          pageErrorStatus=googleResponse.status;
-          break;
-        }
-
-        pagesUsed++;
-        for(const place of Array.isArray(googlePayload.places)?googlePayload.places:[]){
-          if(place?.id && !placesById.has(place.id)) {
-            placesById.set(place.id,{...place,_axivaSearchTerm:selectedTerm.term});
-          }
-          if(placesById.size>=leadsPerCapture) break;
-        }
-
-        nextPageToken=googlePayload?.nextPageToken||null;
-        if(!nextPageToken) break;
+      if(!nextPageToken){
+        queriesUsed.push(selectedTerm.term);
+        termsUsed++;
       }
 
-      if(quotaStopped) break;
+      try{
+        const enterprise=await reserveQuota(admin,campaign.organization_id,"enterprise");
+        enterpriseUsage=enterprise.usage;
+        enterpriseQuota=enterprise.quota;
+      }catch(error:any){
+        if(searchCallsUsed>0 && Number(error?.status||0)===429){
+          quotaStopped=true;
+          break;
+        }
+        throw error;
+      }
+
+      const requestBody:any={
+        textQuery:selectedTerm.term,
+        languageCode:"pt-BR",
+        regionCode:"BR",
+        pageSize:Math.min(20,Math.max(1,leadsPerCapture-validPlacesById.size)),
+        locationBias:{circle:{center:{latitude:center.latitude,longitude:center.longitude},radius:radiusKm*1000}}
+      };
+      if(nextPageToken) requestBody.pageToken=nextPageToken;
+
+      const googleResponse=await fetch("https://places.googleapis.com/v1/places:searchText",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "X-Goog-Api-Key":googleApiKey,
+          "X-Goog-FieldMask":fieldMask,
+        },
+        body:JSON.stringify(requestBody),
+      });
+      const googlePayload=await googleResponse.json();
+      searchCallsUsed++;
+
+      if(!googleResponse.ok){
+        if(searchCallsUsed===1){
+          await admin.rpc("finish_lead_capture_run",{p_run_id:captureRunId,p_success:false,p_result:{google_status:googleResponse.status}});
+          captureRunId=null;
+          return json({error:"Google Places request failed",google_status:googleResponse.status,details:googlePayload},502);
+        }
+        pageErrorStatus=googleResponse.status;
+        break;
+      }
+
+      const returnedPlaces=Array.isArray(googlePayload.places)?googlePayload.places:[];
+      const returnedIds=returnedPlaces.map((p:any)=>p?.id).filter(Boolean);
+
+      if(returnedIds.length){
+        const {data:existing}=await admin.from("leads")
+          .select("google_place_id")
+          .eq("organization_id",campaign.organization_id)
+          .is("deleted_at",null)
+          .in("google_place_id",returnedIds);
+        for(const row of existing||[]){
+          if(row?.google_place_id) existingIds.add(row.google_place_id);
+        }
+      }
+
+      for(const place of returnedPlaces){
+        if(!place?.id) continue;
+        if(placesById.has(place.id)) continue;
+        placesById.set(place.id,{...place,_axivaSearchTerm:selectedTerm.term});
+
+        if(existingIds.has(place.id)){
+          duplicates++;
+          continue;
+        }
+        if(place.businessStatus&&place.businessStatus!=="OPERATIONAL"){
+          nonOperational++;
+          continue;
+        }
+        const lat=Number(place.location?.latitude),lon=Number(place.location?.longitude);
+        if(!Number.isFinite(lat)||!Number.isFinite(lon)){
+          missingLocation++;
+          continue;
+        }
+        const distanceKm=haversineKm(center.latitude,center.longitude,lat,lon);
+        if(distanceKm>radiusKm){
+          outsideRadius++;
+          continue;
+        }
+        if(!validPlacesById.has(place.id)) validPlacesById.set(place.id,{...place,_axivaSearchTerm:selectedTerm.term});
+        if(validPlacesById.size>=leadsPerCapture) break;
+      }
+
+      nextPageToken=googlePayload?.nextPageToken||null;
+      if(validPlacesById.size>=leadsPerCapture) break;
+
+      if(!nextPageToken){
+        nextTermOffset++;
+      }
     }
 
+    const nextCursor=(startTermIndex+Math.max(nextTermOffset,1))%searchTerms.length;
     const nextCursor=(startTermIndex+Math.max(termsUsed,1))%searchTerms.length;
     await admin.from("campaigns").update({search_term_cursor:nextCursor}).eq("id",campaign.id).eq("organization_id",campaign.organization_id).is("deleted_at",null);
 

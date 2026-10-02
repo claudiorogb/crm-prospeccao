@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Building2, RefreshCw, ChevronLeft, Save, Users, Bot } from 'lucide-react'
+import { Building2, RefreshCw, ChevronLeft, Save, Users, Bot, Power } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
 function errorMessage(error, fallback) {
@@ -15,6 +15,7 @@ export default function AdminAiLimits({ reloadOrganizations }) {
   const [loadingOrganizations, setLoadingOrganizations] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [savingCompany, setSavingCompany] = useState(false)
+  const [togglingOrganizationId, setTogglingOrganizationId] = useState('')
   const [savingUserId, setSavingUserId] = useState('')
   const [notice, setNotice] = useState('')
   const [noticeType, setNoticeType] = useState('success')
@@ -98,6 +99,32 @@ export default function AdminAiLimits({ reloadOrganizations }) {
       daily_message_limit: String(organization.daily_message_limit ?? 100),
     })
     await loadUsers(organization.id)
+  }
+
+  async function toggleOrganizationAi(organization) {
+    const enabled = !organization.ai_enabled
+    setTogglingOrganizationId(organization.id)
+    setNotice('')
+
+    const { data, error } = await supabase.functions.invoke('admin_ai_limits', {
+      body: {
+        action: 'toggle_organization_ai',
+        organization_id: organization.id,
+        enabled,
+      },
+    })
+
+    setTogglingOrganizationId('')
+    if (error || data?.error) {
+      setNotice(data?.error || error?.message || 'Não foi possível alterar o acesso à IA.')
+      setNoticeType('error')
+      return
+    }
+
+    setNotice(`IA ${enabled ? 'ativada' : 'desativada'} para ${organization.name}.`)
+    setNoticeType('success')
+    await loadOrganizations()
+    if (reloadOrganizations) await reloadOrganizations()
   }
 
   async function saveCompanyLimits(event) {
@@ -184,21 +211,35 @@ export default function AdminAiLimits({ reloadOrganizations }) {
           ) : (
             <div className="ai-limits-company-list">
               {organizations.map(organization => (
-                <button
-                  type="button"
+                <div
                   key={organization.id}
                   className={`ai-limits-company-card ${selectedOrganizationId === organization.id ? 'active' : ''}`}
-                  onClick={() => selectOrganization(organization)}
                 >
-                  <span className="ai-limits-company-icon"><Building2 size={17} /></span>
-                  <span className="ai-limits-company-copy">
-                    <strong>{organization.name}</strong>
-                    <small>{organization.is_sandbox ? 'Ambiente de teste' : organization.is_active ? 'Empresa ativa' : 'Empresa inativa'} · {organization.active_user_count || 0} usuário(s)</small>
-                  </span>
-                  <span className={`ai-limits-status ${organization.ai_enabled ? 'enabled' : ''}`}>
-                    {organization.ai_enabled ? 'IA ativa' : 'IA inativa'}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    className="ai-limits-company-select"
+                    onClick={() => selectOrganization(organization)}
+                  >
+                    <span className="ai-limits-company-icon"><Building2 size={17} /></span>
+                    <span className="ai-limits-company-copy">
+                      <strong>{organization.name}</strong>
+                      <small>{organization.is_sandbox ? 'Ambiente de teste' : organization.is_active ? 'Empresa ativa' : 'Empresa inativa'} · {organization.active_user_count || 0} usuário(s)</small>
+                    </span>
+                    <span className={`ai-limits-status ${organization.ai_enabled ? 'enabled' : ''}`}>
+                      {organization.ai_enabled ? 'IA ativa' : 'IA inativa'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={organization.ai_enabled ? 'secondary mini ai-limits-toggle-button' : 'primary mini ai-limits-toggle-button'}
+                    onClick={() => toggleOrganizationAi(organization)}
+                    disabled={togglingOrganizationId === organization.id || loadingOrganizations}
+                    aria-label={`${organization.ai_enabled ? 'Desativar' : 'Ativar'} IA para ${organization.name}`}
+                  >
+                    <Power size={13} />
+                    {togglingOrganizationId === organization.id ? 'Salvando...' : organization.ai_enabled ? 'Desativar IA' : 'Ativar IA'}
+                  </button>
+                </div>
               ))}
             </div>
           )}

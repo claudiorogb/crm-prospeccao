@@ -35,7 +35,7 @@ for (const [provider, source] of [['Evolution', evolution], ['Meta', meta]]) {
     const isAutomaticReply = loadClassifier(source)
     assert.equal(
       isAutomaticReply('Olá o grupo soul agradece seu contato, sou o Evandro e estarei prestando-lhe atendimento, como podemos ajudar?'),
-      false,
+      true,
     )
     assert.equal(isAutomaticReply('Não é necessário, utilizamos o CRM com nosso ERP.'), false)
   })

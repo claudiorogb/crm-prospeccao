@@ -194,19 +194,10 @@ Deno.serve(async(req)=>{
     let nonOperational=0;
     let missingLocation=0;
 
-    const isValidPlace=(place:any)=>{
-      if(!place?.id) return false;
-      if(existingIds.has(place.id)) return false;
-      if(place.businessStatus&&place.businessStatus!=="OPERATIONAL") return false;
-      const lat=Number(place.location?.latitude),lon=Number(place.location?.longitude);
-      if(!Number.isFinite(lat)||!Number.isFinite(lon)) return false;
-      return haversineKm(center.latitude,center.longitude,lat,lon)<=radiusKm;
-    };
-
     let nextPageToken:string|null=null;
     let nextTermOffset=0;
 
-    while(searchCallsUsed<googleCallsPerCapture && validPlacesById.size<leadsPerCapture){
+    while(searchCallsUsed<googleCallsPerCapture && nextTermOffset<searchTerms.length && validPlacesById.size<leadsPerCapture){
       const termIndex=(startTermIndex+nextTermOffset)%searchTerms.length;
       const selectedTerm=searchTerms[termIndex];
       if(!nextPageToken){
@@ -307,27 +298,14 @@ Deno.serve(async(req)=>{
     }
 
     const nextCursor=(startTermIndex+Math.max(nextTermOffset,1))%searchTerms.length;
-    const nextCursor=(startTermIndex+Math.max(termsUsed,1))%searchTerms.length;
     await admin.from("campaigns").update({search_term_cursor:nextCursor}).eq("id",campaign.id).eq("organization_id",campaign.organization_id).is("deleted_at",null);
 
-    const places=Array.from(placesById.values()).slice(0,leadsPerCapture);
-    const placeIds=places.map((p:any)=>p.id).filter(Boolean);
-    let existingIds=new Set<string>();
-    if(placeIds.length){
-      const {data:existing}=await admin.from("leads").select("google_place_id").eq("organization_id",campaign.organization_id).is("deleted_at",null).in("google_place_id",placeIds);
-      existingIds=new Set((existing||[]).map((x:any)=>x.google_place_id));
-    }
+    const places=Array.from(validPlacesById.values()).slice(0,leadsPerCapture);
 
     const candidates:any[]=[];
-    let duplicates=0,outsideRadius=0,nonOperational=0,missingLocation=0;
     for(const place of places){
-      if(!place?.id) continue;
-      if(existingIds.has(place.id)){duplicates++;continue;}
-      if(place.businessStatus&&place.businessStatus!=="OPERATIONAL"){nonOperational++;continue;}
       const lat=Number(place.location?.latitude),lon=Number(place.location?.longitude);
-      if(!Number.isFinite(lat)||!Number.isFinite(lon)){missingLocation++;continue;}
       const distanceKm=haversineKm(center.latitude,center.longitude,lat,lon);
-      if(distanceKm>radiusKm){outsideRadius++;continue;}
       candidates.push({
         organization_id:campaign.organization_id,campaign_id:campaign.id,target_segment_id:targetSegment.id,
         business_name:place.displayName?.text||"Empresa sem nome",segment:targetSegment.name,
@@ -357,7 +335,9 @@ Deno.serve(async(req)=>{
 
     const captureResult={
       requested_limit:leadsPerCapture,
-      pages_used:pagesUsed,
+      pages_used:searchCallsUsed,
+      search_calls_used:searchCallsUsed,
+      search_calls_limit:googleCallsPerCapture,
       terms_used:termsUsed,
       queries:queriesUsed,
       found:places.length,
@@ -382,7 +362,9 @@ Deno.serve(async(req)=>{
       center:{latitude:center.latitude,longitude:center.longitude},
       radius_km:radiusKm,
       requested_limit:leadsPerCapture,
-      pages_used:pagesUsed,
+      pages_used:searchCallsUsed,
+      search_calls_used:searchCallsUsed,
+      search_calls_limit:googleCallsPerCapture,
       found:places.length,
       inserted,
       duplicates,

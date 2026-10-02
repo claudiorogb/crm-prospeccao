@@ -191,7 +191,7 @@ test('base de suporte documenta permissões confirmadas por papel', () => {
 
 test('análise comercial não carrega manual completo por padrão', () => {
   assert.match(edge, /function isSupportQuestion\(message: string\)/)
-  assert.match(edge, /buildInstructions\(isSupportQuestion\(message\)\)/)
+  assert.match(edge, /support: isSupportQuestion\(message\)/)
   assert.match(edge, /if \(includeSupportKnowledge\) base\.push\("", AXIVA_AI_KNOWLEDGE\)/)
   assert.match(edge, /max_output_tokens: 2400/)
 })
@@ -225,4 +225,19 @@ test('respostas da IA não exibem marcadores markdown de negrito literalmente', 
   assert.match(assistant, /function InlineText/)
   assert.match(assistant, /part\.slice\(2, -2\)/)
   assert.doesNotMatch(assistant, /<p>\{item\.content\}<\/p>/)
+})
+
+
+test('base de Sales Coach é carregada por intenção sem substituir suporte do CRM', () => {
+  assert.match(edge, /function isSalesCoachingQuestion\(message: string\)/)
+  assert.match(edge, /salesCoach: isSalesCoachingQuestion\(message\)/)
+  assert.match(edge, /if \(options\.salesCoach\)/)
+  assert.match(edge, /else if \(options\.support\)/)
+  assert.match(knowledge, /AXIVA_SALES_COACH_KNOWLEDGE/)
+  assert.match(knowledge, /SPIN SELLING/)
+  assert.match(knowledge, /CHALLENGER SALE/)
+  assert.match(knowledge, /LAER/)
+  assert.match(knowledge, /GPCTBA/)
+  assert.match(knowledge, /ROLEPLAY/)
+  assert.match(knowledge, /REVISÃO DE DISCURSO E SCRIPTS/)
 })

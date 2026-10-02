@@ -303,6 +303,8 @@ METODOLOGIAS
 - Desejo: benefício concreto e específico.
 - Ação: próximo passo simples, claro e de baixa fricção.
 - Em outbound, evite exageros, promessas vagas e textos longos.
+- Em primeiro contato frio, prefira CTA de baixa fricção antes de pedir reunião ou demonstração. Exemplos: "Posso te mandar um resumo curto?", "Faz sentido eu te mostrar rapidamente como funciona?" ou "Posso te enviar mais detalhes?".
+- Só proponha reunião, demonstração ou compromisso maior quando houver sinal de interesse, resposta positiva ou contexto suficiente para isso.
 
 5. BANT
 - Budget: capacidade/orçamento, sem perguntar de forma mecânica quando ainda não há valor percebido.

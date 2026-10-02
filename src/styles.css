@@ -4089,7 +4089,9 @@ button:not(:disabled):active,
 .ai-assistant-messages.compact {
   min-height: 0;
   max-height: none;
-  height: 100%;
+  height: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 13px;
   gap: 9px;
 }

@@ -3992,7 +3992,7 @@ button:not(:disabled):active,
 .ai-floating-root {
   position: fixed;
   right: 22px;
-  bottom: 22px;
+  top: 18px;
   z-index: 1200;
   display: flex;
   flex-direction: column;
@@ -4131,7 +4131,7 @@ button:not(:disabled):active,
 @media (max-width: 720px) {
   .ai-floating-root {
     right: 14px;
-    bottom: 14px;
+    top: 14px;
   }
   .ai-floating-window {
     width: calc(100vw - 28px);
@@ -4153,7 +4153,7 @@ button:not(:disabled):active,
   }
   .ai-floating-root {
     right: 10px;
-    bottom: 10px;
+    top: 10px;
   }
   .ai-assistant-form.compact {
     grid-template-columns: 1fr;

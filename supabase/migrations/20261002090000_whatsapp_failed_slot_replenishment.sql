@@ -22,6 +22,7 @@ declare
   v_limit integer;
   v_allowed_days smallint[];
   v_last_sent timestamptz;
+  v_last_scheduled timestamptz;
   v_daily_sent integer;
 begin
   if not pg_try_advisory_xact_lock(732941) then
@@ -69,9 +70,19 @@ begin
     and (sent.sent_at at time zone 'America/Sao_Paulo')::date = v_local
     and sent.whatsapp_number_id = p_whatsapp_number_id;
 
+  select max(om.scheduled_for)
+  into v_last_scheduled
+  from public.outbound_messages om
+  where om.organization_id = p_organization_id
+    and om.whatsapp_number_id = p_whatsapp_number_id
+    and om.status in ('queued','ready','processing')
+    and om.scheduled_for is not null
+    and (om.scheduled_for at time zone 'America/Sao_Paulo')::date = v_local;
+
   v_scheduled := greatest(
     v_now,
-    coalesce(v_last_sent + make_interval(secs => greatest(1, p_interval_seconds)), v_now)
+    coalesce(v_last_sent + make_interval(secs => greatest(1, p_interval_seconds)), v_now),
+    coalesce(v_last_scheduled + make_interval(secs => greatest(1, p_interval_seconds)), v_now)
   );
 
   if (v_scheduled at time zone 'America/Sao_Paulo')::time < v_start then

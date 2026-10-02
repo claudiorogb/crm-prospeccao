@@ -84,6 +84,29 @@ function cleanFilename(name) {
     .slice(-120)
 }
 
+async function fileToBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  return btoa(binary)
+}
+
+async function invokeFileSecurity(body) {
+  const { data, error } = await supabase.functions.invoke('file-security-gate', { body })
+  if (error) {
+    let message = error.message || 'Não foi possível verificar o arquivo.'
+    try {
+      const payload = await error.context?.json?.()
+      if (payload?.error) message = payload.error
+    } catch {}
+    throw new Error(data?.error || message)
+  }
+  if (data?.blocked) throw new Error('O arquivo foi bloqueado pela camada de segurança do AXIVA CRM.')
+  if (data?.error) throw new Error(data.error)
+  return data || {}
+}
+
 async function invokeEmailProvider(body) {
   const { data, error } = await supabase.functions.invoke('email-provider-oauth', { body })
   if (error) {
@@ -876,12 +899,21 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
 
       for (const file of files) {
         const path = `${organization.id}/${campaignId}/${crypto.randomUUID()}-${cleanFilename(file.name)}`
-        const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' })
-        if (uploadError) throw uploadError
-        uploaded.push(path)
+        const base64 = await fileToBase64(file)
+        const secured = await invokeFileSecurity({
+          organization_id: organization.id,
+          user_id: null,
+          source: 'email-campaign-attachment',
+          target_bucket: BUCKET,
+          target_path: path,
+          file_name: file.name,
+          mime_type: file.type || 'application/octet-stream',
+          base64
+        })
+        uploaded.push(secured.storage_path || path)
         const { error: registerError } = await supabase.rpc('register_email_campaign_attachment', {
           p_campaign_id: campaignId,
-          p_storage_path: path,
+          p_storage_path: secured.storage_path || path,
           p_file_name: file.name,
           p_mime_type: file.type || 'application/octet-stream',
           p_size_bytes: file.size

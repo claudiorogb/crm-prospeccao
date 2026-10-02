@@ -69,15 +69,22 @@ function safeFileName(value: string) {
     .slice(0, 120) || "arquivo";
 }
 
-async function storeMedia(admin: any, path: string, base64: string, mimeType: string) {
-  const bytes = base64Bytes(base64);
-  const { error } = await admin.storage
-    .from("whatsapp-media")
-    .upload(path, bytes, { contentType: mimeType || "application/octet-stream", upsert: true });
-  if (error) throw error;
-  const { data, error: signedError } = await admin.storage
-    .from("whatsapp-media")
-    .createSignedUrl(path, 60 * 60);
+async function storeMedia(admin: any, path: string, base64: string, mimeType: string, organizationId: string, userId: string | null, source: string) {
+  const { data: secured, error: securityError } = await admin.functions.invoke("file-security-gate", {
+    body: {
+      organization_id: organizationId,
+      user_id: userId,
+      source,
+      target_bucket: "whatsapp-media",
+      target_path: path,
+      file_name: path.split("/").pop() || "arquivo",
+      mime_type: mimeType || "application/octet-stream",
+      base64,
+    },
+  });
+  if (securityError) throw securityError;
+  if (!secured?.ok || secured?.blocked) throw new Error("O arquivo foi bloqueado pela camada de segurança do AXIVA CRM.");
+  const { data, error: signedError } = await admin.storage.from("whatsapp-media").createSignedUrl(path, 60 * 60);
   if (signedError) throw signedError;
   return data?.signedUrl || null;
 }
@@ -479,7 +486,7 @@ Deno.serve(async (req) => {
       if (!mediaBase64) return json({ error: "A Evolution não retornou o conteúdo desta mídia." }, 200);
 
       const storagePath = `${organizationId}/${conversationId}/${message.provider_message_id}-${fileName}`;
-      const signedUrl = await storeMedia(admin, storagePath, mediaBase64, mimeType);
+      const signedUrl = await storeMedia(admin, storagePath, mediaBase64, mimeType, organizationId, null, "whatsapp-inbound");
 
       await admin.from("whatsapp_messages")
         .update({
@@ -521,6 +528,13 @@ Deno.serve(async (req) => {
     if (approximateBytes > 8 * 1024 * 1024) return json({ error: "O anexo deve ter no máximo 8 MB." }, 413);
 
     const messageType = mediaTypeFromMime(mimeType);
+    const storedFileName = safeFileName(fileName);
+    const storagePath = `${organizationId}/${conversationId}/pending-${crypto.randomUUID()}-${storedFileName}`;
+    try {
+      await storeMedia(admin, storagePath, base64, mimeType, organizationId, user.id, "whatsapp-outbound");
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : "O arquivo foi bloqueado pela camada de segurança." }, 422);
+    }
     let providerMessageId = "";
     try {
       let response: Response;
@@ -564,12 +578,10 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     const preview = caption || (messageType === "image" ? "Imagem enviada" : messageType === "video" ? "Vídeo enviado" : messageType === "audio" ? "Áudio enviado" : "Documento enviado");
 
-    const storedFileName = safeFileName(fileName);
-    const storagePath = `${organizationId}/${conversationId}/${providerMessageId}-${storedFileName}`;
-    try {
-      await storeMedia(admin, storagePath, base64, mimeType);
-    } catch {
-      // O envio do WhatsApp não deve falhar se apenas o cache de mídia ficar indisponível.
+    const finalStoragePath = `${organizationId}/${conversationId}/${providerMessageId}-${storedFileName}`;
+    if (finalStoragePath !== storagePath) {
+      const { error: moveError } = await admin.storage.from("whatsapp-media").move(storagePath, finalStoragePath);
+      if (moveError) console.error("Não foi possível renomear a mídia armazenada:", moveError);
     }
 
     const { error: insertError } = await admin.from("whatsapp_messages").insert({
@@ -582,7 +594,7 @@ Deno.serve(async (req) => {
       direction: "outbound",
       message_type: messageType,
       text_body: caption || null,
-      media_metadata: { file_name: storedFileName, mime_type: mimeType, caption: caption || null, storage_path: storagePath },
+      media_metadata: { file_name: storedFileName, mime_type: mimeType, caption: caption || null, storage_path: finalStoragePath },
       delivery_status: "sent",
       is_automatic: false,
       source: "crm",

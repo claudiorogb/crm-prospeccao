@@ -23,10 +23,10 @@ function applyBranding() {
     mark.style.background = 'transparent'
 
     if (isSidebar) {
-      mark.style.width = '52px'
-      mark.style.height = '52px'
+      mark.style.width = '30px'
+      mark.style.height = '30px'
       mark.style.borderRadius = '0'
-      mark.style.flex = '0 0 52px'
+      mark.style.flex = '0 0 30px'
 
       const copy = mark.nextElementSibling
       if (copy) {

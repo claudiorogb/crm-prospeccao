@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { MessageCircle, Send, X } from 'lucide-react'
-import { askAxivaAi } from './ai-client'
+import { askAxivaAi, loadAxivaAiHistory } from './ai-client'
 
 function InlineText({ text }) {
   const value = String(text || '')
@@ -57,13 +57,76 @@ function AiMessageContent({ content }) {
   )
 }
 
-function useAiConversation() {
-  const [messages, setMessages] = useState([])
+function aiStorageKey(userKey) {
+  const safeKey = encodeURIComponent(String(userKey || 'current-user'))
+  return `axiva_ai_conversation_v1_${safeKey}`
+}
+
+function readStoredConversation(userKey) {
+  try {
+    const raw = localStorage.getItem(aiStorageKey(userKey))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed?.messages)) return null
+    return {
+      conversationId: parsed.conversationId || null,
+      messages: parsed.messages.slice(-100),
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeStoredConversation(userKey, conversationId, messages) {
+  try {
+    localStorage.setItem(aiStorageKey(userKey), JSON.stringify({
+      conversationId: conversationId || null,
+      messages: Array.isArray(messages) ? messages.slice(-100) : [],
+      updatedAt: new Date().toISOString(),
+    }))
+  } catch {
+    // O histórico da interface é apenas um cache. Se o navegador não permitir armazenamento,
+    // a conversa continua funcionando normalmente pelo backend.
+  }
+}
+
+function useAiConversation(userKey) {
+  const initial = useRef(null)
+  if (initial.current === null) initial.current = readStoredConversation(userKey)
+
+  const [messages, setMessages] = useState(() => initial.current?.messages || [])
   const [message, setMessage] = useState('')
-  const [conversationId, setConversationId] = useState(null)
+  const [conversationId, setConversationId] = useState(() => initial.current?.conversationId || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const shouldScrollRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function restoreFromBackend() {
+      if (initial.current?.messages?.length || initial.current?.conversationId) return
+
+      try {
+        const data = await loadAxivaAiHistory()
+        if (cancelled) return
+        if (data?.conversation_id) setConversationId(data.conversation_id)
+        if (Array.isArray(data?.messages) && data.messages.length) {
+          setMessages(data.messages)
+          writeStoredConversation(userKey, data.conversation_id, data.messages)
+        }
+      } catch {
+        // Falha no carregamento do histórico não impede novas perguntas.
+      }
+    }
+
+    restoreFromBackend()
+    return () => { cancelled = true }
+  }, [userKey])
+
+  useEffect(() => {
+    writeStoredConversation(userKey, conversationId, messages)
+  }, [userKey, conversationId, messages])
 
   async function submit(e) {
     e?.preventDefault?.()
@@ -73,13 +136,16 @@ function useAiConversation() {
     setLoading(true)
     setError('')
     shouldScrollRef.current = true
-    setMessages(old => [...old, { role: 'user', content: text }])
+    const nextUserMessages = [...messages, { role: 'user', content: text }]
+    setMessages(nextUserMessages)
     setMessage('')
 
     try {
       const data = await askAxivaAi({ message: text, conversationId })
-      if (data?.conversation_id) setConversationId(data.conversation_id)
-      setMessages(old => [...old, { role: 'assistant', content: data?.answer || 'Não foi possível gerar uma resposta.' }])
+      const nextConversationId = data?.conversation_id || conversationId
+      const answer = data?.answer || 'Não foi possível gerar uma resposta.'
+      if (nextConversationId) setConversationId(nextConversationId)
+      setMessages(old => [...old, { role: 'assistant', content: answer }])
     } catch (err) {
       setError(err?.message || 'A IA está temporariamente indisponível.')
     } finally {
@@ -98,8 +164,8 @@ function useAiConversation() {
   }
 }
 
-function AiChatBody({ compact = false }) {
-  const chat = useAiConversation()
+function AiChatBody({ compact = false, userKey = '' }) {
+  const chat = useAiConversation(userKey)
   const messagesRef = useRef(null)
 
   useEffect(() => {
@@ -201,7 +267,7 @@ export function AiFloatingAssistant({ userEmail }) {
           </header>
 
           <div className="ai-floating-user">{userEmail}</div>
-          <AiChatBody compact />
+          <AiChatBody compact userKey={userEmail} />
         </section>
       )}
 
@@ -239,7 +305,7 @@ export default function AiAssistant({ userEmail }) {
         <div className="notice">
           A IA Axiva não cria campanhas, não envia mensagens e não altera dados do CRM.
         </div>
-        <AiChatBody />
+        <AiChatBody userKey={userEmail} />
       </section>
     </>
   )

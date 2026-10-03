@@ -90,9 +90,9 @@ function writeStoredConversation(userKey, conversationId, messages) {
   }
 }
 
-function useAiConversation(userKey) {
+function useAiConversation(userKey, persist = true) {
   const initial = useRef(null)
-  if (initial.current === null) initial.current = readStoredConversation(userKey)
+  if (initial.current === null) initial.current = persist ? readStoredConversation(userKey) : { conversationId: null, messages: [] }
 
   const [messages, setMessages] = useState(() => initial.current?.messages || [])
   const [message, setMessage] = useState('')
@@ -105,7 +105,7 @@ function useAiConversation(userKey) {
     let cancelled = false
 
     async function restoreFromBackend() {
-      if (initial.current?.messages?.length || initial.current?.conversationId) return
+      if (!persist || initial.current?.messages?.length || initial.current?.conversationId) return
 
       try {
         const data = await loadAxivaAiHistory()
@@ -113,7 +113,7 @@ function useAiConversation(userKey) {
         if (data?.conversation_id) setConversationId(data.conversation_id)
         if (Array.isArray(data?.messages) && data.messages.length) {
           setMessages(data.messages)
-          writeStoredConversation(userKey, data.conversation_id, data.messages)
+          if (persist) writeStoredConversation(userKey, data.conversation_id, data.messages)
         }
       } catch {
         // Falha no carregamento do histórico não impede novas perguntas.
@@ -122,11 +122,11 @@ function useAiConversation(userKey) {
 
     restoreFromBackend()
     return () => { cancelled = true }
-  }, [userKey])
+  }, [userKey, persist])
 
   useEffect(() => {
-    writeStoredConversation(userKey, conversationId, messages)
-  }, [userKey, conversationId, messages])
+    if (persist) writeStoredConversation(userKey, conversationId, messages)
+  }, [userKey, conversationId, messages, persist])
 
   async function submit(e) {
     e?.preventDefault?.()
@@ -164,8 +164,8 @@ function useAiConversation(userKey) {
   }
 }
 
-function AiChatBody({ compact = false, userKey = '' }) {
-  const chat = useAiConversation(userKey)
+function AiChatBody({ compact = false, userKey = '', persistConversation = true }) {
+  const chat = useAiConversation(userKey, persistConversation)
   const messagesRef = useRef(null)
 
   useEffect(() => {
@@ -244,13 +244,17 @@ function AiChatBody({ compact = false, userKey = '' }) {
   )
 }
 
-export function AiFloatingAssistant({ userEmail }) {
+export function AiFloatingAssistant({ userEmail, pageKey = '' }) {
   const [open, setOpen] = useState(false)
 
   return (
     <div className={`ai-floating-root ${open ? 'open' : ''}`}>
-      {open && (
-        <section className="ai-floating-window" role="dialog" aria-label="AXIVA IA">
+      <section
+        className="ai-floating-window"
+        role="dialog"
+        aria-label="AXIVA IA"
+        style={{ display: open ? undefined : 'none' }}
+      >
           <header className="ai-floating-header">
             <div>
               <strong>AXIVA IA</strong>
@@ -267,9 +271,8 @@ export function AiFloatingAssistant({ userEmail }) {
           </header>
 
           <div className="ai-floating-user">{userEmail}</div>
-          <AiChatBody compact userKey={userEmail} />
-        </section>
-      )}
+          <AiChatBody key={pageKey} compact userKey={userEmail} persistConversation={false} />
+      </section>
 
       <button
         type="button"

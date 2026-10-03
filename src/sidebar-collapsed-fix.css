@@ -1,14 +1,14 @@
 /* Sidebar desktop collapsed-state fix
-   Keeps the AXIVA brand mark and navigation icons fully visible.
-   Does not change the expanded sidebar or mobile menu behavior.
+   The collapsed sidebar must have enough width to show the AXIVA logo
+   and navigation icons without clipping.
 */
 @media (min-width: 901px) {
   .app-shell {
-    grid-template-columns: 100px minmax(0, 1fr) !important;
+    grid-template-columns: 140px minmax(0, 1fr) !important;
   }
 
   .sidebar {
-    width: 100px;
+    width: 140px;
     padding-left: 20px;
     padding-right: 20px;
   }
@@ -20,7 +20,7 @@
   }
 
   .kanban-fixed-horizontal-scroll {
-    left: 100px !important;
+    left: 140px !important;
   }
 
   .sidebar:hover,

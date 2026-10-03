@@ -30,3 +30,26 @@ export async function askAxivaAi({ message, conversationId = null }) {
   if (data?.error) throw new Error(data.error)
   return data
 }
+
+export async function loadAxivaAiHistory({ conversationId = null } = {}) {
+  const body = { action: 'history' }
+  if (conversationId) body.conversation_id = conversationId
+
+  const { data, error } = await supabase.functions.invoke('crm-ai-chat', { body })
+
+  if (error) {
+    try {
+      const response = error.context
+      if (response && typeof response.clone === 'function') {
+        const payload = await response.clone().json()
+        if (payload?.error) throw new Error(payload.error)
+      }
+    } catch (parsedError) {
+      if (parsedError?.message) throw parsedError
+    }
+    throw error
+  }
+
+  if (data?.error) throw new Error(data.error)
+  return data
+}

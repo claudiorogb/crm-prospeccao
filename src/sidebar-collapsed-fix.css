@@ -1,11 +1,11 @@
 /* Sidebar desktop collapsed-state fix */
 @media (min-width: 901px) {
   .app-shell {
-    grid-template-columns: 220px minmax(0, 1fr) !important;
+    grid-template-columns: 280px minmax(0, 1fr) !important;
   }
 
   .sidebar {
-    width: 220px;
+    width: 280px;
     padding-left: 20px;
     padding-right: 20px;
   }
@@ -17,11 +17,11 @@
   }
 
   .sidebar .nav-item {
-    width: 180px;
+    width: 240px;
   }
 
   .kanban-fixed-horizontal-scroll {
-    left: 220px !important;
+    left: 280px !important;
   }
 
   .sidebar:hover,

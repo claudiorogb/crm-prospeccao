@@ -223,7 +223,6 @@ export default function AiAssistant({ userEmail }) {
       <header className="topbar">
         <div>
           <span className="eyebrow">ASSISTENTE DE IA DO CRM</span>
-          <h1>IA do AXIVA CRM</h1>
           <p className="muted"></p>
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>

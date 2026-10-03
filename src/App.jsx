@@ -720,33 +720,21 @@ function TeamPerformance({ organization }) {
 
 function Dashboard({ organization, userEmail, onGoCampaigns }) {
   const [stats, setStats] = useState({
-    ongoing: 0,
-    negotiation: 0,
-    proposalsSent: 0,
-    interested: 0,
-    won: 0,
-    lost: 0,
-    captured: 0,
-    registered: 0,
-    contacted: 0,
-    responded: 0
+    ongoing: 0, negotiation: 0, proposalsSent: 0, interested: 0,
+    won: 0, lost: 0, captured: 0, registered: 0, contacted: 0, responded: 0
   })
   const [message, setMessage] = useState('')
 
   useEffect(() => {
     let active = true
-
     async function loadStats() {
       const { data, error } = await supabase
         .rpc('get_dashboard_stats', { p_organization_id: organization.id })
-
       if (!active) return
-
       if (error) {
         setMessage(`Não foi possível atualizar o Dashboard: ${error.message}`)
         return
       }
-
       setMessage('')
       setStats({
         ongoing: Number(data?.ongoing || 0),
@@ -761,80 +749,68 @@ function Dashboard({ organization, userEmail, onGoCampaigns }) {
         responded: Number(data?.responded || 0)
       })
     }
-
     loadStats()
     const timer = setInterval(loadStats, 15000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
+    return () => { active = false; clearInterval(timer) }
   }, [organization.id])
 
   return (
     <>
-      <header className="topbar">
-        <div>
-          
-          <h1>Dashboard</h1>
-          
-        </div>
+      <header className="topbar dashboard-topbar-v75">
+        <div><h1>Dashboard</h1></div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
 
       {message && <div className="notice error">{message}</div>}
 
-      <section className="panel dashboard-block-v61 dashboard-funnel-v61">
-        <div className="dashboard-hero-v61">
-          <StatCard
-            label="Negócios em andamento"
-            value={stats.ongoing}
-            detail="Interessado + Proposta + Negociação"
-          />
-        </div>
+      <div className="dashboard-redesign-v75">
+        <section className="dashboard-redesign-top-v75">
+          <article className="dashboard-redesign-hero-v75">
+            <div className="dashboard-redesign-hero-main-v75">
+              <span className="dashboard-redesign-number-v75">{stats.ongoing}</span>
+              <div>
+                <p className="dashboard-redesign-title-v75">Negócios em andamento</p>
+                <p className="dashboard-redesign-description-v75">Interessado + Proposta + Negociação</p>
+              </div>
+            </div>
+            <div className="dashboard-redesign-submetrics-v75">
+              <div><strong>{stats.negotiation}</strong><span>Total em Negociação</span></div>
+              <div><strong>{stats.proposalsSent}</strong><span>Total de propostas enviadas</span></div>
+              <div><strong>{stats.interested}</strong><span>Total Interessados</span></div>
+            </div>
+          </article>
 
-        <div className="dashboard-metric-grid-v61 dashboard-metric-grid-three-v61">
-          <StatCard label="Total em Negociação" value={stats.negotiation} detail="Oportunidades na etapa Negociação" />
-          <StatCard label="Total de propostas enviadas" value={stats.proposalsSent} detail="Leads que já tiveram proposta registrada" />
-          <StatCard label="Total Interessados" value={stats.interested} detail="Oportunidades atualmente em Interessado" />
-        </div>
-      </section>
+          <article className="dashboard-redesign-panel-v75 dashboard-redesign-results-v75">
+            <div className="dashboard-redesign-heading-v75"><h2>Resultados</h2></div>
+            <div className="dashboard-redesign-result-grid-v75">
+              <div className="dashboard-redesign-result-card-v75 won">
+                <span>Ganhos</span><strong>{stats.won}</strong>
+                <small>Negócios convertidos em clientes</small>
+              </div>
+              <div className="dashboard-redesign-result-card-v75 lost">
+                <span>Perdidos</span><strong>{stats.lost}</strong>
+                <small>Negócios encerrados como perdidos</small>
+              </div>
+            </div>
+          </article>
+        </section>
 
-      <section className="panel dashboard-block-v61">
-        <div className="dashboard-block-head-v61">
-          <div>
-            
-            <h2>Resultados</h2>
-            <p className="muted">Resultado das oportunidades que saíram do funil ativo.</p>
+        <section className="dashboard-redesign-panel-v75 dashboard-redesign-leads-v75">
+          <div className="dashboard-redesign-heading-v75"><h2>Leads e contatos</h2></div>
+          <div className="dashboard-redesign-leads-grid-v75">
+            <div><strong>{stats.captured}</strong><span>Total de leads captados</span><small>Captados pela busca de empresas</small></div>
+            <div><strong>{stats.registered}</strong><span>Total de leads cadastrados</span><small>Cadastrados manualmente</small></div>
+            <div><strong>{stats.contacted}</strong><span>Total Leads contatados</span><small>Leads que já receberam contato</small></div>
+            <div><strong>{stats.responded}</strong><span>Total que respondeu</span><small>Responderam ou avançaram após a resposta</small></div>
           </div>
-        </div>
-        <div className="dashboard-metric-grid-v61 dashboard-metric-grid-two-v61">
-          <StatCard label="Ganhos" value={stats.won} detail="Negócios convertidos em clientes" />
-          <StatCard label="Perdidos" value={stats.lost} detail="Negócios encerrados como perdidos" />
-        </div>
-      </section>
+        </section>
 
-      <section className="panel dashboard-block-v61">
-        <div className="dashboard-block-head-v61">
-          <div>
-            
-            <h2>Leads e contatos</h2>
-          </div>
-        </div>
-        <div className="dashboard-metric-grid-v61 dashboard-metric-grid-four-v61">
-          <StatCard label="Total de leads captados" value={stats.captured} detail="Captados pela busca de empresas" />
-          <StatCard label="Total de leads cadastrados" value={stats.registered} detail="Cadastrados manualmente" />
-          <StatCard label="Total Leads contatados" value={stats.contacted} detail="Leads que já receberam contato" />
-          <StatCard label="Total que respondeu" value={stats.responded} detail="Responderam ou avançaram após a resposta" />
-        </div>
-      </section>
-
-      <DashboardVisual organization={organization} />
-
-      <TeamPerformance organization={organization} />
+        <DashboardVisual organization={organization} />
+        <TeamPerformance organization={organization} />
+      </div>
     </>
   )
 }
-
 
 function CatalogAdmin({ userEmail }) {
   const [segments, setSegments] = useState([])

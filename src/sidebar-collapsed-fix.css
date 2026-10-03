@@ -4,13 +4,13 @@
 */
 @media (min-width: 901px) {
   .app-shell {
-    grid-template-columns: 80px minmax(0, 1fr) !important;
+    grid-template-columns: 100px minmax(0, 1fr) !important;
   }
 
   .sidebar {
-    width: 80px;
-    padding-left: 14px;
-    padding-right: 14px;
+    width: 100px;
+    padding-left: 20px;
+    padding-right: 20px;
   }
 
   .sidebar .brand-mark.small {
@@ -20,7 +20,7 @@
   }
 
   .kanban-fixed-horizontal-scroll {
-    left: 80px !important;
+    left: 100px !important;
   }
 
   .sidebar:hover,

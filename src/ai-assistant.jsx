@@ -63,6 +63,7 @@ function useAiConversation() {
   const [conversationId, setConversationId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const shouldScrollRef = useRef(false)
 
   async function submit(e) {
     e?.preventDefault?.()
@@ -71,6 +72,7 @@ function useAiConversation() {
 
     setLoading(true)
     setError('')
+    shouldScrollRef.current = true
     setMessages(old => [...old, { role: 'user', content: text }])
     setMessage('')
 
@@ -92,6 +94,7 @@ function useAiConversation() {
     loading,
     error,
     submit,
+    shouldScrollRef,
   }
 }
 
@@ -103,9 +106,13 @@ function AiChatBody({ compact = false }) {
     const element = messagesRef.current
     if (!element) return
 
-    // Wait until the new question/answer has been laid out before scrolling.
+    // Only scroll automatically after the user sends a new message.
+    // Manual scrolling through the history must never be interrupted.
+    if (!chat.shouldScrollRef.current) return undefined
+
     const frame = window.requestAnimationFrame(() => {
       element.scrollTop = element.scrollHeight
+      chat.shouldScrollRef.current = false
     })
 
     return () => window.cancelAnimationFrame(frame)

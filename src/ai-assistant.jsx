@@ -109,7 +109,7 @@ function AiChatBody({ compact = false }) {
     })
 
     return () => window.cancelAnimationFrame(frame)
-  }, [chat.messages, chat.loading])
+  }, [chat.messages])
 
   return (
     <>

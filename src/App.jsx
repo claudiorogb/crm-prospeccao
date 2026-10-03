@@ -8902,7 +8902,7 @@ export default function App() {
         </main>
 
         {commercialMode && sandboxOrganization && adminSandboxSettings?.feature_flags?.ai_assistant === true && (
-          <AiFloatingAssistant userEmail={userEmail} />
+          <AiFloatingAssistant userEmail={userEmail} pageKey={adminCommercialPage} />
         )}
       </div>
     )
@@ -9057,7 +9057,7 @@ export default function App() {
       </main>
 
       {settings?.feature_flags?.ai_assistant === true && (
-        <AiFloatingAssistant userEmail={userLabel} />
+        <AiFloatingAssistant userEmail={userLabel} pageKey={page} />
       )}
     </div>
   )

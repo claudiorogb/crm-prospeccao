@@ -121,7 +121,7 @@ function AiChatBody({ compact = false }) {
         {!chat.messages.length && (
           <div className="ai-assistant-empty">
             <strong>Como posso ajudar?</strong>
-            <p className="muted">Pergunte sobre esta tela, o CRM ou seus dados comerciais autorizados.</p>
+            <p className="muted">Posso mostrar como usar o CRM, ser sua analista comercial e sales coach e analisar oportunidades para te ajudar a vender melhor.</p>
           </div>
         )}
 
@@ -222,16 +222,16 @@ export default function AiAssistant({ userEmail }) {
     <>
       <header className="topbar">
         <div>
-          <span className="eyebrow">ASSISTENTE</span>
+          <span className="eyebrow">ASSISTENTE DE IA DO CRM</span>
           <h1>IA do AXIVA CRM</h1>
-          <p className="muted">Tire dúvidas sobre o CRM e consulte informações autorizadas da sua empresa.</p>
+          <p className="muted"></p>
         </div>
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
 
       <section className="panel ai-assistant-panel">
         <div className="notice">
-          A IA está em modo somente leitura. Ela não cria campanhas, não envia mensagens e não altera dados do CRM.
+          A IA Axiva não cria campanhas, não envia mensagens e não altera dados do CRM.
         </div>
         <AiChatBody />
       </section>

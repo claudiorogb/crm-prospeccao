@@ -289,7 +289,7 @@ export default function WhatsAppCenter({ organization }) {
     }
   }
 
-  async function loadMessages(conversationId) {
+  async function loadMessages(conversationId, { scrollToBottom = false } = {}) {
     if (!conversationId) {
       setMessages([])
       return
@@ -306,10 +306,12 @@ export default function WhatsAppCenter({ organization }) {
       return
     }
     setMessages(data || [])
-    requestAnimationFrame(() => {
-      const container = endRef.current?.parentElement
-      if (container) container.scrollTop = container.scrollHeight
-    })
+    if (scrollToBottom) {
+      requestAnimationFrame(() => {
+        const container = endRef.current?.parentElement
+        if (container) container.scrollTop = container.scrollHeight
+      })
+    }
   }
 
   async function loadNumbers() {
@@ -430,7 +432,7 @@ export default function WhatsAppCenter({ organization }) {
       setMessages([])
       return
     }
-    loadMessages(selectedId)
+    loadMessages(selectedId, { scrollToBottom: true })
     invoke('mark_read', { conversation_id: selectedId }).then(() => {
       setConversations(current => current.map(item =>
         item.id === selectedId ? { ...item, unread_count: 0, last_read_at: new Date().toISOString() } : item
@@ -529,7 +531,7 @@ export default function WhatsAppCenter({ organization }) {
       setDraft('')
       setAttachment(null)
       if (fileRef.current) fileRef.current.value = ''
-      await Promise.all([loadMessages(selected.id), loadConversations(true)])
+      await Promise.all([loadMessages(selected.id, { scrollToBottom: true }), loadConversations(true)])
     } catch (error) {
       setNotice(error.message)
     } finally {
@@ -1078,7 +1080,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
     const row = data?.[0] || null
     setConversation(row)
     if (row?.id) {
-      await loadMessages(row.id)
+      await loadMessages(row.id, { scrollToBottom: true })
       await supabase.functions.invoke('whatsapp-conversation-api', {
         body: { action:'mark_read', organization_id:organization.id, conversation_id:row.id }
       })
@@ -1088,7 +1090,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
     }
   }
 
-  async function loadMessages(conversationId) {
+  async function loadMessages(conversationId, { scrollToBottom = false } = {}) {
     const { data, error } = await supabase
       .from('whatsapp_messages')
       .select('id,conversation_id,provider,provider_message_id,direction,message_type,text_body,media_metadata,delivery_status,is_automatic,source,sent_by_user_id,occurred_at')
@@ -1100,10 +1102,12 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
       return
     }
     setMessages(data || [])
-    requestAnimationFrame(() => {
-      const container = endRef.current?.parentElement
-      if (container) container.scrollTop = container.scrollHeight
-    })
+    if (scrollToBottom) {
+      requestAnimationFrame(() => {
+        const container = endRef.current?.parentElement
+        if (container) container.scrollTop = container.scrollHeight
+      })
+    }
   }
 
   async function loadQuickReplies() {
@@ -1186,7 +1190,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
       setDraft('')
       setAttachment(null)
       if (fileRef.current) fileRef.current.value = ''
-      await loadMessages(conversation.id)
+      await loadMessages(conversation.id, { scrollToBottom: true })
       onUpdated?.()
     } catch (error) {
       setNotice(error.message)

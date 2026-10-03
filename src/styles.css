@@ -2658,12 +2658,12 @@ select:focus {
 
   .sidebar:hover,
   .sidebar:focus-within {
-    width: 250px;
+    width: 220px;
     box-shadow: 10px 0 28px rgba(15, 23, 42, .16);
   }
 
   .sidebar-brand {
-    width: 226px;
+    width: 196px;
     gap: 12px;
     padding-left: 1px;
   }
@@ -2688,11 +2688,11 @@ select:focus {
   }
 
   .sidebar nav {
-    width: 226px;
+    width: 196px;
   }
 
   .sidebar .nav-item {
-    width: 226px;
+    width: 196px;
     min-height: 42px;
     white-space: nowrap;
     overflow: hidden;
@@ -3835,7 +3835,7 @@ button:not(:disabled):active,
 
 /* AXIVA CRM — identidade visual do menu lateral */
 .sidebar-brand { flex-wrap: nowrap; align-items: center; }
-.sidebar-brand .brand-mark.small { width: 52px; height: 52px; flex: 0 0 52px; }
+.sidebar-brand .brand-mark.small { width: 38px; height: 38px; flex: 0 0 38px; }
 .sidebar-brand .brand-mark.small + div { min-width: 0; flex: 1 1 auto; padding-left: 0; }
 
 .kanban-company-edit-v72{

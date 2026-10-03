@@ -117,6 +117,18 @@ function resetOverdueLoginAlerts() {
   }
 }
 
+function clearAxivaAiHistoryStorage() {
+  try {
+    const prefix = 'axiva_ai_conversation_v1_'
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index)
+      if (key?.startsWith(prefix)) localStorage.removeItem(key)
+    }
+  } catch {
+    // O logout continua normalmente mesmo se o navegador bloquear o armazenamento local.
+  }
+}
+
 function formatPhone(value) {
   if (!value) return '—'
   return String(value)
@@ -8525,7 +8537,10 @@ export default function App() {
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (event === 'SIGNED_OUT') resetOverdueLoginAlerts()
+      if (event === 'SIGNED_OUT') {
+        resetOverdueLoginAlerts()
+        clearAxivaAiHistoryStorage()
+      }
       setSession(newSession)
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
     })

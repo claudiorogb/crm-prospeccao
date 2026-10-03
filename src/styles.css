@@ -4002,7 +4002,7 @@ button:not(:disabled):active,
 .ai-floating-trigger {
   min-width: 72px;
   width: 72px;
-  height: 40px;
+  height: 46px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #fff;
@@ -4558,6 +4558,7 @@ button:not(:disabled):active,
 .dashboard-redesign-result-card-v75 small { display:block; margin-top:8px; color:#64748b; font-size:11px; line-height:1.35; }
 
 .dashboard-redesign-leads-v75 { padding-top:20px; }
+.dashboard-redesign-leads-v75 > .dashboard-redesign-heading-v75 { padding:0 22px; }
 .dashboard-redesign-leads-grid-v75 {
   display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid #e2e8f0;
 }

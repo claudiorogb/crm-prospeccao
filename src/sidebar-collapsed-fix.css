@@ -1,14 +1,11 @@
-/* Sidebar desktop collapsed-state fix
-   The collapsed sidebar must have enough width to show the AXIVA logo
-   and navigation icons without clipping.
-*/
+/* Sidebar desktop collapsed-state fix */
 @media (min-width: 901px) {
   .app-shell {
-    grid-template-columns: 140px minmax(0, 1fr) !important;
+    grid-template-columns: 220px minmax(0, 1fr) !important;
   }
 
   .sidebar {
-    width: 140px;
+    width: 220px;
     padding-left: 20px;
     padding-right: 20px;
   }
@@ -19,8 +16,12 @@
     flex: 0 0 52px;
   }
 
+  .sidebar .nav-item {
+    width: 180px;
+  }
+
   .kanban-fixed-horizontal-scroll {
-    left: 140px !important;
+    left: 220px !important;
   }
 
   .sidebar:hover,

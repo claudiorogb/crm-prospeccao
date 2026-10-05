@@ -12,6 +12,7 @@ const PLANS = [
 export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSignup = null }) {
   const [loadingPlan, setLoadingPlan] = useState('')
   const [selectedPlan, setSelectedPlan] = useState(initialPlanId)
+  const [licenseQuantity, setLicenseQuantity] = useState(1)
   const [error, setError] = useState('')
 
   async function openContract(planId) {
@@ -27,7 +28,7 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
 
     try {
       const { data, error: functionError } = await supabase.functions.invoke('create-asaas-checkout', {
-        body: { planId: selectedPlan },
+        body: { planId: selectedPlan, licenseQuantity },
       })
 
       if (functionError) throw functionError
@@ -47,6 +48,7 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
     return (
       <BillingContractScreen
         planId={selectedPlan}
+        licenseQuantity={licenseQuantity}
         paidSignup={paidSignup}
         onBack={() => { setSelectedPlan(''); setError('') }}
         onContinue={continueToAsaas}
@@ -90,6 +92,16 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
         <p className="muted" style={{ marginTop: 0 }}>
           Escolha o plano mensal do AXIVA CRM para continuar usando todos os recursos sem restrições.
         </p>
+
+        <div style={{ marginTop: 22, padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <strong>Quantidade de usuários</strong>
+            <div className="muted" style={{ fontSize: 13 }}>Cada usuário tem sua própria licença e pode ter um plano diferente depois.</div>
+          </div>
+          <select value={licenseQuantity} onChange={e => setLicenseQuantity(Math.max(1, Math.min(100, Number(e.target.value))))} style={{ width: 110 }}>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n} {n === 1 ? 'usuário' : 'usuários'}</option>)}
+          </select>
+        </div>
 
         <div
           style={{

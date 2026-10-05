@@ -24,6 +24,7 @@ export default function BillingManagementScreen({ onBackToCrm }) {
   const [contracting, setContracting] = useState(false)
   const [inviteName, setInviteName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
+  const [pendingChange, setPendingChange] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -86,6 +87,39 @@ export default function BillingManagementScreen({ onBackToCrm }) {
       {error && <div className="notice error" style={{ marginBottom: 16 }}>{error}</div>}
       {message && <div className="notice" style={{ marginBottom: 16 }}>{message}</div>}
 
+      {canManage && pendingChange && (
+        <section className="notice" role="alert" style={{ marginBottom: 16, padding: '16px 18px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
+          <div style={{ fontWeight: 700, color: '#0b192c', marginBottom: 6 }}>Confirmar mudança de plano</div>
+          <div style={{ color: '#475569', lineHeight: 1.5 }}>
+            Deseja realmente mudar o plano de <strong>{pendingChange.memberName}</strong>?
+            <br />
+            Novo plano: <strong>{pendingChange.planName}</strong> — <strong>{money(pendingChange.planValue)}/mês</strong>.
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="primary inline-btn"
+              disabled={Boolean(busy)}
+              onClick={async () => {
+                const change = pendingChange
+                setPendingChange(null)
+                await manage('change_plan', change.userId, change.planId)
+              }}
+            >
+              {busy === 'change_plan:' + pendingChange.userId ? <><Loader2 size={15} className="spin" /> Confirmando...</> : 'Confirmar mudança'}
+            </button>
+            <button
+              type="button"
+              className="secondary inline-btn"
+              disabled={Boolean(busy)}
+              onClick={() => setPendingChange(null)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </section>
+      )}
+
       <section className="panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div>
@@ -140,7 +174,24 @@ export default function BillingManagementScreen({ onBackToCrm }) {
                     <td style={{ padding: 10 }}><strong>{member.full_name || member.email}</strong><div className="muted" style={{ fontSize: 12 }}>{member.email}</div></td>
                     <td style={{ padding: 10 }}>
                       {canManage && hasPaid ? (
-                        <select value={active ? (member.plan_id || 'axiva') : ''} onChange={e => manage('change_plan', member.user_id, e.target.value)} disabled={Boolean(busy)} style={{ minWidth: 170 }}>
+                        <select
+                          value={active ? (member.plan_id || 'axiva') : ''}
+                          onChange={e => {
+                            const nextPlanId = e.target.value
+                            const currentPlanId = active ? (member.plan_id || 'axiva') : ''
+                            if (!nextPlanId || nextPlanId === currentPlanId) return
+                            const nextPlan = PLANS[nextPlanId]
+                            setPendingChange({
+                              userId: member.user_id,
+                              memberName: member.full_name || member.email || 'usuário',
+                              planId: nextPlanId,
+                              planName: nextPlan.name,
+                              planValue: nextPlan.value,
+                            })
+                          }}
+                          disabled={Boolean(busy) || Boolean(pendingChange)}
+                          style={{ minWidth: 170 }}
+                        >
                           {!active && <option value="">Sem licença</option>}
                           {Object.entries(PLANS).map(([id, plan]) => <option key={id} value={id}>{plan.name}</option>)}
                         </select>

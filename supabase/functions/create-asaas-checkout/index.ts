@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
 
   const { data: contract, error: contractError } = await admin
     .from("axiva_paid_contract_acceptances")
-    .select("id,plan_id,status,accepted_at,signer_name,signer_email")
+    .select("id,plan_id,status,accepted_at,signer_name,signer_email,license_quantity")
     .eq("organization_id", organizationId)
     .eq("user_id", user.id)
     .eq("plan_id", planId)
@@ -213,6 +213,16 @@ Deno.serve(async (req) => {
 
   const externalReference = "axiva-contract:" + contract.id;
   const nextDueDate = brazilDate();
+  const licenseQuantity = Math.max(1, Math.min(100, Number(contract.license_quantity || 1)));
+
+  await admin.from("axiva_billing_accounts").upsert({
+    organization_id: organizationId,
+    status: "pending",
+    default_plan_id: planId,
+    licensed_seats: licenseQuantity,
+    current_amount: Number((plan.value * licenseQuantity).toFixed(2)),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "organization_id" });
 
   const payload: Record<string, unknown> = {
     billingTypes: ["PIX", "CREDIT_CARD"],
@@ -227,7 +237,7 @@ Deno.serve(async (req) => {
     items: [{
       name: "AXIVA CRM - " + plan.name,
       description: "Assinatura mensal do AXIVA CRM",
-      quantity: 1,
+      quantity: licenseQuantity,
       value: plan.value,
     }],
     subscription: {
@@ -279,7 +289,7 @@ Deno.serve(async (req) => {
 
     if (saveError) return json({ error: "Checkout criado, mas não foi possível registrar a contratação. Não prossiga com outro pagamento; entre em contato com o suporte." }, 500);
 
-    return json({ checkoutUrl, checkoutId, planId, planName: plan.name, value: plan.value });
+    return json({ checkoutUrl, checkoutId, planId, planName: plan.name, value: plan.value, licenseQuantity, totalMonthly: Number((plan.value * licenseQuantity).toFixed(2)) });
   } catch (error) {
     return json({
       error: "Não foi possível conectar ao Asaas.",

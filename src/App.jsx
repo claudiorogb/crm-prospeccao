@@ -9065,8 +9065,9 @@ export default function App() {
       <BillingPlanScreen
         initialPlanId={pendingPaidSignup.planId}
         paidSignup={organization ? null : pendingPaidSignup}
-        onBack={() => {
+        onBack={async () => {
           localStorage.removeItem('axiva_pending_paid_v1')
+          await supabase.auth.signOut()
           window.location.assign('https://axiva.com.br/crm/precos')
         }}
       />

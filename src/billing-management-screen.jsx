@@ -14,6 +14,8 @@ function money(value) {
 }
 
 export default function BillingManagementScreen({ onBackToCrm }) {
+  const asaasEnvironment = (() => { try { return localStorage.getItem('axiva_asaas_environment_v1') === 'sandbox' ? 'sandbox' : 'production' } catch { return 'production' } })()
+  const billingFunction = asaasEnvironment === 'sandbox' ? 'manage-asaas-billing-sandbox' : 'manage-asaas-billing'
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
@@ -37,7 +39,7 @@ export default function BillingManagementScreen({ onBackToCrm }) {
     const key = action + ':' + userId
     setBusy(key); setError(''); setMessage('')
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('manage-asaas-billing', { body: { action, userId, planId } })
+      const { data, error: fnError } = await supabase.functions.invoke(billingFunction, { body: { action, userId, planId } })
       if (fnError) throw fnError
       if (data?.error) throw new Error(data.error + (data.requiresReauthorization ? ' A forma de pagamento pode exigir nova autorização no Asaas.' : ''))
       setMessage('Alteração realizada. Nova mensalidade: ' + money(data.totalMonthly) + '.')
@@ -51,7 +53,7 @@ export default function BillingManagementScreen({ onBackToCrm }) {
     if (!window.confirm('Cancelar a assinatura da empresa? Os dados do CRM serão preservados.')) return
     setBusy('cancel'); setError(''); setMessage('')
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('manage-asaas-billing', { body: { action: 'cancel' } })
+      const { data, error: fnError } = await supabase.functions.invoke(billingFunction, { body: { action: 'cancel' } })
       if (fnError) throw fnError
       if (data?.error) throw new Error(data.error)
       setMessage('Assinatura cancelada. Os dados do CRM foram preservados.')
@@ -62,7 +64,7 @@ export default function BillingManagementScreen({ onBackToCrm }) {
   }
 
   if (loading) return <div className="loading-screen">Carregando plano...</div>
-  if (contracting) return <BillingPlanScreen onBack={() => setContracting(false)} />
+  if (contracting) return <BillingPlanScreen onBack={() => setContracting(false)} asaasEnvironment={asaasEnvironment} />
 
   const account = overview?.billing_account
   const members = overview?.members || []

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
+import BillingPlanScreen from './billing-plan-screen'
 
 function daysUntil(value) {
   if (!value) return null
@@ -10,6 +11,7 @@ function daysUntil(value) {
 
 export default function TrialBanner() {
   const [daysLeft, setDaysLeft] = useState(null)
+  const [showBilling, setShowBilling] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -60,6 +62,10 @@ export default function TrialBanner() {
     }
   }, [])
 
+  if (showBilling) {
+    return <BillingPlanScreen onBack={() => setShowBilling(false)} />
+  }
+
   if (!(daysLeft === 10 || (daysLeft >= 1 && daysLeft <= 5))) return null
 
   return (
@@ -79,9 +85,33 @@ export default function TrialBanner() {
         fontSize: '14px',
         lineHeight: 1.45,
         fontWeight: 600,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+        flexWrap: 'wrap',
       }}
     >
-      Faltam {daysLeft} {daysLeft === 1 ? 'dia' : 'dias'} para acabar o período de testes, contrate o plano mensal e continue usando o AXIVA CRM sem restrições.
+      <span>
+        Faltam {daysLeft} {daysLeft === 1 ? 'dia' : 'dias'} para acabar o período de testes, contrate o plano mensal e continue usando o AXIVA CRM sem restrições.
+      </span>
+      <button
+        type="button"
+        onClick={() => setShowBilling(true)}
+        style={{
+          border: 0,
+          borderRadius: 5,
+          padding: '8px 13px',
+          background: '#0b192c',
+          color: '#fff',
+          fontWeight: 700,
+          fontSize: 13,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Contratar plano mensal
+      </button>
     </div>
   )
 }

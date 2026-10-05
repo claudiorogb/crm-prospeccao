@@ -21,6 +21,7 @@ import AiAssistant, { AiFloatingAssistant } from './ai-assistant'
 import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import TrialExpiredScreen from './trial-expired-screen'
+import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
 import whatsappIcon from './whatsapp-icon.png'
 
 
@@ -308,6 +309,57 @@ function AuthScreen() {
   const [form, setForm] = useState({ email: '', password: '', fullName: '', organizationName: '', cnpj: '' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [showTrialTerms, setShowTrialTerms] = useState(false)
+
+  function validateSignup() {
+    if (form.password.length < 10) throw new Error('A senha precisa ter pelo menos 10 caracteres.')
+    const displayName = form.fullName.trim().replace(/\s+/g, ' ')
+    const organizationName = form.organizationName.trim().replace(/\s+/g, ' ')
+    const cnpj = form.cnpj.replace(/\D/g, '')
+    if (displayName.length < 2) throw new Error('Informe como deseja ser chamado.')
+    if (organizationName.length < 2) throw new Error('Informe o nome da empresa.')
+    if (cnpj.length !== 14) throw new Error('Informe um CNPJ válido com 14 dígitos.')
+    return { displayName, organizationName, cnpj }
+  }
+
+  async function createTrialAccount({ termsVersion, privacyVersion, acceptedAt }) {
+    setLoading(true)
+    setMessage('')
+    try {
+      const { displayName, organizationName, cnpj } = validateSignup()
+      const email = form.email.trim().toLowerCase()
+      const { data: signupData, error } = await supabase.auth.signUp({
+        email,
+        password: form.password,
+        options: { data: { full_name: displayName } }
+      })
+      if (error) throw error
+
+      localStorage.setItem('axiva_pending_trial_v1', JSON.stringify({
+        organizationName, cnpj, termsVersion, privacyVersion, acceptedAt
+      }))
+      setShowTrialTerms(false)
+
+      if (signupData?.session) {
+        const { error: trialError } = await supabase.rpc('start_axiva_trial', {
+          p_cnpj: cnpj,
+          p_organization_name: organizationName,
+          p_terms_version: termsVersion,
+          p_privacy_version: privacyVersion,
+          p_terms_accepted: true
+        })
+        if (trialError) throw trialError
+        localStorage.removeItem('axiva_pending_trial_v1')
+        setMessage('Cadastro concluído. Seu teste gratuito de 30 dias já está ativo.')
+      } else {
+        setMessage('Cadastro criado. Confirme seu e-mail. Depois, entre no CRM para ativar seu teste gratuito de 30 dias.')
+      }
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível concluir o cadastro.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function submit(e) {
     e.preventDefault()
@@ -321,47 +373,14 @@ function AuthScreen() {
         if (error) throw error
         setMessage('Se o e-mail estiver cadastrado, enviaremos um link para criar uma nova senha.')
       } else if (mode === 'signup') {
-        if (form.password.length < 10) {
-          throw new Error('A senha precisa ter pelo menos 10 caracteres.')
-        }
-        const displayName = form.fullName.trim().replace(/\s+/g, ' ')
-        const organizationName = form.organizationName.trim().replace(/\s+/g, ' ')
-        const cnpj = form.cnpj.replace(/\D/g, '')
-        if (displayName.length < 2) throw new Error('Informe como deseja ser chamado.')
-        if (organizationName.length < 2) throw new Error('Informe o nome da empresa.')
-        if (cnpj.length !== 14) throw new Error('Informe um CNPJ válido com 14 dígitos.')
-
-        const { data: signupData, error } = await supabase.auth.signUp({
-          email: form.email.trim().toLowerCase(),
-          password: form.password,
-          options: { data: { full_name: displayName } }
-        })
-        if (error) throw error
-
-        localStorage.setItem('axiva_pending_trial_v1', JSON.stringify({
-          organizationName,
-          cnpj,
-        }))
-
-        if (signupData?.session) {
-          const { error: trialError } = await supabase.rpc('start_axiva_trial', {
-            p_cnpj: cnpj,
-            p_organization_name: organizationName,
-          })
-          if (trialError) throw trialError
-          localStorage.removeItem('axiva_pending_trial_v1')
-          setMessage('Cadastro concluído. Seu teste gratuito do Plano AXIVA já está ativo.')
-        } else {
-          setMessage('Cadastro criado. Confirme seu e-mail. Depois, entre no CRM para ativar automaticamente seu teste gratuito de 30 dias.')
-        }
+        validateSignup()
+        setShowTrialTerms(true)
       } else {
         const blocked = loginBlockMessage(CRM_LOGIN_GUARD_KEY)
         if (blocked) {
           setMessage(blocked)
           return
         }
-
-        // Reset before auth emits SIGNED_IN, so a fresh login can show its notice.
         resetOverdueLoginAlerts()
         const { error } = await supabase.auth.signInWithPassword({
           email: form.email,
@@ -380,57 +399,41 @@ function AuthScreen() {
     }
   }
 
+  if (showTrialTerms) {
+    return (
+      <TrialTermsScreen
+        loading={loading}
+        onBack={() => setShowTrialTerms(false)}
+        onAccept={createTrialAccount}
+      />
+    )
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card">
         <div className="brand-mark">CP</div>
         <h1>CRM Prospecção</h1>
         <p className="muted">Entre no CRM ou crie sua conta para testar o Plano AXIVA gratuitamente por 30 dias.</p>
-
         <div className="auth-tabs">
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Entrar</button>
+          <button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setMessage('') }}>Entrar</button>
           <button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setMessage('') }}>Teste grátis</button>
         </div>
-
-        {mode === 'forgot' && (
-          <div className="notice">Informe seu e-mail. Você receberá um link seguro para criar uma nova senha.</div>
-        )}
-
+        {mode === 'forgot' && <div className="notice">Informe seu e-mail. Você receberá um link seguro para criar uma nova senha.</div>}
         <form onSubmit={submit}>
           {mode === 'signup' && (
             <>
               <label>
                 Como deseja ser chamado
-                <input
-                  value={form.fullName}
-                  onChange={e => setForm({ ...form, fullName: e.target.value })}
-                  placeholder="Ex.: Claudio"
-                  minLength={2}
-                  maxLength={80}
-                  autoComplete="name"
-                  required
-                />
+                <input value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} placeholder="Ex.: Claudio" minLength={2} maxLength={80} autoComplete="name" required />
               </label>
               <label>
                 Nome da empresa
-                <input
-                  value={form.organizationName}
-                  onChange={e => setForm({ ...form, organizationName: e.target.value })}
-                  placeholder="Ex.: Empresa ABC"
-                  maxLength={160}
-                  required
-                />
+                <input value={form.organizationName} onChange={e => setForm({ ...form, organizationName: e.target.value })} placeholder="Ex.: Empresa ABC" maxLength={160} required />
               </label>
               <label>
                 CNPJ
-                <input
-                  value={form.cnpj}
-                  onChange={e => setForm({ ...form, cnpj: e.target.value.replace(/\D/g, '').slice(0, 14) })}
-                  placeholder="00.000.000/0000-00"
-                  inputMode="numeric"
-                  maxLength={18}
-                  required
-                />
+                <input value={form.cnpj} onChange={e => setForm({ ...form, cnpj: e.target.value.replace(/\D/g, '').slice(0, 14) })} placeholder="00.000.000/0000-00" inputMode="numeric" maxLength={18} required />
               </label>
             </>
           )}
@@ -445,25 +448,16 @@ function AuthScreen() {
             </label>
           )}
           <button className="primary full" disabled={loading}>
-            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : mode === 'forgot' ? 'Enviar link de redefinição' : 'Criar conta'}
+            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : mode === 'forgot' ? 'Enviar link de redefinição' : 'Continuar'}
           </button>
-          {mode === 'login' && (
-            <button type="button" className="secondary full" onClick={() => { setMode('forgot'); setMessage('') }}>
-              Esqueci minha senha
-            </button>
-          )}
-          {mode === 'forgot' && (
-            <button type="button" className="secondary full" onClick={() => { setMode('login'); setMessage('') }}>
-              Voltar para entrar
-            </button>
-          )}
+          {mode === 'login' && <button type="button" className="secondary full" onClick={() => { setMode('forgot'); setMessage('') }}>Esqueci minha senha</button>}
+          {mode === 'forgot' && <button type="button" className="secondary full" onClick={() => { setMode('login'); setMessage('') }}>Voltar para entrar</button>}
         </form>
         {message && <div className="notice">{message}</div>}
       </section>
     </main>
   )
 }
-
 
 function ResetPasswordScreen({ onDone }) {
   const [password, setPassword] = useState('')
@@ -608,7 +602,7 @@ function Onboarding({ user, onCreated }) {
 }
 
 
-function WaitingAccessScreen({ email, onLogout }) {
+function WaitingAccessScreen({ email, onLogout, message = '' }) {
   return (
     <main className="auth-shell">
       <section className="auth-card access-state-card">
@@ -619,6 +613,7 @@ function WaitingAccessScreen({ email, onLogout }) {
           Sua conta foi confirmada, mas ainda não está vinculada a uma empresa no CRM.
         </p>
         <div className="access-email">{email}</div>
+        {message && <div className="notice error">{message}</div>}
         <p className="muted small-copy">
           O administrador do sistema fará o vínculo com a empresa correta.
         </p>
@@ -8571,6 +8566,7 @@ export default function App() {
   const [adminCommercialPage, setAdminCommercialPage] = useState('dashboard')
   const [adminSandboxSettings, setAdminSandboxSettings] = useState(null)
   const [userPlan, setUserPlan] = useState(null)
+  const [pendingTrialError, setPendingTrialError] = useState('')
 
   const sandboxOrganization = useMemo(
     () => adminOrganizations.find(org => org.is_sandbox === true && org.is_active),
@@ -8648,8 +8644,12 @@ export default function App() {
             const { error: trialError } = await supabase.rpc('start_axiva_trial', {
               p_cnpj: pending.cnpj,
               p_organization_name: pending.organizationName,
+              p_terms_version: pending.termsVersion || AXIVA_TRIAL_TERMS_VERSION,
+              p_privacy_version: pending.privacyVersion || AXIVA_PRIVACY_VERSION,
+              p_terms_accepted: true
             })
             if (!trialError) {
+              setPendingTrialError('')
               localStorage.removeItem('axiva_pending_trial_v1')
               const { data: refreshedMembership } = await supabase
                 .from('organization_members')
@@ -8663,8 +8663,8 @@ export default function App() {
               if (refreshedPlan?.[0]) setUserPlan(refreshedPlan[0])
             }
           }
-        } catch {
-          // O usuário permanece na tela de acesso aguardando vínculo.
+        } catch (err) {
+          setPendingTrialError(err?.message || 'Não foi possível ativar o período de teste.')
         }
       }
 
@@ -9012,6 +9012,7 @@ export default function App() {
       <WaitingAccessScreen
         email={userEmail}
         onLogout={logout}
+        message={pendingTrialError}
       />
     )
   }

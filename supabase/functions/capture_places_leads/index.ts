@@ -98,6 +98,7 @@ Deno.serve(async(req)=>{
 
   let admin:any=null;
   let captureRunId:string|null=null;
+  let planReservation={reserved:0,organizationId:'',userId:''};
 
   try{
     const authHeader=req.headers.get("Authorization");
@@ -175,7 +176,27 @@ Deno.serve(async(req)=>{
     const startTermIndex=((cursor%searchTerms.length)+searchTerms.length)%searchTerms.length;
     const center=await resolveCampaignCenter(admin,campaign,googleApiKey);
     const radiusKm=Math.max(1,Math.min(Number(campaign.radius_km||30),50));
-    const leadsPerCapture=Math.max(1,Math.trunc(Number(orgSettings?.google_places_leads_per_capture||40)));
+    const configuredLeadsPerCapture=Math.max(1,Math.trunc(Number(orgSettings?.google_places_leads_per_capture||40)));
+    const quotaReservation=await admin.rpc("reserve_user_lead_quota",{
+      p_organization_id:campaign.organization_id,
+      p_user_id:user.id,
+      p_requested:configuredLeadsPerCapture,
+    });
+    if(quotaReservation.error) throw quotaReservation.error;
+    const planQuota=quotaReservation.data?.[0];
+    if(!planQuota?.allowed){
+      return json({
+        error:"Limite mensal de leads do seu plano atingido. Faça upgrade do plano para aumentar sua capacidade.",
+        lead_usage:Number(planQuota?.used||0),
+        lead_limit:Number(planQuota?.limit_value||0),
+      },429);
+    }
+    planReservation={
+      reserved:Number(planQuota?.reserved||0),
+      organizationId:campaign.organization_id,
+      userId:user.id,
+    };
+    const leadsPerCapture=Math.max(1,Number(planQuota.reserved||configuredLeadsPerCapture));
     const googleCallsPerCapture=Math.max(1,Math.min(20,Math.trunc(Number(orgSettings?.google_places_calls_per_capture||2))));
 
     const fieldMask=["places.id","places.displayName","places.formattedAddress","places.location","places.nationalPhoneNumber","places.websiteUri","places.rating","places.userRatingCount","places.primaryType","places.businessStatus","nextPageToken"].join(",");
@@ -333,6 +354,16 @@ Deno.serve(async(req)=>{
       inserted=insertedRows?.length||0;
     }
 
+    if(planReservation.reserved>0){
+      await admin.rpc("finalize_user_lead_quota",{
+        p_organization_id:planReservation.organizationId,
+        p_user_id:planReservation.userId,
+        p_reserved:planReservation.reserved,
+        p_used:inserted,
+      });
+      planReservation.reserved=0;
+    }
+
     const captureResult={
       requested_limit:leadsPerCapture,
       pages_used:searchCallsUsed,
@@ -383,6 +414,15 @@ Deno.serve(async(req)=>{
       week_start:capture?.week_start
     });
   }catch(error:any){
+    if(admin&&planReservation.reserved>0){
+      try{await admin.rpc("finalize_user_lead_quota",{
+        p_organization_id:planReservation.organizationId,
+        p_user_id:planReservation.userId,
+        p_reserved:planReservation.reserved,
+        p_used:0,
+      });}catch(_){ }
+      planReservation.reserved=0;
+    }
     if(admin&&captureRunId){
       try{await admin.rpc("finish_lead_capture_run",{p_run_id:captureRunId,p_success:false,p_result:{error:error instanceof Error?error.message:String(error)}});}catch(_){ }
     }

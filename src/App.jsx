@@ -337,10 +337,12 @@ function AuthScreen() {
     try {
       const { displayName, organizationName, cnpj } = validateSignup()
       const email = form.email.trim().toLowerCase()
-      const { data: signupData, error } = await supabase.auth.signUp({
-        email,
-        password: form.password,
-        options: { data: { full_name: displayName } }
+      const { data: signupData, error } = await supabase.functions.invoke('signup-with-resend', {
+        body: {
+          email,
+          password: form.password,
+          fullName: displayName
+        }
       })
       if (error) throw error
 
@@ -391,11 +393,13 @@ function AuthScreen() {
         const planId = new URLSearchParams(window.location.search).get('plan')
         if (!['axiva','axiva_plus','axiva_max'].includes(planId)) throw new Error('Plano de contratação inválido.')
 
-        const { data: signupData, error } = await supabase.auth.signUp({
+        const { data: signupData, error } = await supabase.functions.invoke('signup-with-resend', {
+        body: {
           email,
           password: form.password,
-          options: { data: { full_name: displayName } }
-        })
+          fullName: displayName
+        }
+      })
         if (error) throw error
 
         localStorage.setItem('axiva_pending_paid_v1', JSON.stringify({
@@ -408,7 +412,7 @@ function AuthScreen() {
 
         if (!signupData?.session) {
           setMode('login')
-          setMessage('Cadastro criado. Confirme seu e-mail. Depois, entre no CRM para continuar a contratação.')
+          setMessage('Cadastro criado. Enviamos um e-mail para confirmação. Depois, entre no CRM para continuar a contratação.')
         } else {
           setMessage('')
         }

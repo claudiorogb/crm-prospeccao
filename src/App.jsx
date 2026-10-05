@@ -8528,9 +8528,19 @@ function AdminTestSettings({ organization, userEmail, userId }) {
 
 function OrganizationTeam({ organization, currentUserId, currentRole }) {
   const [members, setMembers] = useState([])
-  const [form, setForm] = useState({ email: '', role: 'member' })
+  const [form, setForm] = useState({ name: '', email: '', role: 'member', planId: 'axiva' })
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const PLANS = {
+    axiva: { name: 'AXIVA', value: 45 },
+    axiva_plus: { name: 'AXIVA Plus', value: 79.8 },
+    axiva_max: { name: 'AXIVA Max', value: 164.8 },
+  }
+
+  function money(value) {
+    return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  }
 
   async function loadMembers() {
     if (!organization?.id) return
@@ -8553,21 +8563,27 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
     if (loading) return
     setLoading(true)
     setNotice('')
-    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+
+    const { data, error } = await supabase.functions.invoke('invite-org-user', {
       body: {
-        action: 'add_member',
-        organization_id: organization.id,
+        name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
-        role: form.role
+        role: form.role,
+        planId: form.planId
       }
     })
+
     setLoading(false)
     if (error || data?.error) {
       setNotice(data?.error || error?.message || 'Não foi possível criar o usuário.')
       return
     }
-    setNotice('Usuário criado e convite enviado por e-mail.')
-    setForm({ email: '', role: 'member' })
+
+    setNotice(data?.invited
+      ? `Convite enviado. Nova mensalidade: ${money(data.totalMonthly)}.`
+      : `Usuário vinculado. Nova mensalidade: ${money(data.totalMonthly)}.`
+    )
+    setForm({ name: '', email: '', role: 'member', planId: 'axiva' })
     await loadMembers()
   }
 
@@ -8618,24 +8634,31 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
       {notice && <div className="notice">{notice}</div>}
 
       <section className="panel">
-        <h2>Adicionar usuário</h2>
-        <form onSubmit={addMember} className="admin-member-form">
-          <input
-            type="email"
-            value={form.email}
-            onChange={e => setForm({...form, email: e.target.value})}
-            placeholder="usuario@empresa.com.br"
-            required
-          />
-          <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
-            <option value="member">Usuário</option>
-            <option value="admin">Administrador</option>
-            <option value="owner">Proprietário</option>
-          </select>
-          <button className="primary inline-btn" disabled={loading}>
-            <UserPlus size={16}/>{loading ? 'Criando...' : 'Adicionar usuário'}
+        <span className="eyebrow">USUÁRIOS</span>
+        <h2 style={{ margin: '6px 0' }}>Adicionar usuário</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+          <label>Nome
+            <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Nome completo" />
+          </label>
+          <label>E-mail
+            <input value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="usuario@empresa.com" type="email" />
+          </label>
+          <label>Papel na empresa
+            <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
+              <option value="member">Usuário</option>
+              <option value="admin">Administrador</option>
+              <option value="owner">Proprietário</option>
+            </select>
+          </label>
+          <label>Plano contratado
+            <select value={form.planId} onChange={e => setForm({...form, planId: e.target.value})}>
+              {Object.entries(PLANS).map(([id, plan]) => <option key={id} value={id}>{plan.name} — {money(plan.value)}/mês</option>)}
+            </select>
+          </label>
+          <button className="primary inline-btn" disabled={loading || !form.name.trim() || !form.email.trim() || !form.planId} onClick={addMember}>
+            <UserPlus size={16}/>{loading ? 'Adicionando...' : 'Adicionar usuário'}
           </button>
-        </form>
+        </div>
       </section>
 
       <section className="panel">
@@ -9301,9 +9324,6 @@ export default function App() {
           <button className={`nav-item ${page === 'dashboard' ? 'active' : ''}`} onClick={() => { setPage('dashboard'); setMobileMenuOpen(false) }}>
             <Building2 size={18}/> Dashboard
           </button>
-          <button className={`nav-item ${page === 'billing-management' ? 'active' : ''}`} onClick={() => { setPage('billing-management'); setMobileMenuOpen(false) }}>
-            <CreditCard size={18}/> Meu plano
-          </button>
           <button className={`nav-item ${page === 'campaign-workspace' ? 'active' : ''}`} onClick={() => { setPage('campaign-workspace'); setMobileMenuOpen(false) }}>
             <Target size={18}/> Campanhas
           </button>
@@ -9332,6 +9352,9 @@ export default function App() {
               <UserPlus size={18}/> Equipe
             </button>
           )}
+          <button className={`nav-item ${page === 'billing-management' ? 'active' : ''}`} onClick={() => { setPage('billing-management'); setMobileMenuOpen(false) }}>
+            <CreditCard size={18}/> Meu plano
+          </button>
 
           {isSystemAdmin && (
             <>

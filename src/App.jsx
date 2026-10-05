@@ -304,7 +304,7 @@ function clearLoginGuard(key) {
 }
 
 function AuthScreen() {
-  const [mode, setMode] = useState('login')
+  const [mode, setMode] = useState(() => new URLSearchParams(window.location.search).get('trial') === '1' ? 'signup' : 'login')
   const [form, setForm] = useState({ email: '', password: '', fullName: '', organizationName: '', cnpj: '' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')

@@ -21,6 +21,7 @@ import AiAssistant, { AiFloatingAssistant } from './ai-assistant'
 import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import TrialExpiredScreen from './trial-expired-screen'
+import BillingReturnScreen from './billing-return-screen'
 import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
 import whatsappIcon from './whatsapp-icon.png'
 
@@ -8778,6 +8779,12 @@ export default function App() {
         onLogout={logout}
       />
     )
+  }
+
+  const billingState = new URLSearchParams(window.location.search).get('billing')
+
+  if (!isSystemAdmin && ['success', 'cancelled', 'expired'].includes(billingState || '')) {
+    return <BillingReturnScreen status={billingState} />
   }
 
   const trialExpired = Boolean(

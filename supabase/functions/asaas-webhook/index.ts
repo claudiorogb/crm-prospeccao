@@ -123,6 +123,41 @@ async function activateContract(contractId: string, customerId?: string, subscri
     updated_at: new Date().toISOString(),
   }, { onConflict: "organization_id,user_id" });
 
+  const { data: activeAssignments } = await admin
+    .from("user_plan_assignments")
+    .select("user_id,plan_id,trial_ends_at,status")
+    .eq("organization_id", contract.organization_id)
+    .eq("status", "active");
+
+  const assignedTotal = (activeAssignments || []).reduce((sum: number, item: any) => {
+    const value = item.plan_id === "axiva" ? 45 : item.plan_id === "axiva_plus" ? 79.8 : item.plan_id === "axiva_max" ? 164.8 : 0;
+    return sum + (item.trial_ends_at ? 0 : value);
+  }, 0);
+
+  const { data: billingAccount } = await admin
+    .from("axiva_billing_accounts")
+    .select("licensed_seats,default_plan_id")
+    .eq("organization_id", contract.organization_id)
+    .maybeSingle();
+
+  const licensedSeats = Math.max(1, Number(billingAccount?.licensed_seats || 1));
+  const assignedSeats = (activeAssignments || []).filter((item: any) => !item.trial_ends_at).length;
+  const unassignedSeats = Math.max(0, licensedSeats - assignedSeats);
+  const defaultValue = billingAccount?.default_plan_id === "axiva_plus" ? 79.8 : billingAccount?.default_plan_id === "axiva_max" ? 164.8 : 45;
+  const total = assignedTotal + (unassignedSeats * defaultValue);
+
+  await admin.from("axiva_billing_accounts").upsert({
+    organization_id: contract.organization_id,
+    asaas_customer_id: customerId || null,
+    asaas_subscription_id: subscriptionId || null,
+    status: "active",
+    current_amount: Number(total.toFixed(2)),
+    licensed_seats: licensedSeats,
+    default_plan_id: billingAccount?.default_plan_id || contract.plan_id,
+    cancelled_at: null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "organization_id" });
+
   await sendContractEmail(contractId);
 }
 
@@ -181,22 +216,34 @@ Deno.serve(async (req) => {
 
     if (event === "SUBSCRIPTION_CREATED" || event === "SUBSCRIPTION_UPDATED") {
       const externalReference = String(subscription?.externalReference || "");
-      const contractId = externalReference.startsWith("axiva-contract:")
-        ? externalReference.slice("axiva-contract:".length)
-        : "";
-
+      const contractId = externalReference.startsWith("axiva-contract:") ? externalReference.slice("axiva-contract:".length) : "";
+      let billingOrganizationId = "";
       if (contractId) {
-        await admin.from("axiva_paid_contract_acceptances")
-          .update({
-            asaas_subscription_id: String(subscription.id || ""),
-            asaas_customer_id: String(subscription.customer || ""),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", contractId);
+        const { data: contractRef } = await admin.from("axiva_paid_contract_acceptances").select("organization_id").eq("id", contractId).maybeSingle();
+        billingOrganizationId = String(contractRef?.organization_id || "");
+        await admin.from("axiva_paid_contract_acceptances").update({
+          asaas_subscription_id: String(subscription.id || ""),
+          asaas_customer_id: String(subscription.customer || ""),
+          updated_at: new Date().toISOString(),
+        }).eq("id", contractId);
       } else if (subscription?.id) {
-        await admin.from("axiva_paid_contract_acceptances")
-          .update({ asaas_subscription_id: String(subscription.id), asaas_customer_id: String(subscription.customer || ""), updated_at: new Date().toISOString() })
-          .eq("asaas_subscription_id", String(subscription.id));
+        const { data: existingAccount } = await admin.from("axiva_billing_accounts").select("organization_id").eq("asaas_subscription_id", String(subscription.id)).maybeSingle();
+        billingOrganizationId = String(existingAccount?.organization_id || "");
+        await admin.from("axiva_paid_contract_acceptances").update({
+          asaas_subscription_id: String(subscription.id),
+          asaas_customer_id: String(subscription.customer || ""),
+          updated_at: new Date().toISOString(),
+        }).eq("asaas_subscription_id", String(subscription.id));
+      }
+      if (subscription?.id && billingOrganizationId) {
+        await admin.from("axiva_billing_accounts").update({
+          asaas_subscription_id: String(subscription.id),
+          asaas_customer_id: String(subscription.customer || ""),
+          status: subscription?.status === "ACTIVE" ? "active" : "suspended",
+          current_amount: Number(subscription?.value || 0),
+          next_due_date: subscription?.nextDueDate || null,
+          updated_at: new Date().toISOString(),
+        }).eq("organization_id", billingOrganizationId);
       }
     }
 

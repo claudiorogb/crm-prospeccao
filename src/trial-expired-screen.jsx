@@ -110,9 +110,9 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
       <section className="auth-card access-state-card" style={{ maxWidth: 620 }}>
         <div className="brand-mark">AX</div>
         <span className="eyebrow">PERÍODO DE TESTE ENCERRADO</span>
-        <h1>Seu teste de 30 dias terminou</h1>
+        <h1>Seu período de testes expirou</h1>
         <p className="muted">
-          Seus dados comerciais continuam armazenados no AXIVA CRM. Neste momento, seu acesso está limitado à visualização do Kanban.
+          Contrate o plano mensal do AXIVA CRM e continue usando. Seus dados comerciais continuam armazenados no AXIVA CRM e seu acesso permanece limitado à visualização do Kanban até a contratação.
         </p>
         <div className="panel" style={{ margin: '20px 0', textAlign: 'left' }}>
           <strong>Seu Kanban</strong>

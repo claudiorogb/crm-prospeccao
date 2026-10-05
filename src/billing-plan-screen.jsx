@@ -9,7 +9,7 @@ const PLANS = [
   { id: 'axiva_max', name: 'AXIVA Max', price: 'R$ 164,80/mês' },
 ]
 
-export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSignup = null }) {
+export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSignup = null, asaasEnvironment = 'production' }) {
   const [loadingPlan, setLoadingPlan] = useState('')
   const [selectedPlan, setSelectedPlan] = useState(initialPlanId)
   const [licenseQuantity, setLicenseQuantity] = useState(1)
@@ -27,15 +27,16 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
     setError('')
 
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('create-asaas-checkout', {
+      const functionName = asaasEnvironment === 'sandbox' ? 'create-asaas-checkout-sandbox' : 'create-asaas-checkout'
+      const { data, error: functionError } = await supabase.functions.invoke(functionName, {
         body: { planId: selectedPlan, licenseQuantity },
       })
 
       if (functionError) throw functionError
       if (!data?.checkoutUrl) throw new Error(data?.error || 'Não foi possível iniciar a contratação.')
-      if (paidSignup) {
-        localStorage.removeItem('axiva_pending_paid_v1')
-      }
+      if (asaasEnvironment === 'sandbox') localStorage.setItem('axiva_asaas_environment_v1', 'sandbox')
+      else localStorage.removeItem('axiva_asaas_environment_v1')
+      if (paidSignup) localStorage.removeItem('axiva_pending_paid_v1')
 
       window.location.assign(data.checkoutUrl)
     } catch (err) {

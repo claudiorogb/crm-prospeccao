@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import BillingContractScreen from './billing-contract-screen'
 
 const PLANS = [
   { id: 'axiva', name: 'AXIVA', price: 'R$ 45,00/mês' },
@@ -10,16 +11,23 @@ const PLANS = [
 
 export default function BillingPlanScreen({ onBack }) {
   const [loadingPlan, setLoadingPlan] = useState('')
+  const [selectedPlan, setSelectedPlan] = useState('')
   const [error, setError] = useState('')
 
-  async function choosePlan(planId) {
+  async function openContract(planId) {
     if (loadingPlan) return
-    setLoadingPlan(planId)
+    setError('')
+    setSelectedPlan(planId)
+  }
+
+  async function continueToAsaas() {
+    if (!selectedPlan) return
+    setLoadingPlan(selectedPlan)
     setError('')
 
     try {
       const { data, error: functionError } = await supabase.functions.invoke('create-asaas-checkout', {
-        body: { planId },
+        body: { planId: selectedPlan },
       })
 
       if (functionError) throw functionError
@@ -30,6 +38,16 @@ export default function BillingPlanScreen({ onBack }) {
       setError(err?.message || 'Não foi possível iniciar a contratação. Tente novamente.')
       setLoadingPlan('')
     }
+  }
+
+  if (selectedPlan) {
+    return (
+      <BillingContractScreen
+        planId={selectedPlan}
+        onBack={() => { setSelectedPlan(''); setError('') }}
+        onContinue={continueToAsaas}
+      />
+    )
   }
 
   return (
@@ -95,7 +113,7 @@ export default function BillingPlanScreen({ onBack }) {
               <button
                 type="button"
                 className="primary full"
-                onClick={() => choosePlan(plan.id)}
+                onClick={() => openContract(plan.id)}
                 disabled={Boolean(loadingPlan)}
                 style={{ minHeight: 42, whiteSpace: 'nowrap' }}
               >
@@ -126,7 +144,7 @@ export default function BillingPlanScreen({ onBack }) {
           }}
         >
           <CheckCircle2 size={16} style={{ flex: '0 0 auto', marginTop: 2, color: '#008e79' }} />
-          O pagamento será realizado em uma página segura do Asaas. O AXIVA não armazena os dados do seu cartão.
+          Antes do pagamento, você verá o contrato de uso e dará seu aceite eletrônico. O pagamento será realizado em uma página segura do Asaas.
         </p>
       </section>
 

@@ -8526,6 +8526,159 @@ function AdminTestSettings({ organization, userEmail, userId }) {
 }
 
 
+function OrganizationTeam({ organization, currentUserId, currentRole }) {
+  const [members, setMembers] = useState([])
+  const [form, setForm] = useState({ email: '', role: 'member' })
+  const [notice, setNotice] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function loadMembers() {
+    if (!organization?.id) return
+    setLoading(true)
+    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+      body: { action: 'list_members', organization_id: organization.id }
+    })
+    setLoading(false)
+    if (error || data?.error) {
+      setNotice(data?.error || error?.message || 'Não foi possível carregar a equipe.')
+      return
+    }
+    setMembers(data?.members || [])
+  }
+
+  useEffect(() => { loadMembers() }, [organization?.id])
+
+  async function addMember(event) {
+    event.preventDefault()
+    if (loading) return
+    setLoading(true)
+    setNotice('')
+    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+      body: {
+        action: 'add_member',
+        organization_id: organization.id,
+        email: form.email.trim().toLowerCase(),
+        role: form.role
+      }
+    })
+    setLoading(false)
+    if (error || data?.error) {
+      setNotice(data?.error || error?.message || 'Não foi possível criar o usuário.')
+      return
+    }
+    setNotice('Usuário criado e convite enviado por e-mail.')
+    setForm({ email: '', role: 'member' })
+    await loadMembers()
+  }
+
+  async function updateMember(member, patch) {
+    setNotice('')
+    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+      body: {
+        action: 'update_member',
+        organization_id: organization.id,
+        user_id: member.user_id,
+        ...patch
+      }
+    })
+    if (error || data?.error) {
+      setNotice(data?.error || error?.message || 'Não foi possível atualizar o usuário.')
+      return
+    }
+    await loadMembers()
+  }
+
+  async function removeMember(member) {
+    if (member.user_id === currentUserId) return
+    if (!window.confirm(`Remover ${member.email || 'este usuário'} da empresa?`)) return
+    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+      body: {
+        action: 'remove_member',
+        organization_id: organization.id,
+        user_id: member.user_id
+      }
+    })
+    if (error || data?.error) {
+      setNotice(data?.error || error?.message || 'Não foi possível remover o usuário.')
+      return
+    }
+    await loadMembers()
+  }
+
+  return (
+    <>
+      <header className="topbar">
+        <div>
+          <span className="eyebrow">EQUIPE</span>
+          <h1>Usuários da empresa</h1>
+          <p className="muted">Adicione usuários e defina o nível hierárquico de cada acesso.</p>
+        </div>
+      </header>
+
+      {notice && <div className="notice">{notice}</div>}
+
+      <section className="panel">
+        <h2>Adicionar usuário</h2>
+        <form onSubmit={addMember} className="admin-member-form">
+          <input
+            type="email"
+            value={form.email}
+            onChange={e => setForm({...form, email: e.target.value})}
+            placeholder="usuario@empresa.com.br"
+            required
+          />
+          <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
+            <option value="member">Usuário</option>
+            <option value="admin">Administrador</option>
+            <option value="owner">Proprietário</option>
+          </select>
+          <button className="primary inline-btn" disabled={loading}>
+            <UserPlus size={16}/>{loading ? 'Criando...' : 'Adicionar usuário'}
+          </button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Usuários da empresa</h2>
+            <p className="muted">{members.length} usuário(s)</p>
+          </div>
+        </div>
+        <div className="admin-list">
+          {members.map(member => (
+            <div className="admin-list-row" key={member.user_id}>
+              <div>
+                <strong>{member.email || member.user_id}</strong>
+                <span>{member.role === 'owner' ? 'Proprietário' : member.role === 'admin' ? 'Administrador' : 'Usuário'} • {member.is_active ? 'Ativo' : 'Suspenso'}</span>
+                <small>Último acesso: {formatDateTime(member.last_sign_in_at)}</small>
+              </div>
+              <div className="row-actions">
+                <select
+                  value={member.role || 'member'}
+                  disabled={member.user_id === currentUserId || (currentRole !== 'owner' && member.role === 'owner')}
+                  onChange={e => updateMember(member, { role: e.target.value })}
+                >
+                  <option value="member">Usuário</option>
+                  <option value="admin">Administrador</option>
+                  <option value="owner">Proprietário</option>
+                </select>
+                <button className="secondary mini" disabled={member.user_id === currentUserId} onClick={() => updateMember(member, { is_active: !member.is_active })}>
+                  {member.is_active ? 'Suspender' : 'Ativar'}
+                </button>
+                <button className="secondary mini" disabled={member.user_id === currentUserId} onClick={() => removeMember(member)}>
+                  Remover
+                </button>
+              </div>
+            </div>
+          ))}
+          {!members.length && !loading && <p className="muted">Nenhum usuário adicional cadastrado.</p>}
+        </div>
+      </section>
+    </>
+  )
+}
+
 function Administration({ organizations, reloadOrganizations, userEmail, userId }) {
   const [section, setSection] = useState('overview')
   const productionOrganizations = useMemo(
@@ -8603,6 +8756,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [accessLoading, setAccessLoading] = useState(true)
   const [organization, setOrganization] = useState(null)
+  const [organizationMembershipRole, setOrganizationMembershipRole] = useState(null)
   const [settings, setSettings] = useState(null)
   const [accountStatus, setAccountStatus] = useState('active')
   const [userDisplayName, setUserDisplayName] = useState('')
@@ -8647,6 +8801,7 @@ export default function App() {
       setAccountStatus('active')
       setUserDisplayName('')
       setIsSystemAdmin(false)
+      setOrganizationMembershipRole(null)
       setUserPlan(null)
       setAccessLoading(false)
       return
@@ -8723,6 +8878,7 @@ export default function App() {
       setAccountStatus(status)
       setUserDisplayName(displayName)
       setIsSystemAdmin(platformAdmin)
+      setOrganizationMembershipRole(platformAdmin ? null : (effectiveMembership?.role || null))
 
       if (platformAdmin) {
         // Administradores do sistema permanecem na área administrativa mesmo
@@ -9171,6 +9327,12 @@ export default function App() {
             onOpen={() => { setPage('overdue-returns'); setMobileMenuOpen(false) }}
           />
 
+          {(organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (
+            <button className={`nav-item ${page === 'team' ? 'active' : ''}`} onClick={() => { setPage('team'); setMobileMenuOpen(false) }}>
+              <UserPlus size={18}/> Equipe
+            </button>
+          )}
+
           {isSystemAdmin && (
             <>
               <button className={`nav-item ${page === 'platform-sales' ? 'active' : ''}`} onClick={() => { setPage('platform-sales'); setMobileMenuOpen(false) }}>
@@ -9221,6 +9383,9 @@ export default function App() {
             userEmail={userLabel}
             userId={session.user.id}
           />
+        )}
+        {page === 'team' && (organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (
+          <OrganizationTeam organization={organization} currentUserId={session.user.id} currentRole={organizationMembershipRole} />
         )}
         {page === 'overdue-returns' && (
           <OverdueReturnsPage

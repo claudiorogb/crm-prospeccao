@@ -13,7 +13,7 @@ const PLANS = {
   axiva_max: { name: 'AXIVA Max', price: 'R$ 164,80/mês', value: 164.8 },
 }
 
-export default function BillingContractScreen({ planId, onBack, onContinue, paidSignup }) {
+export default function BillingContractScreen({ planId, licenseQuantity = 1, onBack, onContinue, paidSignup }) {
   const [signerName, setSignerName] = useState(() => paidSignup?.fullName || '')
   const [accepted, setAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -38,22 +38,24 @@ export default function BillingContractScreen({ planId, onBack, onContinue, paid
       let rpcError
 
       if (paidSignup) {
-        const result = await supabase.rpc('prepare_axiva_paid_contract', {
+        const result = await supabase.rpc('prepare_axiva_paid_contract_v2', {
           p_cnpj: paidSignup.cnpj,
           p_organization_name: paidSignup.organizationName,
           p_plan_id: planId,
           p_contract_version: AXIVA_PAID_CONTRACT_VERSION,
           p_signer_name: signerName.trim(),
           p_user_agent: navigator.userAgent,
+          p_license_quantity: licenseQuantity,
         })
         data = result.data
         rpcError = result.error
       } else {
-        const result = await supabase.rpc('accept_axiva_paid_contract', {
+        const result = await supabase.rpc('accept_axiva_paid_contract_v2', {
         p_plan_id: planId,
         p_contract_version: AXIVA_PAID_CONTRACT_VERSION,
         p_signer_name: signerName.trim(),
           p_user_agent: navigator.userAgent,
+          p_license_quantity: licenseQuantity,
         })
         data = result.data
         rpcError = result.error
@@ -87,7 +89,7 @@ export default function BillingContractScreen({ planId, onBack, onContinue, paid
         <span className="eyebrow">CONTRATO DE USO</span>
         <h1 style={{ marginBottom: 8 }}>Contrato de Licença e Uso do AXIVA CRM</h1>
         <p className="muted" style={{ marginTop: 0 }}>
-          Plano selecionado: <strong>{plan.name}</strong> — {plan.price}
+          Plano selecionado: <strong>{plan.name}</strong> — {plan.price} por usuário · {licenseQuantity} {licenseQuantity === 1 ? 'usuário' : 'usuários'} · <strong>{(plan.value * licenseQuantity).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</strong>
         </p>
 
         <div

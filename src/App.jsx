@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  LogOut, Building2, Users, Search, MessageSquareText, Settings,
+  LogOut, Building2, Users, Search, MessageSquareText, Settings, CreditCard,
   ChevronRight, Plus, Target, Trash2, ClipboardCopy, Tags, Send,
   Phone, ListChecks, Shield, Database, SlidersHorizontal, History,
   Pause, Play, RefreshCw, XCircle, CheckCircle2, Activity, UserPlus,

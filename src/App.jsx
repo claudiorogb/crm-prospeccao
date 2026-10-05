@@ -8659,6 +8659,8 @@ export default function App() {
                 .limit(1)
                 .maybeSingle()
               effectiveMembership = refreshedMembership
+              const { data: refreshedPlan } = await supabase.rpc('get_my_crm_plan')
+              if (refreshedPlan?.[0]) setUserPlan(refreshedPlan[0])
             }
           }
         } catch {
@@ -8780,8 +8782,7 @@ export default function App() {
     !isSystemAdmin &&
     organization?.id &&
     userPlan?.trial_ends_at &&
-    new Date(userPlan.trial_ends_at).getTime() <= Date.now() &&
-    userPlan?.trial_active !== true
+    new Date(userPlan.trial_ends_at).getTime() <= Date.now()
   )
 
   if (trialExpired) {

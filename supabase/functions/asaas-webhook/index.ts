@@ -96,7 +96,7 @@ async function sendContractEmail(contractId: string) {
   return true;
 }
 
-async function activateContract(contractId: string, customerId?: string, subscriptionId?: string) {
+async function activateContract(contractId: string, customerId?: string, subscriptionId?: string, environment = "production") {
   const { data: contract } = await admin
     .from("axiva_paid_contract_acceptances")
     .select("id,organization_id,user_id,plan_id,status,signer_email")
@@ -148,6 +148,7 @@ async function activateContract(contractId: string, customerId?: string, subscri
 
   await admin.from("axiva_billing_accounts").upsert({
     organization_id: contract.organization_id,
+    environment,
     asaas_customer_id: customerId || null,
     asaas_subscription_id: subscriptionId || null,
     status: "active",
@@ -164,10 +165,11 @@ async function activateContract(contractId: string, customerId?: string, subscri
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const receivedToken = req.headers.get("asaas-access-token") || "";
-  const { data: webhookConfig } = await admin.from("axiva_asaas_config").select("webhook_token").eq("id", 1).maybeSingle();
-  const expectedToken = String(webhookConfig?.webhook_token || WEBHOOK_TOKEN_ENV);
-  if (!expectedToken) return json({ error: "Webhook não configurado." }, 503);
-  if (receivedToken !== expectedToken) return json({ error: "Unauthorized" }, 401);
+  const { data: webhookConfig } = await admin.from("axiva_asaas_config").select("webhook_token,sandbox_webhook_token").eq("id", 1).maybeSingle();
+  const productionToken = String(webhookConfig?.webhook_token || WEBHOOK_TOKEN_ENV);
+  const sandboxToken = String(webhookConfig?.sandbox_webhook_token || "");
+  const environment = receivedToken === sandboxToken && sandboxToken ? "sandbox" : receivedToken === productionToken ? "production" : "";
+  if (!environment) return json({ error: "Unauthorized" }, 401);
 
   let payload: any;
   try { payload = await req.json(); } catch { return json({ error: "JSON inválido." }, 400); }
@@ -197,7 +199,7 @@ Deno.serve(async (req) => {
         .eq("checkout_id", String(checkout.id))
         .maybeSingle();
 
-      if (contract) await activateContract(contract.id, checkout.customer || undefined);
+      if (contract) await activateContract(contract.id, checkout.customer || undefined, undefined, environment);
     }
 
     if (event === "CHECKOUT_CANCELED" && checkout?.id) {

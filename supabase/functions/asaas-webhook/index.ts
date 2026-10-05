@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
+const WEBHOOK_TOKEN_ENV = Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const RESEND_FROM = Deno.env.get("RESEND_FROM_EMAIL") || "resposta@axiva.com.br";
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -128,10 +128,11 @@ async function activateContract(contractId: string, customerId?: string, subscri
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  if (!WEBHOOK_TOKEN) return json({ error: "Webhook não configurado." }, 503);
-
   const receivedToken = req.headers.get("asaas-access-token") || "";
-  if (receivedToken !== WEBHOOK_TOKEN) return json({ error: "Unauthorized" }, 401);
+  const { data: webhookConfig } = await admin.from("axiva_asaas_config").select("webhook_token").eq("id", 1).maybeSingle();
+  const expectedToken = String(webhookConfig?.webhook_token || WEBHOOK_TOKEN_ENV);
+  if (!expectedToken) return json({ error: "Webhook não configurado." }, 503);
+  if (receivedToken !== expectedToken) return json({ error: "Unauthorized" }, 401);
 
   let payload: any;
   try { payload = await req.json(); } catch { return json({ error: "JSON inválido." }, 400); }

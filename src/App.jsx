@@ -22,6 +22,7 @@ import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import TrialExpiredScreen from './trial-expired-screen'
 import BillingReturnScreen from './billing-return-screen'
+import BillingPlanScreen from './billing-plan-screen'
 import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
 import whatsappIcon from './whatsapp-icon.png'
 
@@ -306,7 +307,13 @@ function clearLoginGuard(key) {
 }
 
 function AuthScreen() {
-  const [mode, setMode] = useState(() => new URLSearchParams(window.location.search).get('trial') === '1' ? 'signup' : 'login')
+  const [mode, setMode] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    const requestedPlan = params.get('plan')
+    return ['axiva','axiva_plus','axiva_max'].includes(requestedPlan)
+      ? 'paid_signup'
+      : params.get('trial') === '1' ? 'signup' : 'login'
+  })
   const [form, setForm] = useState({ email: '', password: '', fullName: '', organizationName: '', cnpj: '' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -377,6 +384,32 @@ function AuthScreen() {
       } else if (mode === 'signup') {
         validateSignup()
         setShowTrialTerms(true)
+      } else if (mode === 'paid_signup') {
+        const { displayName, organizationName, cnpj } = validateSignup()
+        const email = form.email.trim().toLowerCase()
+        const planId = new URLSearchParams(window.location.search).get('plan')
+        if (!['axiva','axiva_plus','axiva_max'].includes(planId)) throw new Error('Plano de contratação inválido.')
+
+        const { data: signupData, error } = await supabase.auth.signUp({
+          email,
+          password: form.password,
+          options: { data: { full_name: displayName } }
+        })
+        if (error) throw error
+
+        localStorage.setItem('axiva_pending_paid_v1', JSON.stringify({
+          planId,
+          fullName: displayName,
+          organizationName,
+          cnpj
+        }))
+
+        if (!signupData?.session) {
+          setMode('login')
+          setMessage('Cadastro criado. Confirme seu e-mail. Depois, entre no CRM para continuar a contratação.')
+        } else {
+          setMessage('')
+        }
       } else {
         const blocked = loginBlockMessage(CRM_LOGIN_GUARD_KEY)
         if (blocked) {
@@ -415,15 +448,19 @@ function AuthScreen() {
     <main className="auth-shell">
       <section className="auth-card">
         <div className="brand-mark">CP</div>
-        <h1>CRM Prospecção</h1>
-        <p className="muted">Entre no CRM ou crie sua conta para testar o Plano AXIVA gratuitamente por 30 dias.</p>
+        <h1>{mode === 'paid_signup' ? 'Contratação do AXIVA CRM' : 'CRM Prospecção'}</h1>
+        <p className="muted">
+          {mode === 'paid_signup'
+            ? 'Preencha seus dados para continuar com a contratação do plano selecionado.'
+            : 'Entre no CRM ou crie sua conta para testar o Plano AXIVA gratuitamente por 30 dias.'}
+        </p>
         <div className="auth-tabs">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setMessage('') }}>Entrar</button>
           <button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setMessage('') }}>Teste grátis</button>
         </div>
         {mode === 'forgot' && <div className="notice">Informe seu e-mail. Você receberá um link seguro para criar uma nova senha.</div>}
         <form onSubmit={submit}>
-          {mode === 'signup' && (
+          {(mode === 'signup' || mode === 'paid_signup') && (
             <>
               <label>
                 Como deseja ser chamado
@@ -450,7 +487,7 @@ function AuthScreen() {
             </label>
           )}
           <button className="primary full" disabled={loading}>
-            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : mode === 'forgot' ? 'Enviar link de redefinição' : 'Continuar'}
+            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : mode === 'forgot' ? 'Enviar link de redefinição' : mode === 'paid_signup' ? 'Continuar para o contrato' : 'Continuar'}
           </button>
           {mode === 'login' && <button type="button" className="secondary full" onClick={() => { setMode('forgot'); setMessage('') }}>Esqueci minha senha</button>}
           {mode === 'forgot' && <button type="button" className="secondary full" onClick={() => { setMode('login'); setMessage('') }}>Voltar para entrar</button>}
@@ -9013,6 +9050,26 @@ export default function App() {
           <AiFloatingAssistant userEmail={userEmail} pageKey={adminCommercialPage} />
         )}
       </div>
+    )
+  }
+
+  let pendingPaidSignup = null
+  try {
+    pendingPaidSignup = JSON.parse(localStorage.getItem('axiva_pending_paid_v1') || 'null')
+  } catch {
+    pendingPaidSignup = null
+  }
+
+  if (!isSystemAdmin && pendingPaidSignup?.planId && !organization) {
+    return (
+      <BillingPlanScreen
+        initialPlanId={pendingPaidSignup.planId}
+        paidSignup={pendingPaidSignup}
+        onBack={() => {
+          localStorage.removeItem('axiva_pending_paid_v1')
+          window.location.assign('https://axiva.com.br/crm/precos')
+        }}
+      />
     )
   }
 

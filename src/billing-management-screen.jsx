@@ -20,6 +20,8 @@ export default function BillingManagementScreen({ onBackToCrm }) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [contracting, setContracting] = useState(false)
+  const [inviteName, setInviteName] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
 
   async function load() {
     setLoading(true)
@@ -97,6 +99,27 @@ export default function BillingManagementScreen({ onBackToCrm }) {
         </div>
         {account?.next_due_date && <div className="muted" style={{ marginTop: 14 }}>Próxima cobrança: {new Date(account.next_due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</div>}
       </section>
+
+      {canManage && hasPaid && <section className="panel" style={{ marginTop: 16 }}>
+        <span className="eyebrow">USUÁRIOS</span>
+        <h2 style={{ margin: '6px 0' }}>Adicionar usuário</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+          <label>Nome<input value={inviteName} onChange={e => setInviteName(e.target.value)} placeholder="Nome completo" /></label>
+          <label>E-mail<input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="usuario@empresa.com" type="email" /></label>
+          <button className="primary inline-btn" disabled={Boolean(busy) || !inviteName.trim() || !inviteEmail.trim()} onClick={async () => {
+            setBusy('invite'); setError(''); setMessage('')
+            try {
+              const { data, error: fnError } = await supabase.functions.invoke('invite-org-user', { body: { name: inviteName.trim(), email: inviteEmail.trim() } })
+              if (fnError) throw fnError
+              if (data?.error) throw new Error(data.error)
+              setInviteName(''); setInviteEmail('')
+              setMessage(data?.invited ? 'Convite enviado por e-mail.' : 'Usuário vinculado à empresa.')
+              await load()
+            } catch (err) { setError(err?.message || 'Não foi possível adicionar o usuário.') }
+            finally { setBusy('') }
+          }}>{busy === 'invite' ? <Loader2 size={16} className="spin" /> : 'Adicionar'}</button>
+        </div>
+      </section>}
 
       <section className="panel" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 14 }}>

@@ -19,6 +19,8 @@ import DashboardVisual from './dashboard-visual'
 import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
 import AiAssistant, { AiFloatingAssistant } from './ai-assistant'
 import AdminAiLimits from './admin-ai-limits'
+import AdminUserPlans from './admin-user-plans'
+import TrialExpiredScreen from './trial-expired-screen'
 import whatsappIcon from './whatsapp-icon.png'
 
 
@@ -302,8 +304,8 @@ function clearLoginGuard(key) {
 }
 
 function AuthScreen() {
-  const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ email: '', password: '', fullName: '' })
+  const [mode, setMode] = useState(() => new URLSearchParams(window.location.search).get('trial') === '1' ? 'signup' : 'login')
+  const [form, setForm] = useState({ email: '', password: '', fullName: '', organizationName: '', cnpj: '' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -323,15 +325,35 @@ function AuthScreen() {
           throw new Error('A senha precisa ter pelo menos 10 caracteres.')
         }
         const displayName = form.fullName.trim().replace(/\s+/g, ' ')
+        const organizationName = form.organizationName.trim().replace(/\s+/g, ' ')
+        const cnpj = form.cnpj.replace(/\D/g, '')
         if (displayName.length < 2) throw new Error('Informe como deseja ser chamado.')
+        if (organizationName.length < 2) throw new Error('Informe o nome da empresa.')
+        if (cnpj.length !== 14) throw new Error('Informe um CNPJ válido com 14 dígitos.')
 
-        const { error } = await supabase.auth.signUp({
-          email: form.email,
+        const { data: signupData, error } = await supabase.auth.signUp({
+          email: form.email.trim().toLowerCase(),
           password: form.password,
           options: { data: { full_name: displayName } }
         })
         if (error) throw error
-        setMessage('Cadastro criado. Se a confirmação de e-mail estiver ativa, confirme pelo link recebido.')
+
+        localStorage.setItem('axiva_pending_trial_v1', JSON.stringify({
+          organizationName,
+          cnpj,
+        }))
+
+        if (signupData?.session) {
+          const { error: trialError } = await supabase.rpc('start_axiva_trial', {
+            p_cnpj: cnpj,
+            p_organization_name: organizationName,
+          })
+          if (trialError) throw trialError
+          localStorage.removeItem('axiva_pending_trial_v1')
+          setMessage('Cadastro concluído. Seu teste gratuito do Plano AXIVA já está ativo.')
+        } else {
+          setMessage('Cadastro criado. Confirme seu e-mail. Depois, entre no CRM para ativar automaticamente seu teste gratuito de 30 dias.')
+        }
       } else {
         const blocked = loginBlockMessage(CRM_LOGIN_GUARD_KEY)
         if (blocked) {
@@ -363,11 +385,11 @@ function AuthScreen() {
       <section className="auth-card">
         <div className="brand-mark">CP</div>
         <h1>CRM Prospecção</h1>
-        <p className="muted">Digite seu e-mail e senha para entrar.</p>
+        <p className="muted">Entre no CRM ou crie sua conta para testar o Plano AXIVA gratuitamente por 30 dias.</p>
 
         <div className="auth-tabs">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Entrar</button>
-          <button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setMessage('') }}>Criar conta</button>
+          <button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setMessage('') }}>Teste grátis</button>
         </div>
 
         {mode === 'forgot' && (
@@ -376,18 +398,41 @@ function AuthScreen() {
 
         <form onSubmit={submit}>
           {mode === 'signup' && (
-            <label>
-              Como deseja ser chamado
-              <input
-                value={form.fullName}
-                onChange={e => setForm({ ...form, fullName: e.target.value })}
-                placeholder="Ex.: Claudio"
-                minLength={2}
-                maxLength={80}
-                autoComplete="name"
-                required
-              />
-            </label>
+            <>
+              <label>
+                Como deseja ser chamado
+                <input
+                  value={form.fullName}
+                  onChange={e => setForm({ ...form, fullName: e.target.value })}
+                  placeholder="Ex.: Claudio"
+                  minLength={2}
+                  maxLength={80}
+                  autoComplete="name"
+                  required
+                />
+              </label>
+              <label>
+                Nome da empresa
+                <input
+                  value={form.organizationName}
+                  onChange={e => setForm({ ...form, organizationName: e.target.value })}
+                  placeholder="Ex.: Empresa ABC"
+                  maxLength={160}
+                  required
+                />
+              </label>
+              <label>
+                CNPJ
+                <input
+                  value={form.cnpj}
+                  onChange={e => setForm({ ...form, cnpj: e.target.value.replace(/\D/g, '').slice(0, 14) })}
+                  placeholder="00.000.000/0000-00"
+                  inputMode="numeric"
+                  maxLength={18}
+                  required
+                />
+              </label>
+            </>
           )}
           <label>
             E-mail
@@ -8458,6 +8503,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
     ['defaults', 'Padrões', SlidersHorizontal],
     ['messages', 'Mensagens', MessageSquareText],
     ['ai', 'IA', Bot],
+    ['plans', 'Planos', SlidersHorizontal],
     ['audit', 'Auditoria', History]
   ]
 
@@ -8499,6 +8545,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
           {section === 'defaults' && <AdminDefaults organizations={organizations} />}
           {section === 'messages' && <AdminMessages organizations={organizations} userEmail={userEmail} />}
           {section === 'ai' && <AdminAiLimits reloadOrganizations={reloadOrganizations} />}
+          {section === 'plans' && <AdminUserPlans />}
           {section === 'audit' && <AdminAudit organizations={productionOrganizations} userEmail={userEmail} />}
         </div>
       </div>
@@ -8523,6 +8570,7 @@ export default function App() {
   const [systemAdminView, setSystemAdminView] = useState('administration')
   const [adminCommercialPage, setAdminCommercialPage] = useState('dashboard')
   const [adminSandboxSettings, setAdminSandboxSettings] = useState(null)
+  const [userPlan, setUserPlan] = useState(null)
 
   const sandboxOrganization = useMemo(
     () => adminOrganizations.find(org => org.is_sandbox === true && org.is_active),
@@ -8555,6 +8603,7 @@ export default function App() {
       setAccountStatus('active')
       setUserDisplayName('')
       setIsSystemAdmin(false)
+      setUserPlan(null)
       setAccessLoading(false)
       return
     }
@@ -8564,7 +8613,7 @@ export default function App() {
     async function loadAccess() {
       setAccessLoading(true)
 
-      const [profileResult, membershipResult, adminResult] = await Promise.all([
+      const [profileResult, membershipResult, adminResult, planResult] = await Promise.all([
         supabase
           .from('profiles')
           .select('account_status,full_name')
@@ -8581,7 +8630,8 @@ export default function App() {
           .from('system_admins')
           .select('user_id')
           .eq('user_id', session.user.id)
-          .maybeSingle()
+          .maybeSingle(),
+        supabase.rpc('get_my_crm_plan')
       ])
 
       if (cancelled) return
@@ -8589,6 +8639,37 @@ export default function App() {
       const status = profileResult.data?.account_status || 'active'
       const displayName = profileResult.data?.full_name?.trim() || session.user.user_metadata?.full_name?.trim() || ''
       const platformAdmin = Boolean(adminResult.data)
+
+      let effectiveMembership = membershipResult.data
+      if (!platformAdmin && (!effectiveMembership || membershipResult.error)) {
+        try {
+          const pending = JSON.parse(localStorage.getItem('axiva_pending_trial_v1') || 'null')
+          if (pending?.cnpj && pending?.organizationName) {
+            const { error: trialError } = await supabase.rpc('start_axiva_trial', {
+              p_cnpj: pending.cnpj,
+              p_organization_name: pending.organizationName,
+            })
+            if (!trialError) {
+              localStorage.removeItem('axiva_pending_trial_v1')
+              const { data: refreshedMembership } = await supabase
+                .from('organization_members')
+                .select('organization_id,role,is_active,organizations(id,name,is_active)')
+                .eq('user_id', session.user.id)
+                .eq('is_active', true)
+                .limit(1)
+                .maybeSingle()
+              effectiveMembership = refreshedMembership
+              const { data: refreshedPlan } = await supabase.rpc('get_my_crm_plan')
+              if (refreshedPlan?.[0]) setUserPlan(refreshedPlan[0])
+            }
+          }
+        } catch {
+          // O usuário permanece na tela de acesso aguardando vínculo.
+        }
+      }
+
+      const planRow = planResult.data?.[0] || null
+      setUserPlan(planRow)
 
       setAccountStatus(status)
       setUserDisplayName(displayName)
@@ -8599,8 +8680,8 @@ export default function App() {
         // quando também são membros da organização isolada de testes.
         setOrganization(null)
         setSettings(null)
-      } else if (!membershipResult.error && membershipResult.data?.organizations?.is_active) {
-        setOrganization(membershipResult.data.organizations)
+      } else if (!membershipResult.error && effectiveMembership?.organizations?.is_active) {
+        setOrganization(effectiveMembership.organizations)
       } else {
         setOrganization(null)
         setSettings(null)
@@ -8692,6 +8773,24 @@ export default function App() {
       <BlockedAccessScreen
         status={accountStatus}
         email={userEmail}
+        onLogout={logout}
+      />
+    )
+  }
+
+  const trialExpired = Boolean(
+    !isSystemAdmin &&
+    organization?.id &&
+    userPlan?.trial_ends_at &&
+    new Date(userPlan.trial_ends_at).getTime() <= Date.now()
+  )
+
+  if (trialExpired) {
+    return (
+      <TrialExpiredScreen
+        organization={organization}
+        userId={session.user.id}
+        userEmail={userEmail}
         onLogout={logout}
       />
     )

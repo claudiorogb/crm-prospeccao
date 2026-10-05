@@ -9073,6 +9073,14 @@ export default function App() {
     )
   }
 
+  if (!isSystemAdmin && organization && !userPlan) {
+    return (
+      <BillingPlanScreen
+        onBack={() => logout()}
+      />
+    )
+  }
+
   if (!organization) {
     return (
       <WaitingAccessScreen

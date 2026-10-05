@@ -346,7 +346,8 @@ function AuthScreen() {
           p_organization_name: organizationName,
           p_terms_version: termsVersion,
           p_privacy_version: privacyVersion,
-          p_terms_accepted: true
+          p_terms_accepted: true,
+          p_accepted_at: acceptedAt
         })
         if (trialError) throw trialError
         localStorage.removeItem('axiva_pending_trial_v1')
@@ -8646,7 +8647,8 @@ export default function App() {
               p_organization_name: pending.organizationName,
               p_terms_version: pending.termsVersion || AXIVA_TRIAL_TERMS_VERSION,
               p_privacy_version: pending.privacyVersion || AXIVA_PRIVACY_VERSION,
-              p_terms_accepted: true
+              p_terms_accepted: true,
+              p_accepted_at: pending.acceptedAt || null
             })
             if (!trialError) {
               setPendingTrialError('')

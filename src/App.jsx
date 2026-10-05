@@ -22,6 +22,7 @@ import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import TrialExpiredScreen from './trial-expired-screen'
 import BillingReturnScreen from './billing-return-screen'
+import BillingManagementScreen from './billing-management-screen'
 import BillingPlanScreen from './billing-plan-screen'
 import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
 import whatsappIcon from './whatsapp-icon.png'
@@ -9134,6 +9135,9 @@ export default function App() {
           <button className={`nav-item ${page === 'dashboard' ? 'active' : ''}`} onClick={() => { setPage('dashboard'); setMobileMenuOpen(false) }}>
             <Building2 size={18}/> Dashboard
           </button>
+          <button className={`nav-item ${page === 'billing-management' ? 'active' : ''}`} onClick={() => { setPage('billing-management'); setMobileMenuOpen(false) }}>
+            <CreditCard size={18}/> Meu plano
+          </button>
           <button className={`nav-item ${page === 'campaign-workspace' ? 'active' : ''}`} onClick={() => { setPage('campaign-workspace'); setMobileMenuOpen(false) }}>
             <Target size={18}/> Campanhas
           </button>
@@ -9187,6 +9191,9 @@ export default function App() {
             userEmail={userLabel}
             onGoCampaigns={() => setPage('campaign-workspace')}
           />
+        )}
+        {page === 'billing-management' && (
+          <BillingManagementScreen onBackToCrm={() => setPage('dashboard')} />
         )}
         {page === 'campaign-workspace' && (
           <CampaignWorkspace organization={organization} settings={settings} userEmail={userLabel} />

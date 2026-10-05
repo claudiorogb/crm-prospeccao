@@ -28,6 +28,92 @@ function brazilDate() {
   }).format(new Date());
 }
 
+async function ensureAsaasWebhook(apiKey: string, admin: any) {
+  const webhookUrl = supabaseUrlForWebhook();
+  const events = [
+    "CHECKOUT_CREATED",
+    "CHECKOUT_PAID",
+    "CHECKOUT_CANCELED",
+    "CHECKOUT_EXPIRED",
+    "SUBSCRIPTION_CREATED",
+    "SUBSCRIPTION_UPDATED",
+    "SUBSCRIPTION_INACTIVATED",
+    "SUBSCRIPTION_DELETED",
+    "PAYMENT_CONFIRMED",
+    "PAYMENT_RECEIVED",
+    "PAYMENT_OVERDUE",
+    "PAYMENT_REFUNDED",
+    "PAYMENT_CHARGEBACK_REQUESTED",
+  ];
+
+  const { data: config } = await admin
+    .from("axiva_asaas_config")
+    .select("id,webhook_id,webhook_token")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (!config?.webhook_token) throw new Error("Configuração do Webhook Asaas indisponível.");
+
+  if (config.webhook_id) {
+    const existingResponse = await fetch("https://api.asaas.com/v3/webhooks/" + encodeURIComponent(config.webhook_id), {
+      headers: { access_token: apiKey, Accept: "application/json" },
+    });
+    if (existingResponse.ok) {
+      const existing = await existingResponse.json();
+      if (existing?.enabled && existing?.url === webhookUrl) return;
+    }
+  }
+
+  const listResponse = await fetch("https://api.asaas.com/v3/webhooks", {
+    headers: { access_token: apiKey, Accept: "application/json" },
+  });
+  if (listResponse.ok) {
+    const list = await listResponse.json();
+    const existing = (list?.data || []).find((item: any) => item?.url === webhookUrl);
+    if (existing?.id) {
+      await admin.from("axiva_asaas_config")
+        .update({ webhook_id: existing.id, updated_at: new Date().toISOString() })
+        .eq("id", 1);
+      if (existing.enabled) return;
+    }
+  }
+
+  const createResponse = await fetch("https://api.asaas.com/v3/webhooks", {
+    method: "POST",
+    headers: {
+      access_token: apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      name: "AXIVA CRM - Cobranças",
+      url: webhookUrl,
+      email: "resposta@axiva.com.br",
+      enabled: true,
+      interrupted: false,
+      apiVersion: 3,
+      authToken: config.webhook_token,
+      sendType: "SEQUENTIALLY",
+      events,
+    }),
+  });
+
+  if (!createResponse.ok) {
+    const raw = await createResponse.text();
+    throw new Error("Não foi possível configurar o Webhook do Asaas: " + raw.slice(0, 220));
+  }
+
+  const created = await createResponse.json();
+  await admin.from("axiva_asaas_config")
+    .update({ webhook_id: created.id, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+}
+
+function supabaseUrlForWebhook() {
+  const base = Deno.env.get("SUPABASE_URL") || "";
+  return base.replace(/\/$/, "") + "/functions/v1/asaas-webhook";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -122,6 +208,8 @@ Deno.serve(async (req) => {
   if (contractError || !contract) {
     return json({ error: "O contrato de uso precisa ser aceito antes do pagamento." }, 409);
   }
+
+  try { await ensureAsaasWebhook(apiKey, admin); } catch (webhookError) { return json({ error: String(webhookError?.message || webhookError) }, 503); }
 
   const externalReference = "axiva-contract:" + contract.id;
   const nextDueDate = brazilDate();

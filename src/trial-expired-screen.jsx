@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Download, ArrowRight } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from './lib/supabase'
+import BillingPlanScreen from './billing-plan-screen'
 
 function downloadCsv(rows, fileName) {
   const headers = [
@@ -41,6 +42,7 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
   const [loadingLeads, setLoadingLeads] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [showBilling, setShowBilling] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -105,6 +107,10 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
     }
   }
 
+  if (showBilling) {
+    return <BillingPlanScreen onBack={() => setShowBilling(false)} />
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card access-state-card" style={{ maxWidth: 620 }}>
@@ -146,8 +152,8 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
           <button className="secondary full" onClick={downloadCommercialData} disabled={downloading}>
             <Download size={17} /> {downloading ? 'Preparando download...' : 'Baixar informações comerciais'}
           </button>
-          <button className="primary full" onClick={() => { window.location.href = '/crm/precos' }}>
-            <ArrowRight size={17} /> Continuar usando o CRM
+          <button className="primary full" onClick={() => setShowBilling(true)}>
+            <ArrowRight size={17} /> Contratar plano mensal
           </button>
           <button className="text-button" onClick={onLogout}>Sair</button>
         </div>

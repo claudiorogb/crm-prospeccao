@@ -13,8 +13,8 @@ const PLANS = {
   axiva_max: { name: 'AXIVA Max', price: 'R$ 164,80/mês', value: 164.8 },
 }
 
-export default function BillingContractScreen({ planId, onBack, onContinue }) {
-  const [signerName, setSignerName] = useState('')
+export default function BillingContractScreen({ planId, onBack, onContinue, paidSignup }) {
+  const [signerName, setSignerName] = useState(() => paidSignup?.fullName || '')
   const [accepted, setAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -34,12 +34,31 @@ export default function BillingContractScreen({ planId, onBack, onContinue }) {
 
     setLoading(true)
     try {
-      const { data, error: rpcError } = await supabase.rpc('accept_axiva_paid_contract', {
+      let data
+      let rpcError
+
+      if (paidSignup) {
+        const result = await supabase.rpc('prepare_axiva_paid_contract', {
+          p_cnpj: paidSignup.cnpj,
+          p_organization_name: paidSignup.organizationName,
+          p_plan_id: planId,
+          p_contract_version: AXIVA_PAID_CONTRACT_VERSION,
+          p_signer_name: signerName.trim(),
+          p_user_agent: navigator.userAgent,
+        })
+        data = result.data
+        rpcError = result.error
+      } else {
+        const result = await supabase.rpc('accept_axiva_paid_contract', {
         p_plan_id: planId,
         p_contract_version: AXIVA_PAID_CONTRACT_VERSION,
         p_signer_name: signerName.trim(),
-        p_user_agent: navigator.userAgent,
-      })
+          p_user_agent: navigator.userAgent,
+        })
+        data = result.data
+        rpcError = result.error
+      }
+
       if (rpcError) throw rpcError
       if (!data) throw new Error('Não foi possível registrar a aceitação do contrato.')
       await onContinue()

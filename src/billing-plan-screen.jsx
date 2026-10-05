@@ -32,6 +32,9 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
 
       if (functionError) throw functionError
       if (!data?.checkoutUrl) throw new Error(data?.error || 'Não foi possível iniciar a contratação.')
+      if (paidSignup) {
+        localStorage.removeItem('axiva_pending_paid_v1')
+      }
 
       window.location.assign(data.checkoutUrl)
     } catch (err) {

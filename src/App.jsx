@@ -402,7 +402,8 @@ function AuthScreen() {
           planId,
           fullName: displayName,
           organizationName,
-          cnpj
+          cnpj,
+          asaasEnvironment: new URLSearchParams(window.location.search).get('asaas') === 'sandbox' ? 'sandbox' : 'production'
         }))
 
         if (!signupData?.session) {
@@ -9066,6 +9067,7 @@ export default function App() {
       <BillingPlanScreen
         initialPlanId={pendingPaidSignup.planId}
         paidSignup={organization ? null : pendingPaidSignup}
+        asaasEnvironment={pendingPaidSignup.asaasEnvironment === 'sandbox' ? 'sandbox' : 'production'}
         onBack={async () => {
           localStorage.removeItem('axiva_pending_paid_v1')
           await supabase.auth.signOut()
@@ -9079,6 +9081,7 @@ export default function App() {
     return (
       <BillingPlanScreen
         onBack={() => logout()}
+        asaasEnvironment={pendingPaidSignup?.asaasEnvironment === 'sandbox' ? 'sandbox' : 'production'}
       />
     )
   }

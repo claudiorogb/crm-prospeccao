@@ -24,6 +24,8 @@ export default function BillingManagementScreen({ onBackToCrm }) {
   const [contracting, setContracting] = useState(false)
   const [inviteName, setInviteName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('member')
+  const [invitePlanId, setInvitePlanId] = useState('axiva')
   const [pendingChange, setPendingChange] = useState(null)
 
   async function load() {
@@ -139,17 +141,30 @@ export default function BillingManagementScreen({ onBackToCrm }) {
       {canManage && hasPaid && <section className="panel" style={{ marginTop: 16 }}>
         <span className="eyebrow">USUÁRIOS</span>
         <h2 style={{ margin: '6px 0' }}>Adicionar usuário</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
           <label>Nome<input value={inviteName} onChange={e => setInviteName(e.target.value)} placeholder="Nome completo" /></label>
           <label>E-mail<input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="usuario@empresa.com" type="email" /></label>
-          <button className="primary inline-btn" disabled={Boolean(busy) || !inviteName.trim() || !inviteEmail.trim()} onClick={async () => {
+          <label>Papel na empresa
+            <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}>
+              <option value="member">Usuário</option>
+              <option value="admin">Administrador</option>
+              <option value="owner">Proprietário</option>
+            </select>
+          </label>
+          <label>Plano contratado
+            <select value={invitePlanId} onChange={e => setInvitePlanId(e.target.value)}>
+              {Object.entries(PLANS).map(([id, plan]) => <option key={id} value={id}>{plan.name} — {money(plan.value)}/mês</option>)}
+            </select>
+          </label>
+          <button className="primary inline-btn" disabled={Boolean(busy) || !inviteName.trim() || !inviteEmail.trim() || !invitePlanId} onClick={async () => {
             setBusy('invite'); setError(''); setMessage('')
             try {
-              const { data, error: fnError } = await supabase.functions.invoke('invite-org-user', { body: { name: inviteName.trim(), email: inviteEmail.trim() } })
+              const selectedPlan = PLANS[invitePlanId]
+              const { data, error: fnError } = await supabase.functions.invoke('invite-org-user', { body: { name: inviteName.trim(), email: inviteEmail.trim(), role: inviteRole, planId: invitePlanId } })
               if (fnError) throw fnError
               if (data?.error) throw new Error(data.error)
-              setInviteName(''); setInviteEmail('')
-              setMessage(data?.invited ? 'Convite enviado por e-mail.' : 'Usuário vinculado à empresa.')
+              setInviteName(''); setInviteEmail(''); setInviteRole('member'); setInvitePlanId('axiva')
+              setMessage(data?.invited ? `Convite enviado. Nova mensalidade: ${money(data.totalMonthly)}.` : `Usuário vinculado. Nova mensalidade: ${money(data.totalMonthly)}.`)
               await load()
             } catch (err) { setError(err?.message || 'Não foi possível adicionar o usuário.') }
             finally { setBusy('') }

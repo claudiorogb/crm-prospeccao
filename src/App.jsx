@@ -9060,11 +9060,11 @@ export default function App() {
     pendingPaidSignup = null
   }
 
-  if (!isSystemAdmin && pendingPaidSignup?.planId && !organization) {
+  if (!isSystemAdmin && pendingPaidSignup?.planId && !userPlan) {
     return (
       <BillingPlanScreen
         initialPlanId={pendingPaidSignup.planId}
-        paidSignup={pendingPaidSignup}
+        paidSignup={organization ? null : pendingPaidSignup}
         onBack={() => {
           localStorage.removeItem('axiva_pending_paid_v1')
           window.location.assign('https://axiva.com.br/crm/precos')

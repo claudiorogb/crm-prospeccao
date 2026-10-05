@@ -394,12 +394,15 @@ function AuthScreen() {
         if (!['axiva','axiva_plus','axiva_max'].includes(planId)) throw new Error('Plano de contratação inválido.')
 
         const { data: signupData, error } = await supabase.functions.invoke('signup-with-resend', {
-        body: {
-          email,
-          password: form.password,
-          fullName: displayName
-        }
-      })
+          body: {
+            email,
+            password: form.password,
+            fullName: displayName,
+            organizationName,
+            cnpj,
+            onboardingType: 'paid'
+          }
+        })
         if (error) throw error
 
         localStorage.setItem('axiva_pending_paid_v1', JSON.stringify({

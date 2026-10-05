@@ -111,7 +111,7 @@ async function ensureAsaasWebhook(apiKey: string, admin: any) {
 
 function supabaseUrlForWebhook() {
   const base = Deno.env.get("SUPABASE_URL") || "";
-  return base.replace(/\/$/, "") + "/functions/v1/asaas-webhook";
+  return base.replace(/\/$/, "") + "/functions/v1/asaas-webhook-sandbox";
 }
 
 Deno.serve(async (req) => {

@@ -32,7 +32,12 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
         body: { planId: selectedPlan, licenseQuantity },
       })
 
-      if (functionError) throw functionError
+      if (functionError) {
+        const detail = Array.isArray(data?.details) && data.details[0]?.description
+          ? data.details[0].description
+          : data?.error
+        throw new Error(detail || functionError.message || 'Não foi possível iniciar a contratação.')
+      }
       if (!data?.checkoutUrl) throw new Error(data?.error || 'Não foi possível iniciar a contratação.')
       if (asaasEnvironment === 'sandbox') localStorage.setItem('axiva_asaas_environment_v1', 'sandbox')
       else localStorage.removeItem('axiva_asaas_environment_v1')
@@ -40,8 +45,10 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
 
       window.location.assign(data.checkoutUrl)
     } catch (err) {
-      setError(err?.message || 'Não foi possível iniciar a contratação. Tente novamente.')
+      const message = err?.message || 'Não foi possível iniciar a contratação. Tente novamente.'
+      setError(message)
       setLoadingPlan('')
+      throw new Error(message)
     }
   }
 

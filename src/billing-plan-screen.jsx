@@ -9,9 +9,9 @@ const PLANS = [
   { id: 'axiva_max', name: 'AXIVA Max', price: 'R$ 164,80/mês' },
 ]
 
-export default function BillingPlanScreen({ onBack }) {
+export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSignup = null }) {
   const [loadingPlan, setLoadingPlan] = useState('')
-  const [selectedPlan, setSelectedPlan] = useState('')
+  const [selectedPlan, setSelectedPlan] = useState(initialPlanId)
   const [error, setError] = useState('')
 
   async function openContract(planId) {
@@ -44,6 +44,7 @@ export default function BillingPlanScreen({ onBack }) {
     return (
       <BillingContractScreen
         planId={selectedPlan}
+        paidSignup={paidSignup}
         onBack={() => { setSelectedPlan(''); setError('') }}
         onContinue={continueToAsaas}
       />

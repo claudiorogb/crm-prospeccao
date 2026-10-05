@@ -146,7 +146,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
         </button>
 
         <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>
-          O pagamento será realizado em uma página segura do Asaas. Os dados do cartão não são armazenados pelo AXIVA.
+          O pagamento será realizado em uma página segura. Os dados do cartão não são armazenados pelo AXIVA CRM.
         </p>
       </section>
 

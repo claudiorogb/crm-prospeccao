@@ -413,6 +413,26 @@ Deno.serve(async (req) => {
   const membership = memberships[0];
   const organizationId = String(membership.organization_id);
 
+  const { data: planAssignment, error: planError } = await admin
+    .from("user_plan_assignments")
+    .select("plan_id,status,trial_ends_at")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (planError) {
+    return json({ error: "Não foi possível validar o plano da conta." }, 500);
+  }
+
+  if (planAssignment && (
+    planAssignment.status !== "active" ||
+    (planAssignment.trial_ends_at && new Date(planAssignment.trial_ends_at).getTime() <= Date.now())
+  )) {
+    return json({
+      error: "Seu período de teste terminou. Escolha um plano para continuar usando a AXIVA IA."
+    }, 403);
+  }
+
   const { data: aiSetting, error: settingError } = await admin
     .from("ai_organization_settings")
     .select("enabled,daily_message_limit,daily_request_limit")

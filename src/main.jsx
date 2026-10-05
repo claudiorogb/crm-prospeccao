@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import PlatformHealthAccess from './platform-health-access'
+import TrialBanner from './trial-banner'
 import { supabase } from './lib/supabase'
 import './styles.css'
 import './role-access.css'
@@ -43,6 +44,7 @@ supabase.auth.onAuthStateChange((_event, session) => {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    <TrialBanner />
     <App />
     <PlatformHealthAccess />
   </React.StrictMode>,

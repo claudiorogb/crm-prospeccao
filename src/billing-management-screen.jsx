@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Loader2, UserMinus, XCircle } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import BillingPlanScreen from './billing-plan-screen'
 
 const PLANS = {
   axiva: { name: 'AXIVA', value: 45 },
@@ -18,6 +19,7 @@ export default function BillingManagementScreen({ onBackToCrm }) {
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [contracting, setContracting] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -58,6 +60,7 @@ export default function BillingManagementScreen({ onBackToCrm }) {
   }
 
   if (loading) return <div className="loading-screen">Carregando plano...</div>
+  if (contracting) return <BillingPlanScreen onBack={() => setContracting(false)} />
 
   const account = overview?.billing_account
   const members = overview?.members || []
@@ -89,6 +92,7 @@ export default function BillingManagementScreen({ onBackToCrm }) {
           <div style={{ textAlign: 'right' }}>
             <div className="muted" style={{ fontSize: 13 }}>Mensalidade</div>
             <strong style={{ fontSize: 28, color: '#0b192c' }}>{money(overview?.total_monthly)}</strong>
+            {!hasPaid && canManage && <div style={{ marginTop: 10 }}><button className="primary inline-btn" onClick={() => setContracting(true)}>Contratar plano</button></div>}
           </div>
         </div>
         {account?.next_due_date && <div className="muted" style={{ marginTop: 14 }}>Próxima cobrança: {new Date(account.next_due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</div>}

@@ -35,7 +35,8 @@ create or replace function public.start_axiva_trial(
   p_state text default null,
   p_terms_version text default null,
   p_privacy_version text default null,
-  p_terms_accepted boolean default false
+  p_terms_accepted boolean default false,
+  p_accepted_at timestamptz default null
 )
 returns table(
   organization_id uuid,
@@ -55,6 +56,7 @@ declare
   v_email text;
   v_start timestamptz := now();
   v_end timestamptz := now() + interval '30 days';
+  v_accepted_at timestamptz := coalesce(p_accepted_at, v_start);
 begin
   if v_user_id is null then raise exception 'AUTH_REQUIRED'; end if;
   if v_cnpj is null or length(v_cnpj) <> 14 then raise exception 'INVALID_CNPJ'; end if;
@@ -122,12 +124,12 @@ begin
     v_user_id,v_org_id,v_cnpj,v_email,
     left(btrim(p_terms_version),100),
     left(btrim(p_privacy_version),100),
-    v_start,v_start,v_end
+    v_accepted_at,v_start,v_end
   );
 
   return query select v_org_id,'axiva'::text,v_start,v_end;
 end;
 $function$;
 
-revoke all on function public.start_axiva_trial(text,text,text,text,text,text,boolean) from public, anon;
+revoke all on function public.start_axiva_trial(text,text,text,text,text,text,boolean,timestamptz) from public, anon;
 grant execute on function public.start_axiva_trial(text,text,text,text,text,text,boolean) to authenticated;

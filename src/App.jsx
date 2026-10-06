@@ -24,6 +24,7 @@ import TrialExpiredScreen from './trial-expired-screen'
 import BillingReturnScreen from './billing-return-screen'
 import BillingManagementScreen from './billing-management-screen'
 import BillingPlanScreen from './billing-plan-screen'
+import BillingContractScreen from './billing-contract-screen'
 import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
 import whatsappIcon from './whatsapp-icon.png'
 
@@ -1112,6 +1113,16 @@ function CatalogAdmin({ userEmail }) {
   useEffect(() => {
     setCatalogPage(0)
   }, [catalogSearch])
+
+  if (contractInvite) {
+    return (
+      <BillingContractScreen
+        planId={contractInvite.planId}
+        onBack={() => setContractInvite(null)}
+        inviteUser={contractInvite}
+      />
+    )
+  }
 
   return (
     <>
@@ -8539,6 +8550,7 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
   const [form, setForm] = useState({ name: '', email: '', role: 'member', planId: 'axiva' })
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [contractInvite, setContractInvite] = useState(null)
 
   const PLANS = {
     axiva: { name: 'AXIVA', value: 45 },
@@ -8584,15 +8596,33 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
   async function addMember(event) {
     event.preventDefault()
     if (loading) return
+    setNotice('')
+
+    if (form.name.trim().length < 2 || !form.email.trim() || !form.email.includes('@')) {
+      setNotice('Informe o nome e um e-mail válido para o novo usuário.')
+      return
+    }
+
+    setContractInvite({
+      name: form.name.trim(),
+      email: form.email.trim().toLowerCase(),
+      role: form.role,
+      planId: form.planId
+    })
+    return
+  }
+
+  async function startInvitePayment() {
+    if (!contractInvite) return
     setLoading(true)
     setNotice('')
 
     const { data: rawData, error } = await supabase.functions.invoke('invite-org-user', {
       body: {
-        name: form.name.trim(),
-        email: form.email.trim().toLowerCase(),
-        role: form.role,
-        planId: form.planId
+        name: contractInvite.name,
+        email: contractInvite.email,
+        role: contractInvite.role,
+        planId: contractInvite.planId
       }
     })
 

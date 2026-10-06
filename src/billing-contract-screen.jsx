@@ -34,11 +34,8 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
 
     setLoading(true)
     try {
-      let data
-      let rpcError
-
       if (paidSignup) {
-        const result = await supabase.rpc('prepare_axiva_paid_contract_v2', {
+        const prepared = await supabase.rpc('prepare_axiva_paid_contract_v2', {
           p_cnpj: paidSignup.cnpj,
           p_organization_name: paidSignup.organizationName,
           p_plan_id: planId,
@@ -47,55 +44,48 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
           p_user_agent: navigator.userAgent,
           p_license_quantity: licenseQuantity,
         })
-        data = result.data
-        rpcError = result.error
-      } else {
-        const result = await supabase.rpc('accept_axiva_paid_contract_v2', {
-        p_plan_id: planId,
-        p_contract_version: AXIVA_PAID_CONTRACT_VERSION,
-        p_signer_name: signerName.trim(),
-          p_user_agent: navigator.userAgent,
-          p_license_quantity: licenseQuantity,
-        })
-        data = result.data
-        rpcError = result.error
+        if (prepared.error) throw prepared.error
       }
 
-      if (rpcError) throw rpcError
-      if (!data) throw new Error('Não foi possível registrar a aceitação do contrato.')
-
-      if (inviteUser) {
-        const result = await supabase.functions.invoke('invite-org-user', {
-          body: {
-            name: inviteUser.name,
-            email: inviteUser.email,
-            role: inviteUser.role,
-            planId: planId
-          }
-        })
-
-        let inviteData = result.data
-        if (typeof inviteData === 'string') {
-          try { inviteData = JSON.parse(inviteData) } catch {}
+      const contractResult = await supabase.functions.invoke('billing-v2-sandbox', {
+        body: {
+          action: 'accept_contract',
+          planId,
+          contractVersion: AXIVA_PAID_CONTRACT_VERSION,
+          mode: inviteUser ? 'add_license' : 'first_access',
+          targetName: inviteUser?.name || signerName.trim(),
+          targetEmail: inviteUser?.email || undefined,
         }
+      })
 
-        if (result.error || inviteData?.error) {
-          throw new Error(inviteData?.error || result.error?.message || 'Não foi possível preparar o pagamento do novo usuário.')
-        }
-
-        let checkoutUrl = inviteData?.checkoutUrl || inviteData?.link || ''
-        if (!checkoutUrl && inviteData?.checkoutId) {
-          checkoutUrl = `https://sandbox.asaas.com/checkoutSession/show?id=${encodeURIComponent(inviteData.checkoutId)}`
-        }
-        if (!checkoutUrl) {
-          throw new Error('O pagamento do novo usuário foi preparado, mas o link do Asaas não foi retornado.')
-        }
-
-        window.location.assign(checkoutUrl)
-        return
+      let contractData = contractResult.data
+      if (typeof contractData === 'string') {
+        try { contractData = JSON.parse(contractData) } catch {}
+      }
+      if (contractResult.error || contractData?.error) {
+        throw new Error(contractData?.error || contractResult.error?.message || 'Não foi possível registrar o contrato.')
       }
 
-      await onContinue()
+      const checkoutResult = await supabase.functions.invoke('billing-v2-sandbox', {
+        body: {
+          action: 'create_checkout',
+          contractId: contractData.contractId
+        }
+      })
+
+      let checkoutData = checkoutResult.data
+      if (typeof checkoutData === 'string') {
+        try { checkoutData = JSON.parse(checkoutData) } catch {}
+      }
+      if (checkoutResult.error || checkoutData?.error) {
+        throw new Error(checkoutData?.error || checkoutResult.error?.message || 'Não foi possível preparar o pagamento.')
+      }
+
+      if (!checkoutData?.checkoutUrl) {
+        throw new Error('O Asaas não retornou o link de pagamento.')
+      }
+
+      window.location.assign(checkoutData.checkoutUrl)
     } catch (err) {
       setError(err?.message || 'Não foi possível registrar o contrato.')
       setLoading(false)

@@ -535,6 +535,7 @@ function ResetPasswordScreen({ onDone }) {
     }
 
     await supabase.auth.signOut()
+    window.history.replaceState({}, '', window.location.pathname)
     setLoading(false)
     onDone()
   }
@@ -8802,6 +8803,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search)
     return params.get('reset') === '1' || window.location.hash.includes('type=recovery')
   })
+  const [emailConfirmationRedirect, setEmailConfirmationRedirect] = useState(() => window.location.hash.includes('type=signup'))
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -8818,11 +8820,13 @@ export default function App() {
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       if (event === 'SIGNED_IN') {
         const params = new URLSearchParams(window.location.search)
-        if (params.get('confirmed') === '1') {
+        const isEmailConfirmation = params.get('confirmed') === '1' || window.location.hash.includes('type=signup') || emailConfirmationRedirect
+        if (isEmailConfirmation) {
           supabase.auth.signOut().finally(() => {
             window.history.replaceState({}, '', window.location.pathname)
             setSession(null)
             setPasswordRecovery(false)
+            setEmailConfirmationRedirect(false)
           })
         }
       }

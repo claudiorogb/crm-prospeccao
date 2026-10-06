@@ -8846,7 +8846,7 @@ export default function App() {
           .maybeSingle(),
         supabase
           .from('organization_members')
-          .select('organization_id,role,is_active,organizations(id,name,is_active)')
+          .select('organization_id,role,is_active,organizations(id,name,is_active,cnpj)')
           .eq('user_id', session.user.id)
           .eq('is_active', true)
           .limit(1)
@@ -8883,7 +8883,7 @@ export default function App() {
               localStorage.removeItem('axiva_pending_trial_v1')
               const { data: refreshedMembership } = await supabase
                 .from('organization_members')
-                .select('organization_id,role,is_active,organizations(id,name,is_active)')
+                .select('organization_id,role,is_active,organizations(id,name,is_active,cnpj)')
                 .eq('user_id', session.user.id)
                 .eq('is_active', true)
                 .limit(1)

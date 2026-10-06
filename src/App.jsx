@@ -8604,11 +8604,13 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
 
     // Adicionar usuário é uma nova assinatura. Nunca mostrar "Usuário vinculado"
     // antes da confirmação do pagamento.
-    const checkoutUrl = data?.checkoutUrl
-      || data?.link
-      || (data?.checkoutId
-        ? `https://asaas.com/checkoutSession/show?id=${encodeURIComponent(data.checkoutId)}`
-        : '')
+    let checkoutUrl = data?.checkoutUrl || data?.link || ''
+    if (checkoutUrl && checkoutUrl.includes('://asaas.com/checkoutSession/show')) {
+      checkoutUrl = checkoutUrl.replace('://asaas.com/checkoutSession/show', '://sandbox.asaas.com/checkoutSession/show')
+    }
+    if (!checkoutUrl && data?.checkoutId) {
+      checkoutUrl = `https://sandbox.asaas.com/checkoutSession/show?id=${encodeURIComponent(data.checkoutId)}`
+    }
 
     if (data?.step === 'payment' || checkoutUrl) {
       if (!checkoutUrl) {

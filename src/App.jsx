@@ -381,7 +381,7 @@ function AuthScreen() {
     try {
       if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(form.email.trim(), {
-          redirectTo: window.location.origin
+          redirectTo: `${window.location.origin}/?reset=1`
         })
         if (error) throw error
         setMessage('Se o e-mail estiver cadastrado, enviaremos um link para criar uma nova senha.')
@@ -8798,7 +8798,10 @@ export default function App() {
     () => adminOrganizations.find(org => org.is_sandbox === true && org.is_active),
     [adminOrganizations]
   )
-  const [passwordRecovery, setPasswordRecovery] = useState(false)
+  const [passwordRecovery, setPasswordRecovery] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('reset') === '1' || window.location.hash.includes('type=recovery')
+  })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -8813,6 +8816,16 @@ export default function App() {
       }
       setSession(newSession)
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      if (event === 'SIGNED_IN') {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('confirmed') === '1') {
+          supabase.auth.signOut().finally(() => {
+            window.history.replaceState({}, '', window.location.pathname)
+            setSession(null)
+            setPasswordRecovery(false)
+          })
+        }
+      }
     })
 
     return () => listener.subscription.unsubscribe()
@@ -8864,11 +8877,11 @@ export default function App() {
       const platformAdmin = Boolean(adminResult.data)
 
       let effectiveMembership = membershipResult.data
-      if (!platformAdmin && (!effectiveMembership || membershipResult.error)) {
+      if (!platformAdmin && !effectiveMembership) {
         try {
           const pending = JSON.parse(localStorage.getItem('axiva_pending_trial_v1') || 'null')
           if (pending?.cnpj && pending?.organizationName) {
-            const { error: trialError } = await supabase.rpc('start_axiva_trial', {
+            const { data: trialData, error: trialError } = await supabase.rpc('start_axiva_trial_from_signup', {
               p_cnpj: pending.cnpj,
               p_organization_name: pending.organizationName,
               p_terms_version: pending.termsVersion || AXIVA_TRIAL_TERMS_VERSION,
@@ -8876,7 +8889,7 @@ export default function App() {
               p_terms_accepted: true,
               p_accepted_at: pending.acceptedAt || null
             })
-            if (!trialError) {
+            if (!trialError && trialData?.organization_id) {
               setPendingTrialError('')
               localStorage.removeItem('axiva_pending_trial_v1')
               const { data: refreshedMembership } = await supabase
@@ -9250,16 +9263,6 @@ export default function App() {
   } catch {
     pendingPaidSignup = null
     pendingTrialSignup = null
-  }
-
-  if (!isSystemAdmin && pendingTrialSignup?.cnpj && !userPlan) {
-    return (
-      <BillingPlanScreen
-        onBack={() => logout()}
-        organization={organization}
-        asaasEnvironment={pendingPaidSignup?.asaasEnvironment === 'sandbox' ? 'sandbox' : 'production'}
-      />
-    )
   }
 
   if (!isSystemAdmin && pendingPaidSignup?.planId && !userPlan) {

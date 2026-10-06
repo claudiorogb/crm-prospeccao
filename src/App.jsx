@@ -9256,6 +9256,7 @@ export default function App() {
       <BillingPlanScreen
         initialPlanId={pendingPaidSignup.planId}
         paidSignup={organization ? null : pendingPaidSignup}
+        organization={organization}
         asaasEnvironment={pendingPaidSignup.asaasEnvironment === 'sandbox' ? 'sandbox' : 'production'}
         onBack={async () => {
           localStorage.removeItem('axiva_pending_paid_v1')
@@ -9270,6 +9271,7 @@ export default function App() {
     return (
       <BillingPlanScreen
         onBack={() => logout()}
+        organization={organization}
         asaasEnvironment={pendingPaidSignup?.asaasEnvironment === 'sandbox' ? 'sandbox' : 'production'}
       />
     )

@@ -1121,6 +1121,7 @@ function CatalogAdmin({ userEmail }) {
         planId={contractInvite.planId}
         onBack={() => setContractInvite(null)}
         inviteUser={contractInvite}
+        billingOrganizationId={organization?.id}
       />
     )
   }

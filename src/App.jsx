@@ -8821,7 +8821,7 @@ export default function App() {
   )
   const [passwordRecovery, setPasswordRecovery] = useState(() => {
     const params = new URLSearchParams(window.location.search)
-    return params.get('reset') === '1' || window.location.hash.includes('type=recovery')
+    return params.get('reset') === '1' || window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite')
   })
   const [emailConfirmationRedirect, setEmailConfirmationRedirect] = useState(() => window.location.hash.includes('type=signup'))
 
@@ -8848,7 +8848,7 @@ export default function App() {
         clearAxivaAiHistoryStorage()
       }
       setSession(newSession)
-      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && window.location.hash.includes('type=invite'))) setPasswordRecovery(true)
       if (event === 'SIGNED_IN') {
         const params = new URLSearchParams(window.location.search)
         const isEmailConfirmation = params.get('confirmed') === '1' || window.location.hash.includes('type=signup')

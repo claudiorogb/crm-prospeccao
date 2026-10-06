@@ -70,8 +70,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
       const checkoutResult = await supabase.functions.invoke('billing-v2-sandbox', {
         body: {
           action: 'create_checkout',
-          contractId: contractData.contractId,
-          organizationId: billingOrganizationId || undefined
+          contractId: contractData.contractId
         }
       })
 
@@ -103,7 +102,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
           type="button"
           className="text-button"
           onClick={onBack}
-          disabled={loading}
+          disabled={loading || !accepted}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 18 }}
         >
           <ArrowLeft size={16} /> Voltar

@@ -13,7 +13,7 @@ const PLANS = {
   axiva_max: { name: 'AXIVA Max', price: 'R$ 164,80/mês', value: 164.8 },
 }
 
-export default function BillingContractScreen({ planId, licenseQuantity = 1, onBack, onContinue, paidSignup }) {
+export default function BillingContractScreen({ planId, licenseQuantity = 1, onBack, onContinue, paidSignup, inviteUser = null }) {
   const [signerName, setSignerName] = useState(() => paidSignup?.fullName || '')
   const [accepted, setAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -63,6 +63,38 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
 
       if (rpcError) throw rpcError
       if (!data) throw new Error('Não foi possível registrar a aceitação do contrato.')
+
+      if (inviteUser) {
+        const result = await supabase.functions.invoke('invite-org-user', {
+          body: {
+            name: inviteUser.name,
+            email: inviteUser.email,
+            role: inviteUser.role,
+            planId: planId
+          }
+        })
+
+        let inviteData = result.data
+        if (typeof inviteData === 'string') {
+          try { inviteData = JSON.parse(inviteData) } catch {}
+        }
+
+        if (result.error || inviteData?.error) {
+          throw new Error(inviteData?.error || result.error?.message || 'Não foi possível preparar o pagamento do novo usuário.')
+        }
+
+        let checkoutUrl = inviteData?.checkoutUrl || inviteData?.link || ''
+        if (!checkoutUrl && inviteData?.checkoutId) {
+          checkoutUrl = `https://sandbox.asaas.com/checkoutSession/show?id=${encodeURIComponent(inviteData.checkoutId)}`
+        }
+        if (!checkoutUrl) {
+          throw new Error('O pagamento do novo usuário foi preparado, mas o link do Asaas não foi retornado.')
+        }
+
+        window.location.assign(checkoutUrl)
+        return
+      }
+
       await onContinue()
     } catch (err) {
       setError(err?.message || 'Não foi possível registrar o contrato.')

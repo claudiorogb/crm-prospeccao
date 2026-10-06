@@ -9,7 +9,7 @@ const PLANS = [
   { id: 'axiva_max', name: 'AXIVA Max', price: 'R$ 164,80/mês' },
 ]
 
-export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSignup = null, organization = null, asaasEnvironment = 'production' }) {
+export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSignup = null, organization = null, asaasEnvironment = 'production', hideTrialOption = false }) {
   const [loadingPlan, setLoadingPlan] = useState('')
   const [selectedPlan, setSelectedPlan] = useState(initialPlanId)
   const [licenseQuantity, setLicenseQuantity] = useState(1)
@@ -194,34 +194,38 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
           </div>
         )}
 
-        <div style={{ marginTop: 22, paddingTop: 20, borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
-          <button
-            type="button"
-            className="secondary"
-            onClick={startFreeTrial}
-            disabled={Boolean(loadingPlan)}
-            style={{ minHeight: 42, padding: '0 20px' }}
-          >
-            {loadingPlan === 'trial' ? <><Loader2 size={16} className="spin" /> Ativando...</> : 'Testar grátis por 30 dias'}
-          </button>
-          <p className="muted" style={{ margin: '9px 0 0', fontSize: 13 }}>
-            Sem cobrança durante o período de teste. A contratação é opcional após os 30 dias.
-          </p>
-        </div>
+        {!hideTrialOption && (
+          <div style={{ marginTop: 22, paddingTop: 20, borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={startFreeTrial}
+              disabled={Boolean(loadingPlan)}
+              style={{ minHeight: 42, padding: '0 20px' }}
+            >
+              {loadingPlan === 'trial' ? <><Loader2 size={16} className="spin" /> Ativando...</> : 'Testar grátis por 30 dias'}
+            </button>
+            <p className="muted" style={{ margin: '9px 0 0', fontSize: 13 }}>
+              Sem cobrança durante o período de teste. A contratação é opcional após os 30 dias.
+            </p>
+          </div>
+        )}
 
-        <p
-          className="muted"
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 8,
-            marginTop: 20,
-            fontSize: 13,
-          }}
-        >
-          <CheckCircle2 size={16} style={{ flex: '0 0 auto', marginTop: 2, color: '#008e79' }} />
-          Antes do pagamento, você verá o contrato de uso e dará seu aceite eletrônico. O pagamento será realizado em uma página segura do Asaas.
-        </p>
+        {!hideTrialOption && (
+          <p
+            className="muted"
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              marginTop: 20,
+              fontSize: 13,
+            }}
+          >
+            <CheckCircle2 size={16} style={{ flex: '0 0 auto', marginTop: 2, color: '#008e79' }} />
+            Antes do pagamento, você verá o contrato de uso e dará seu aceite eletrônico. O pagamento será realizado em uma página segura do Asaas.
+          </p>
+        )}
       </section>
 
       <style>{`

@@ -8881,6 +8881,7 @@ export default function App() {
       const platformAdmin = Boolean(adminResult.data)
 
       let effectiveMembership = membershipResult.data
+      let effectivePlan = planResult.data?.[0] || null
       if (!platformAdmin && !effectiveMembership) {
         try {
           const pending = JSON.parse(localStorage.getItem('axiva_pending_trial_v1') || 'null')
@@ -8905,7 +8906,7 @@ export default function App() {
                 .maybeSingle()
               effectiveMembership = refreshedMembership
               const { data: refreshedPlan } = await supabase.rpc('get_my_crm_plan')
-              if (refreshedPlan?.[0]) setUserPlan(refreshedPlan[0])
+              if (refreshedPlan?.[0]) effectivePlan = refreshedPlan[0]
             }
           }
         } catch (err) {
@@ -8913,8 +8914,7 @@ export default function App() {
         }
       }
 
-      const planRow = planResult.data?.[0] || null
-      setUserPlan(planRow)
+      setUserPlan(effectivePlan)
 
       setAccountStatus(status)
       setUserDisplayName(displayName)

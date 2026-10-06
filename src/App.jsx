@@ -8826,7 +8826,7 @@ export default function App() {
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       if (event === 'SIGNED_IN') {
         const params = new URLSearchParams(window.location.search)
-        const isEmailConfirmation = params.get('confirmed') === '1' || window.location.hash.includes('type=signup') || emailConfirmationRedirect
+        const isEmailConfirmation = params.get('confirmed') === '1' || window.location.hash.includes('type=signup')
         if (isEmailConfirmation) {
           supabase.auth.signOut().finally(() => {
             window.history.replaceState({}, '', window.location.pathname)

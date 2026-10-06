@@ -8564,7 +8564,22 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
     setMembers(data?.members || [])
   }
 
-  useEffect(() => { loadMembers() }, [organization?.id])
+  useEffect(() => {
+    loadMembers()
+
+    const refreshMembers = () => {
+      if (document.visibilityState === 'hidden') return
+      loadMembers()
+    }
+
+    window.addEventListener('focus', refreshMembers)
+    document.addEventListener('visibilitychange', refreshMembers)
+
+    return () => {
+      window.removeEventListener('focus', refreshMembers)
+      document.removeEventListener('visibilitychange', refreshMembers)
+    }
+  }, [organization?.id])
 
   async function addMember(event) {
     event.preventDefault()

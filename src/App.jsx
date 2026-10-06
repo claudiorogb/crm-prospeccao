@@ -8572,7 +8572,7 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
     setLoading(true)
     setNotice('')
 
-    const { data, error } = await supabase.functions.invoke('invite-org-user', {
+    const { data: rawData, error } = await supabase.functions.invoke('invite-org-user', {
       body: {
         name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
@@ -8582,8 +8582,14 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
     })
 
     setLoading(false)
+
+    let data = rawData
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data) } catch {}
+    }
+
     if (error || data?.error) {
-      let functionMessage = error?.message || 'Não foi possível criar o usuário.'
+      let functionMessage = error?.message || 'Não foi possível criar o pagamento do novo usuário.'
       try {
         const responseBody = error?.context && typeof error.context.json === 'function'
           ? await error.context.json()
@@ -8596,17 +8602,25 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
       return
     }
 
-    if (data?.step === 'payment' && data?.checkoutUrl) {
-      window.location.assign(data.checkoutUrl)
+    // Adicionar usuário é uma nova assinatura. Nunca mostrar "Usuário vinculado"
+    // antes da confirmação do pagamento.
+    const checkoutUrl = data?.checkoutUrl
+      || data?.link
+      || (data?.checkoutId
+        ? `https://asaas.com/checkoutSession/show?id=${encodeURIComponent(data.checkoutId)}`
+        : '')
+
+    if (data?.step === 'payment' || checkoutUrl) {
+      if (!checkoutUrl) {
+        setNotice('Pagamento do novo usuário preparado, mas o link do Asaas não foi retornado. Tente novamente.')
+        return
+      }
+      window.location.href = checkoutUrl
       return
     }
 
-    setNotice(data?.invited
-      ? `Convite enviado. Nova mensalidade: ${money(data.totalMonthly)}.`
-      : `Usuário vinculado. Nova mensalidade: ${money(data.totalMonthly)}.`
-    )
-    setForm({ name: '', email: '', role: 'member', planId: 'axiva' })
-    await loadMembers()
+    setNotice('Não foi possível iniciar a cobrança do novo usuário. Nenhuma nova mensalidade foi criada.')
+    return
   }
 
   async function updateMember(member, patch) {

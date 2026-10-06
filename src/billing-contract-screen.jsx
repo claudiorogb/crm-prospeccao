@@ -13,7 +13,7 @@ const PLANS = {
   axiva_max: { name: 'AXIVA Max', price: 'R$ 164,80/mês', value: 164.8 },
 }
 
-export default function BillingContractScreen({ planId, licenseQuantity = 1, onBack, onContinue, paidSignup, inviteUser = null }) {
+export default function BillingContractScreen({ planId, licenseQuantity = 1, onBack, onContinue, paidSignup, inviteUser = null, billingOrganizationId = null }) {
   const [signerName, setSignerName] = useState(() => paidSignup?.fullName || '')
   const [accepted, setAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -55,6 +55,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
           mode: inviteUser ? 'add_license' : 'first_access',
           targetName: inviteUser?.name || signerName.trim(),
           targetEmail: inviteUser?.email || undefined,
+          organizationId: billingOrganizationId || undefined,
         }
       })
 

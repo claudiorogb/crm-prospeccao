@@ -23,6 +23,7 @@ import AdminUserPlans from './admin-user-plans'
 import TrialExpiredScreen from './trial-expired-screen'
 import BillingReturnScreen from './billing-return-screen'
 import BillingManagementScreen from './billing-management-screen'
+import BillingV2SandboxScreen from './billing-v2-sandbox-screen'
 import BillingPlanScreen from './billing-plan-screen'
 import BillingContractScreen from './billing-contract-screen'
 import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
@@ -8806,6 +8807,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
     ['messages', 'Mensagens', MessageSquareText],
     ['ai', 'IA', Bot],
     ['plans', 'Planos', SlidersHorizontal],
+    ['billing-v2-sandbox', 'Cobrança V2 · Sandbox', CreditCard],
     ['audit', 'Auditoria', History]
   ]
 
@@ -8848,6 +8850,12 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
           {section === 'messages' && <AdminMessages organizations={organizations} userEmail={userEmail} />}
           {section === 'ai' && <AdminAiLimits reloadOrganizations={reloadOrganizations} />}
           {section === 'plans' && <AdminUserPlans />}
+          {section === 'billing-v2-sandbox' && (
+            <BillingV2SandboxScreen
+              organization={organizations.find(org => org.is_sandbox === true && org.is_active)}
+              userEmail={userEmail}
+            />
+          )}
           {section === 'audit' && <AdminAudit organizations={productionOrganizations} userEmail={userEmail} />}
         </div>
       </div>

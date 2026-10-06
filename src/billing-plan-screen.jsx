@@ -78,7 +78,7 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
       })
 
       if (trialError) throw trialError
-      if (!data?.length) throw new Error('Não foi possível ativar o teste gratuito.')
+      if (!data?.organization_id) throw new Error('Não foi possível ativar o teste gratuito.')
 
       localStorage.removeItem('axiva_pending_trial_v1')
       localStorage.removeItem('axiva_pending_paid_v1')

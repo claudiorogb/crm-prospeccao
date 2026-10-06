@@ -8812,7 +8812,18 @@ export default function App() {
   const [emailConfirmationRedirect, setEmailConfirmationRedirect] = useState(() => window.location.hash.includes('type=signup'))
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    const confirmationFlow = new URLSearchParams(window.location.search).get('confirmed') === '1'
+      || window.location.hash.includes('type=signup')
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (confirmationFlow) {
+        if (data.session) await supabase.auth.signOut()
+        window.history.replaceState({}, '', window.location.pathname)
+        setSession(null)
+        setPasswordRecovery(false)
+        setEmailConfirmationRedirect(false)
+        setLoading(false)
+        return
+      }
       setSession(data.session)
       setLoading(false)
     })
@@ -8921,6 +8932,7 @@ export default function App() {
       }
 
       setUserPlan(effectivePlan)
+      if (effectivePlan?.plan_id === 'free_30_days' && page === 'team') setPage('dashboard')
 
       setAccountStatus(status)
       setUserDisplayName(displayName)
@@ -9376,7 +9388,7 @@ export default function App() {
             onOpen={() => { setPage('overdue-returns'); setMobileMenuOpen(false) }}
           />
 
-          {(organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (
+          {(userPlan?.plan_id !== 'free_30_days' && (organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin')) && (
             <button className={`nav-item ${page === 'team' ? 'active' : ''}`} onClick={() => { setPage('team'); setMobileMenuOpen(false) }}>
               <UserPlus size={18}/> Equipe
             </button>
@@ -9417,7 +9429,7 @@ export default function App() {
           />
         )}
         {page === 'billing-management' && (
-          <BillingManagementScreen onBackToCrm={() => setPage('dashboard')} />
+          <BillingManagementScreen onBackToCrm={() => setPage('dashboard')} isFreeTrial={userPlan?.plan_id === 'free_30_days'} />
         )}
         {page === 'campaign-workspace' && (
           <CampaignWorkspace organization={organization} settings={settings} userEmail={userLabel} />
@@ -9436,7 +9448,7 @@ export default function App() {
             userId={session.user.id}
           />
         )}
-        {page === 'team' && (organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (
+        {page === 'team' && userPlan?.plan_id !== 'free_30_days' && (organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (
           <OrganizationTeam organization={organization} currentUserId={session.user.id} currentRole={organizationMembershipRole} />
         )}
         {page === 'overdue-returns' && (

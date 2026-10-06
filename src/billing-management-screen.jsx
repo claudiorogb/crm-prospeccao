@@ -13,7 +13,7 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export default function BillingManagementScreen({ onBackToCrm }) {
+export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = false }) {
   const asaasEnvironment = (() => { try { return localStorage.getItem('axiva_asaas_environment_v1') === 'sandbox' ? 'sandbox' : 'production' } catch { return 'production' } })()
   const billingFunction = asaasEnvironment === 'sandbox' ? 'manage-asaas-billing-sandbox' : 'manage-asaas-billing'
   const [overview, setOverview] = useState(null)
@@ -63,7 +63,7 @@ export default function BillingManagementScreen({ onBackToCrm }) {
   }
 
   if (loading) return <div className="loading-screen">Carregando plano...</div>
-  if (contracting) return <BillingPlanScreen onBack={() => setContracting(false)} asaasEnvironment={asaasEnvironment} />
+  if (contracting) return <BillingPlanScreen onBack={() => setContracting(false)} asaasEnvironment={asaasEnvironment} hideTrialOption={isFreeTrial} />
 
   const account = overview?.billing_account
   const members = overview?.members || []
@@ -122,12 +122,14 @@ export default function BillingManagementScreen({ onBackToCrm }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div>
             <span className="eyebrow">ASSINATURA</span>
-            <h2 style={{ margin: '6px 0' }}>{hasPaid ? 'Assinatura ativa' : 'Sem assinatura ativa'}</h2>
-            <p className="muted" style={{ margin: 0 }}>Uma única cobrança mensal reúne os usuários licenciados.</p>
+            <h2 style={{ margin: '6px 0' }}>{isFreeTrial ? 'Plano gratuito' : (hasPaid ? 'Assinatura ativa' : 'Sem assinatura ativa')}</h2>
+            <p className="muted" style={{ margin: 0 }}>{isFreeTrial ? 'Período gratuito de 30 dias.' : 'Uma única cobrança mensal reúne os usuários licenciados.'}</p>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div className="muted" style={{ fontSize: 13 }}>Mensalidade</div>
-            <strong style={{ fontSize: 28, color: '#0b192c' }}>{money(overview?.total_monthly)}</strong>
+            <div className="muted" style={{ fontSize: 13 }}>Plano</div>
+            <strong style={{ fontSize: 20, color: '#0b192c' }}>{isFreeTrial ? 'gratuito' : '—'}</strong>
+            <div className="muted" style={{ fontSize: 13, marginTop: 8 }}>Valor</div>
+            <strong style={{ fontSize: 28, color: '#0b192c' }}>{isFreeTrial ? 'R$0,00' : money(overview?.total_monthly)}</strong>
             {!hasPaid && canManage && <div style={{ marginTop: 10 }}><button className="primary inline-btn" onClick={() => setContracting(true)}>Contratar plano</button></div>}
           </div>
         </div>

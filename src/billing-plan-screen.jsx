@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import BillingContractScreen from './billing-contract-screen'
-import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
 
 const PLANS = [
   { id: 'axiva', name: 'AXIVA', price: 'R$ 45,00/mês' },
@@ -15,7 +14,6 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
   const [selectedPlan, setSelectedPlan] = useState(initialPlanId)
   const [licenseQuantity, setLicenseQuantity] = useState(1)
   const [error, setError] = useState('')
-  const [showTrialTerms, setShowTrialTerms] = useState(false)
 
   async function openContract(planId) {
     if (loadingPlan) return
@@ -54,19 +52,27 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
     }
   }
 
-  async function startFreeTrial({ termsVersion, privacyVersion, acceptedAt }) {
+  async function startFreeTrial() {
+    if (loadingPlan) return
     setError('')
     setLoadingPlan('trial')
     try {
-      const cnpj = paidSignup?.cnpj || organization?.cnpj
-      const organizationName = paidSignup?.organizationName || organization?.name
-      if (!cnpj || !organizationName) throw new Error('Não foi possível identificar os dados da empresa para iniciar o teste gratuito.')
+      const pending = JSON.parse(localStorage.getItem('axiva_pending_trial_v1') || 'null')
+      const cnpj = pending?.cnpj || paidSignup?.cnpj || organization?.cnpj
+      const organizationName = pending?.organizationName || paidSignup?.organizationName || organization?.name
+      const termsVersion = pending?.termsVersion
+      const privacyVersion = pending?.privacyVersion
+      const acceptedAt = pending?.acceptedAt
+
+      if (!cnpj || !organizationName || !termsVersion || !privacyVersion) {
+        throw new Error('Não foi possível recuperar os dados do teste gratuito. Reinicie o cadastro para continuar.')
+      }
 
       const { data, error: trialError } = await supabase.rpc('start_axiva_trial_from_signup', {
         p_cnpj: cnpj,
         p_organization_name: organizationName,
-        p_terms_version: termsVersion || AXIVA_TRIAL_TERMS_VERSION,
-        p_privacy_version: privacyVersion || AXIVA_PRIVACY_VERSION,
+        p_terms_version: termsVersion,
+        p_privacy_version: privacyVersion,
         p_terms_accepted: true,
         p_accepted_at: acceptedAt || new Date().toISOString()
       })
@@ -74,25 +80,13 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
       if (trialError) throw trialError
       if (!data?.length) throw new Error('Não foi possível ativar o teste gratuito.')
 
-      localStorage.removeItem('axiva_pending_paid_v1')
       localStorage.removeItem('axiva_pending_trial_v1')
-      setShowTrialTerms(false)
+      localStorage.removeItem('axiva_pending_paid_v1')
       window.location.reload()
     } catch (err) {
       setError(err?.message || 'Não foi possível iniciar o teste gratuito.')
       setLoadingPlan('')
-      setShowTrialTerms(false)
     }
-  }
-
-  if (showTrialTerms) {
-    return (
-      <TrialTermsScreen
-        loading={loadingPlan === 'trial'}
-        onBack={() => { setShowTrialTerms(false); setError('') }}
-        onAccept={startFreeTrial}
-      />
-    )
   }
 
   if (selectedPlan) {
@@ -204,7 +198,7 @@ export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSign
           <button
             type="button"
             className="secondary"
-            onClick={() => { setError(''); setShowTrialTerms(true) }}
+            onClick={startFreeTrial}
             disabled={Boolean(loadingPlan)}
             style={{ minHeight: 42, padding: '0 20px' }}
           >

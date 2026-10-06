@@ -341,7 +341,10 @@ function AuthScreen() {
         body: {
           email,
           password: form.password,
-          fullName: displayName
+          fullName: displayName,
+          organizationName,
+          cnpj,
+          onboardingType: 'paid'
         }
       })
       if (error) throw error
@@ -8908,7 +8911,7 @@ export default function App() {
         // quando também são membros da organização isolada de testes.
         setOrganization(null)
         setSettings(null)
-      } else if (!membershipResult.error && effectiveMembership?.organizations?.is_active) {
+      } else if (!effectiveMembership?.organizations?.is_active === false && effectiveMembership?.organizations?.is_active) {
         setOrganization(effectiveMembership.organizations)
       } else {
         setOrganization(null)

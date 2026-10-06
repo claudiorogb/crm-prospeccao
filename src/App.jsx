@@ -341,10 +341,7 @@ function AuthScreen() {
         body: {
           email,
           password: form.password,
-          fullName: displayName,
-          organizationName,
-          cnpj,
-          onboardingType: 'paid'
+          fullName: displayName
         }
       })
       if (error) throw error

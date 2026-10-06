@@ -8596,6 +8596,11 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
       return
     }
 
+    if (data?.step === 'payment' && data?.checkoutUrl) {
+      window.location.assign(data.checkoutUrl)
+      return
+    }
+
     setNotice(data?.invited
       ? `Convite enviado. Nova mensalidade: ${money(data.totalMonthly)}.`
       : `Usuário vinculado. Nova mensalidade: ${money(data.totalMonthly)}.`

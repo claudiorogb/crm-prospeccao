@@ -341,7 +341,13 @@ function AuthScreen() {
         body: {
           email,
           password: form.password,
-          fullName: displayName
+          fullName: displayName,
+          organizationName,
+          cnpj,
+          onboardingType: 'trial',
+          termsVersion,
+          privacyVersion,
+          acceptedAt
         }
       })
       if (error) throw error

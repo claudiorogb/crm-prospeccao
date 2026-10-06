@@ -9,7 +9,9 @@ const PLANS = [
   { id: 'axiva_max', name: 'AXIVA Max', price: 'R$ 164,80/mês' },
 ]
 
-export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSignup = null, organization = null, asaasEnvironment = 'production', hideTrialOption = false }) {
+const DEFAULT_ASAAS_ENVIRONMENT = String(import.meta.env.VITE_ASAAS_ENVIRONMENT || '').trim().toLowerCase() === 'sandbox' ? 'sandbox' : 'production'
+
+export default function BillingPlanScreen({ onBack, initialPlanId = '', paidSignup = null, organization = null, asaasEnvironment = DEFAULT_ASAAS_ENVIRONMENT, hideTrialOption = false }) {
   const [loadingPlan, setLoadingPlan] = useState('')
   const [selectedPlan, setSelectedPlan] = useState(initialPlanId)
   const [licenseQuantity, setLicenseQuantity] = useState(1)

@@ -13,8 +13,13 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+const DEFAULT_ASAAS_ENVIRONMENT = String(import.meta.env.VITE_ASAAS_ENVIRONMENT || '').trim().toLowerCase() === 'sandbox' ? 'sandbox' : 'production'
+
 export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = false }) {
-  const asaasEnvironment = (() => { try { return localStorage.getItem('axiva_asaas_environment_v1') === 'sandbox' ? 'sandbox' : 'production' } catch { return 'production' } })()
+  const asaasEnvironment = (() => {
+    if (DEFAULT_ASAAS_ENVIRONMENT === 'sandbox') return 'sandbox'
+    try { return localStorage.getItem('axiva_asaas_environment_v1') === 'sandbox' ? 'sandbox' : DEFAULT_ASAAS_ENVIRONMENT } catch { return DEFAULT_ASAAS_ENVIRONMENT }
+  })()
   const billingFunction = asaasEnvironment === 'sandbox' ? 'manage-asaas-billing-sandbox' : 'manage-asaas-billing'
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)

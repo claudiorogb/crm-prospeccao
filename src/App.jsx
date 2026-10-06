@@ -8583,7 +8583,16 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
 
     setLoading(false)
     if (error || data?.error) {
-      setNotice(data?.error || error?.message || 'Não foi possível criar o usuário.')
+      let functionMessage = error?.message || 'Não foi possível criar o usuário.'
+      try {
+        const responseBody = error?.context && typeof error.context.json === 'function'
+          ? await error.context.json()
+          : null
+        functionMessage = responseBody?.error || responseBody?.message || functionMessage
+      } catch {
+        // Mantém a mensagem original quando a resposta da Edge Function não puder ser lida.
+      }
+      setNotice(data?.error || functionMessage)
       return
     }
 

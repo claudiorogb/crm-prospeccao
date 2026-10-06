@@ -428,7 +428,7 @@ function AuthScreen() {
         }
         resetOverdueLoginAlerts()
         const { error } = await supabase.auth.signInWithPassword({
-          email: form.email,
+          email: form.email.trim().toLowerCase(),
           password: form.password
         })
         if (error) {

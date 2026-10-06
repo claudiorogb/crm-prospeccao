@@ -13,7 +13,7 @@ const PLANS = {
   axiva_max: { name: 'AXIVA Max', price: 'R$ 164,80/mês', value: 164.8 },
 }
 
-export default function BillingContractScreen({ planId, licenseQuantity = 1, onBack, onContinue, paidSignup, inviteUser = null }) {
+export default function BillingContractScreen({ planId, licenseQuantity = 1, onBack, onContinue, paidSignup, inviteUser = null, billingOrganizationId = null }) {
   const [signerName, setSignerName] = useState(() => paidSignup?.fullName || '')
   const [accepted, setAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -55,6 +55,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
           mode: inviteUser ? 'add_license' : 'first_access',
           targetName: inviteUser?.name || signerName.trim(),
           targetEmail: inviteUser?.email || undefined,
+          organizationId: billingOrganizationId || undefined,
         }
       })
 
@@ -101,7 +102,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
           type="button"
           className="text-button"
           onClick={onBack}
-          disabled={loading}
+          disabled={loading || !accepted}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 18 }}
         >
           <ArrowLeft size={16} /> Voltar
@@ -163,7 +164,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
 
         {error && <div className="notice error" role="alert" style={{ marginTop: 16 }}>{error}</div>}
 
-        <button className="primary full" type="button" onClick={acceptContract} disabled={loading || !accepted} style={{ marginTop: 20, minHeight: 44 }}>
+        <button className="primary full" type="button" onClick={acceptContract} disabled={loading} style={{ marginTop: 20, minHeight: 44 }}>
           {loading ? <><Loader2 size={16} className="spin" /> Preparando pagamento...</> : <><CheckCircle2 size={17} /> Aceitar contrato e continuar para pagamento</>}
         </button>
 

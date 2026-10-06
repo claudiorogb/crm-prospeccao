@@ -352,7 +352,7 @@ function AuthScreen() {
       setShowTrialTerms(false)
 
       if (signupData?.session) {
-        const { error: trialError } = await supabase.rpc('start_axiva_trial', {
+        const { data: trialData, error: trialError } = await supabase.rpc('start_axiva_trial_from_signup', {
           p_cnpj: cnpj,
           p_organization_name: organizationName,
           p_terms_version: termsVersion,
@@ -361,6 +361,7 @@ function AuthScreen() {
           p_accepted_at: acceptedAt
         })
         if (trialError) throw trialError
+        if (!trialData?.organization_id) throw new Error('Não foi possível ativar o teste gratuito.')
         localStorage.removeItem('axiva_pending_trial_v1')
         setMessage('Cadastro concluído. Seu teste gratuito de 30 dias já está ativo.')
       } else {
@@ -9242,10 +9243,23 @@ export default function App() {
   }
 
   let pendingPaidSignup = null
+  let pendingTrialSignup = null
   try {
     pendingPaidSignup = JSON.parse(localStorage.getItem('axiva_pending_paid_v1') || 'null')
+    pendingTrialSignup = JSON.parse(localStorage.getItem('axiva_pending_trial_v1') || 'null')
   } catch {
     pendingPaidSignup = null
+    pendingTrialSignup = null
+  }
+
+  if (!isSystemAdmin && pendingTrialSignup?.cnpj && !userPlan) {
+    return (
+      <BillingPlanScreen
+        onBack={() => logout()}
+        organization={organization}
+        asaasEnvironment={pendingPaidSignup?.asaasEnvironment === 'sandbox' ? 'sandbox' : 'production'}
+      />
+    )
   }
 
   if (!isSystemAdmin && pendingPaidSignup?.planId && !userPlan) {

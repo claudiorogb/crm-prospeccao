@@ -70,7 +70,8 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
       const checkoutResult = await supabase.functions.invoke('billing-v2-sandbox', {
         body: {
           action: 'create_checkout',
-          contractId: contractData.contractId
+          contractId: contractData.contractId,
+          organizationId: billingOrganizationId || undefined
         }
       })
 
@@ -164,7 +165,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
 
         {error && <div className="notice error" role="alert" style={{ marginTop: 16 }}>{error}</div>}
 
-        <button className="primary full" type="button" onClick={acceptContract} disabled={loading || !accepted} style={{ marginTop: 20, minHeight: 44 }}>
+        <button className="primary full" type="button" onClick={acceptContract} disabled={loading} style={{ marginTop: 20, minHeight: 44 }}>
           {loading ? <><Loader2 size={16} className="spin" /> Preparando pagamento...</> : <><CheckCircle2 size={17} /> Aceitar contrato e continuar para pagamento</>}
         </button>
 

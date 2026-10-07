@@ -7089,6 +7089,31 @@ function AdminUsers({ organizations, userEmail }) {
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [newUser, setNewUser] = useState({ organizationId: '', name: '', email: '', role: 'member', planId: 'axiva' })
+  const [addingUser, setAddingUser] = useState(false)
+
+  // Administrador da plataforma: adiciona usuário a uma empresa sem cobrança no Asaas.
+  // O plano é liberado direto e o usuário recebe o e-mail para definir a senha.
+  async function addUserWithoutBilling(event) {
+    event.preventDefault()
+    if (addingUser) return
+    if (!newUser.organizationId) {
+      setNotice('Selecione a empresa do novo usuário.')
+      return
+    }
+    setAddingUser(true)
+    setNotice('')
+    const { data, error } = await supabase.functions.invoke('admin-add-user', { body: newUser })
+    setAddingUser(false)
+    if (error || data?.error) {
+      setNotice(data?.error || error?.message || 'Não foi possível adicionar o usuário.')
+      if (data?.ok) await loadUsers()
+      return
+    }
+    setNotice(`Usuário adicionado. O e-mail para definir a senha foi enviado para ${newUser.email}.`)
+    setNewUser({ organizationId: newUser.organizationId, name: '', email: '', role: 'member', planId: 'axiva' })
+    await loadUsers()
+  }
 
   async function loadUsers() {
     setLoading(true)
@@ -7219,6 +7244,43 @@ function AdminUsers({ organizations, userEmail }) {
       />
 
       {notice && <div className="notice">{notice}</div>}
+
+      <section className="panel">
+        <span className="eyebrow">SEM COBRANÇA</span>
+        <h2 style={{ margin: '6px 0' }}>Adicionar usuário</h2>
+        <p className="muted">O plano é liberado sem passar pelo Asaas e o usuário recebe um e-mail para definir a senha.</p>
+        <form onSubmit={addUserWithoutBilling} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <label>Empresa
+            <select value={newUser.organizationId} onChange={e => setNewUser({ ...newUser, organizationId: e.target.value })} required>
+              <option value="">Selecione</option>
+              {organizations.filter(org => org.is_active !== false).map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+            </select>
+          </label>
+          <label>Nome
+            <input value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} placeholder="Nome completo" required minLength={2} />
+          </label>
+          <label>E-mail
+            <input type="email" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} placeholder="usuario@empresa.com" required />
+          </label>
+          <label>Papel na empresa
+            <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
+              <option value="member">Usuário</option>
+              <option value="admin">Administrador</option>
+              <option value="owner">Proprietário</option>
+            </select>
+          </label>
+          <label>Plano
+            <select value={newUser.planId} onChange={e => setNewUser({ ...newUser, planId: e.target.value })}>
+              <option value="axiva">AXIVA — R$ 45,00/mês</option>
+              <option value="axiva_plus">AXIVA Plus — R$ 79,80/mês</option>
+              <option value="axiva_max">AXIVA Max — R$ 164,80/mês</option>
+            </select>
+          </label>
+          <button className="primary inline-btn" disabled={addingUser}>
+            <UserPlus size={16}/> {addingUser ? 'Adicionando...' : 'Adicionar usuário'}
+          </button>
+        </form>
+      </section>
 
       <section className="panel">
         <div className="admin-user-toolbar">

@@ -9,6 +9,10 @@ const PLANS = {
   axiva_max: { name: 'AXIVA Max', value: 164.8 },
 }
 
+function formatDate(value) {
+  return value ? new Date(value + 'T12:00:00').toLocaleDateString('pt-BR') : ''
+}
+
 function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -28,6 +32,9 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
   const [error, setError] = useState('')
   const [contracting, setContracting] = useState(false)
   const [pendingChange, setPendingChange] = useState(null)
+  // Plano contratado pelo Billing V2 (contrato + Asaas): status e cancelamento.
+  const [v2, setV2] = useState(null)
+  const [confirmCancelV2, setConfirmCancelV2] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -37,7 +44,26 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  async function loadV2() {
+    const { data } = await supabase.functions.invoke('billing-v2-cancel', { body: { action: 'status' } })
+    setV2(data?.hasPlan ? data : null)
+  }
+
+  useEffect(() => { load(); loadV2() }, [])
+
+  async function cancelPlanV2() {
+    setConfirmCancelV2(false)
+    setBusy('cancel_v2'); setError(''); setMessage('')
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('billing-v2-cancel', { body: { action: 'cancel' } })
+      if (fnError) throw fnError
+      if (data?.error) throw new Error(data.error)
+      setV2(data)
+      setMessage('Plano cancelado. As próximas cobranças foram encerradas e você pode usar o CRM até ' + formatDate(data.accessUntil) + '.')
+    } catch (err) {
+      setError(err?.message || 'Não foi possível cancelar o plano.')
+    } finally { setBusy('') }
+  }
 
   async function manage(action, userId, planId = '') {
     const key = action + ':' + userId
@@ -74,6 +100,7 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
   const members = overview?.members || []
   const canManage = Boolean(overview?.can_manage)
   const hasPaid = account?.status === 'active' || account?.status === 'past_due'
+  const v2Active = Boolean(v2?.hasPlan)
   const activeCount = members.filter(m => m.plan_status === 'active' && !m.trial_ends_at).length
 
   return (
@@ -127,7 +154,7 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div>
             <span className="eyebrow">ASSINATURA</span>
-            <h2 style={{ margin: '6px 0' }}>{isFreeTrial ? 'Plano gratuito' : (hasPaid ? 'Assinatura ativa' : 'Sem assinatura ativa')}</h2>
+            <h2 style={{ margin: '6px 0' }}>{isFreeTrial ? 'Plano gratuito' : (v2?.cancelled ? 'Plano cancelado' : ((hasPaid || v2Active) ? 'Assinatura ativa' : 'Sem assinatura ativa'))}</h2>
             <p className="muted" style={{ margin: 0 }}>{isFreeTrial ? 'Período gratuito de 30 dias.' : 'Uma única cobrança mensal reúne os usuários licenciados.'}</p>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -135,10 +162,18 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
             <strong style={{ fontSize: 20, color: '#0b192c' }}>{isFreeTrial ? 'gratuito' : '—'}</strong>
             <div className="muted" style={{ fontSize: 13, marginTop: 8 }}>Valor</div>
             <strong style={{ fontSize: 28, color: '#0b192c' }}>{isFreeTrial ? 'R$0,00' : money(overview?.total_monthly)}</strong>
-            {!hasPaid && canManage && <div style={{ marginTop: 10 }}><button className="primary inline-btn" onClick={() => setContracting(true)}>Contratar plano</button></div>}
+            {!hasPaid && !v2Active && canManage && <div style={{ marginTop: 10 }}><button className="primary inline-btn" onClick={() => setContracting(true)}>Contratar plano</button></div>}
           </div>
         </div>
         {account?.next_due_date && <div className="muted" style={{ marginTop: 14 }}>Próxima cobrança: {new Date(account.next_due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</div>}
+        {v2?.cancelled && <div className="notice" style={{ marginTop: 14 }}>Plano cancelado. Não haverá novas cobranças. Você pode usar o CRM até {formatDate(v2.accessUntil)}.</div>}
+        {v2Active && !v2.cancelled && v2.canManage && (
+          <div style={{ marginTop: 14 }}>
+            <button type="button" className="text-button" style={{ fontSize: 13, padding: '4px 8px' }} onClick={() => setConfirmCancelV2(true)} disabled={Boolean(busy)}>
+              {busy === 'cancel_v2' ? <Loader2 size={13} className="spin" /> : <XCircle size={13} />} Cancelar plano
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="panel" style={{ marginTop: 16 }}>
@@ -199,6 +234,21 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
         <p className="muted">O cancelamento encerra a recorrência no Asaas e preserva os dados comerciais.</p>
         <button className="secondary inline-btn" onClick={cancelPlan} disabled={Boolean(busy)}>{busy === 'cancel' ? <Loader2 size={16} className="spin" /> : <XCircle size={16} />} Cancelar assinatura</button>
       </section>}
+
+      {confirmCancelV2 && (
+        <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, background: 'rgba(11,25,44,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 1000 }} onClick={() => setConfirmCancelV2(false)}>
+          <div className="panel" style={{ maxWidth: 440, width: '100%', background: '#fff' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 10px' }}>Tem certeza que deseja cancelar seu plano?</h2>
+            <p className="muted" style={{ lineHeight: 1.5 }}>
+              As próximas cobranças serão encerradas. Você continua usando o AXIVA CRM até {formatDate(v2?.accessUntil)}, fim do período atual. Depois disso, o acesso fica limitado à visualização do Kanban e ao download dos dados, que continuam preservados.
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button type="button" className="secondary inline-btn" onClick={() => setConfirmCancelV2(false)}>Voltar</button>
+              <button type="button" className="primary inline-btn" style={{ background: '#b91c1c', borderColor: '#b91c1c' }} onClick={cancelPlanV2}>Sim, cancelar plano</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{'.spin{animation:axiva-spin .9s linear infinite}@keyframes axiva-spin{to{transform:rotate(360deg)}}'}</style>
     </div>

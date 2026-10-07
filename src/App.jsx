@@ -5978,6 +5978,29 @@ function ClosedLeads({ organization, userEmail }) {
   )
 }
 
+// Modo somente leitura (inadimplência): mostra o conteúdo e permite rolar, mas bloqueia cliques, digitação,
+// seleção de valores e envio de formulários dentro da área.
+function ReadOnlyArea({ children }) {
+  const block = (event) => { event.preventDefault(); event.stopPropagation() }
+  return (
+    <div
+      className="read-only-area"
+      aria-readonly="true"
+      onClickCapture={block}
+      onDoubleClickCapture={block}
+      onChangeCapture={block}
+      onInputCapture={block}
+      onSubmitCapture={block}
+      onKeyDownCapture={block}
+      onPasteCapture={block}
+      onDragStartCapture={block}
+      onDropCapture={block}
+    >
+      {children}
+    </div>
+  )
+}
+
 function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {
   const [section, setSection] = useState('leads')
   const [leadSection, setLeadSection] = useState('funnel')
@@ -7325,7 +7348,8 @@ function AdminClients({ organizations, reloadOrganizations }) {
   const [notice, setNotice] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', city: '', state: 'SP', radius: 30 })
-  const [memberForm, setMemberForm] = useState({ email: '', role: 'member' })
+  const [memberForm, setMemberForm] = useState({ name: '', email: '', role: 'member', planId: 'axiva' })
+  const [addingMember, setAddingMember] = useState(false)
   const [counts, setCounts] = useState({})
   const [organizationSearch, setOrganizationSearch] = useState('')
 
@@ -7411,19 +7435,25 @@ function AdminClients({ organizations, reloadOrganizations }) {
     await reloadOrganizations()
   }
 
+  // Administrador da plataforma: adiciona usuário sem cobrança no Asaas (plano liberado direto)
+  // e envia o e-mail para o usuário definir a senha.
   async function addMember(e) {
     e.preventDefault()
-    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+    if (addingMember) return
+    setAddingMember(true)
+    const { data, error } = await supabase.functions.invoke('admin-add-user', {
       body: {
-        action: 'add_member',
-        organization_id: selectedOrgId,
+        organizationId: selectedOrgId,
+        name: memberForm.name,
         email: memberForm.email,
-        role: memberForm.role
+        role: memberForm.role,
+        planId: memberForm.planId
       }
     })
-    setNotice(data?.error || error?.message || 'Usuário vinculado.')
+    setAddingMember(false)
+    setNotice(data?.error || error?.message || 'Usuário adicionado. O e-mail para definir a senha foi enviado.')
     if (!data?.error && !error) {
-      setMemberForm({ email: '', role: 'member' })
+      setMemberForm({ name: '', email: '', role: 'member', planId: 'axiva' })
       await loadMembers()
     }
   }
@@ -7546,6 +7576,13 @@ function AdminClients({ organizations, reloadOrganizations }) {
 
           <form onSubmit={addMember} className="admin-member-form">
             <input
+              value={memberForm.name}
+              onChange={e => setMemberForm({...memberForm, name: e.target.value})}
+              placeholder="Nome completo"
+              required
+              minLength={2}
+            />
+            <input
               type="email"
               value={memberForm.email}
               onChange={e => setMemberForm({...memberForm, email: e.target.value})}
@@ -7557,7 +7594,12 @@ function AdminClients({ organizations, reloadOrganizations }) {
               <option value="admin">Administrador</option>
               <option value="owner">Proprietário</option>
             </select>
-            <button className="primary inline-btn"><UserPlus size={16}/> Adicionar</button>
+            <select value={memberForm.planId} onChange={e => setMemberForm({...memberForm, planId: e.target.value})}>
+              <option value="axiva">AXIVA</option>
+              <option value="axiva_plus">AXIVA Plus</option>
+              <option value="axiva_max">AXIVA Max</option>
+            </select>
+            <button className="primary inline-btn" disabled={addingMember}><UserPlus size={16}/> {addingMember ? 'Adicionando...' : 'Adicionar'}</button>
           </form>
 
           <div className="admin-list">
@@ -9173,6 +9215,11 @@ export default function App() {
         userEmail={userEmail}
         onLogout={logout}
         reason="billing"
+        kanban={settings ? (
+          <ReadOnlyArea>
+            <Leads organization={organization} settings={settings} userEmail={userLabel} />
+          </ReadOnlyArea>
+        ) : <p className="muted">Carregando o funil de vendas...</p>}
       />
     )
   }

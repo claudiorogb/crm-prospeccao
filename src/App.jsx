@@ -9504,9 +9504,12 @@ export default function App() {
               <UserPlus size={18}/> Equipe
             </button>
           )}
-          <button className={`nav-item ${page === 'billing-management' ? 'active' : ''}`} onClick={() => { setPage('billing-management'); setMobileMenuOpen(false) }}>
-            <CreditCard size={18}/> Meu plano
-          </button>
+          {/* "Meu plano" (cobrança da empresa) só para proprietário/administrador da empresa. */}
+          {(isSystemAdmin || organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (
+            <button className={`nav-item ${page === 'billing-management' ? 'active' : ''}`} onClick={() => { setPage('billing-management'); setMobileMenuOpen(false) }}>
+              <CreditCard size={18}/> Meu plano
+            </button>
+          )}
 
           {isSystemAdmin && (
             <>
@@ -9539,7 +9542,7 @@ export default function App() {
             onGoCampaigns={() => setPage('campaign-workspace')}
           />
         )}
-        {page === 'billing-management' && (
+        {page === 'billing-management' && (isSystemAdmin || organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (
           <BillingManagementScreen onBackToCrm={() => setPage('dashboard')} isFreeTrial={userPlan?.plan_id === 'free_30_days'} />
         )}
         {page === 'campaign-workspace' && (

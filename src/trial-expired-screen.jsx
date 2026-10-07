@@ -46,6 +46,8 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [showBilling, setShowBilling] = useState(false)
+  // Trial encerrado: popup ao abrir o CRM levando aos planos.
+  const [showEndPopup, setShowEndPopup] = useState(!billing)
 
   useEffect(() => {
     let active = true
@@ -111,7 +113,7 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
   }
 
   if (showBilling) {
-    return <BillingPlanScreen onBack={() => setShowBilling(false)} />
+    return <BillingPlanScreen onBack={() => setShowBilling(false)} hideTrialOption />
   }
 
   if (billing) {
@@ -140,6 +142,20 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
 
   return (
     <main className="auth-shell">
+      {showEndPopup && (
+        <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, background: 'rgba(11,25,44,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 1300 }}>
+          <div style={{ maxWidth: 460, width: '100%', background: '#fff', borderRadius: 14, padding: '24px 22px', boxShadow: '0 20px 50px rgba(11,25,44,.25)', color: '#0b192c', textAlign: 'left' }}>
+            <h2 style={{ margin: '0 0 10px', fontSize: 20 }}>Período de testes encerrado</h2>
+            <p style={{ margin: 0, lineHeight: 1.5, color: '#334155' }}>
+              Seu período de testes terminou, clique no botão abaixo para continuar usando o CRM AXIVA
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button type="button" className="secondary inline-btn" onClick={() => setShowEndPopup(false)}>Fechar</button>
+              <button type="button" className="primary inline-btn" onClick={() => { setShowEndPopup(false); setShowBilling(true) }}>Continuar usando o CRM AXIVA</button>
+            </div>
+          </div>
+        </div>
+      )}
       <section className="auth-card access-state-card" style={{ maxWidth: 620 }}>
         <div className="brand-mark">AX</div>
         <span className="eyebrow">PERÍODO DE TESTE ENCERRADO</span>

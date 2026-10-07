@@ -47,7 +47,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
         if (prepared.error) throw prepared.error
       }
 
-      const contractResult = await supabase.functions.invoke('billing-v2-sandbox', {
+      const contractResult = await supabase.functions.invoke('billing-v2-production', {
         body: {
           action: 'accept_contract',
           planId,
@@ -68,7 +68,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
         throw new Error(contractData?.error || contractResult.error?.message || 'Não foi possível registrar o contrato.')
       }
 
-      const checkoutResult = await supabase.functions.invoke('billing-v2-sandbox', {
+      const checkoutResult = await supabase.functions.invoke('billing-v2-production', {
         body: {
           action: 'create_checkout',
           contractId: contractData.contractId

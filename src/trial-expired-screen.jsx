@@ -36,7 +36,9 @@ function downloadCsv(rows, fileName) {
   XLSX.writeFile(wb, fileName, { compression: true })
 }
 
-export default function TrialExpiredScreen({ organization, userId, userEmail, onLogout }) {
+export default function TrialExpiredScreen({ organization, userId, userEmail, onLogout, reason = 'trial' }) {
+  // reason="billing": mensalidade em atraso ou assinatura cancelada. O Trial continua usando os textos originais.
+  const billing = reason === 'billing'
   const [downloading, setDownloading] = useState(false)
   const [leads, setLeads] = useState([])
   const [loadingLeads, setLoadingLeads] = useState(true)
@@ -115,14 +117,16 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
     <main className="auth-shell">
       <section className="auth-card access-state-card" style={{ maxWidth: 620 }}>
         <div className="brand-mark">AX</div>
-        <span className="eyebrow">PERÍODO DE TESTE ENCERRADO</span>
-        <h1>Seu período de testes expirou</h1>
+        <span className="eyebrow">{billing ? 'ACESSO LIMITADO' : 'PERÍODO DE TESTE ENCERRADO'}</span>
+        <h1>{billing ? 'Pagamento pendente' : 'Seu período de testes expirou'}</h1>
         <p className="muted">
-          Contrate o plano mensal do AXIVA CRM e continue usando. Seus dados comerciais continuam armazenados no AXIVA CRM e seu acesso permanece limitado à visualização do Kanban até a contratação.
+          {billing
+            ? 'A mensalidade da empresa está em aberto ou a assinatura foi cancelada. Seus dados comerciais continuam armazenados no AXIVA CRM e o acesso fica limitado à visualização do Kanban e ao download dos dados. Assim que o Asaas confirmar o pagamento, o acesso de todos os usuários da empresa volta automaticamente.'
+            : 'Contrate o plano mensal do AXIVA CRM e continue usando. Seus dados comerciais continuam armazenados no AXIVA CRM e seu acesso permanece limitado à visualização do Kanban até a contratação.'}
         </p>
         <div className="panel" style={{ margin: '20px 0', textAlign: 'left' }}>
           <strong>Seu Kanban</strong>
-          <p className="muted">Modo somente visualização. Nenhuma alteração pode ser feita enquanto o teste estiver expirado.</p>
+          <p className="muted">{billing ? 'Modo somente visualização. Nenhuma alteração pode ser feita enquanto o pagamento estiver pendente.' : 'Modo somente visualização. Nenhuma alteração pode ser feita enquanto o teste estiver expirado.'}</p>
           {loadingLeads ? (
             <p className="muted">Carregando seus dados...</p>
           ) : (
@@ -152,9 +156,11 @@ export default function TrialExpiredScreen({ organization, userId, userEmail, on
           <button className="secondary full" onClick={downloadCommercialData} disabled={downloading}>
             <Download size={17} /> {downloading ? 'Preparando download...' : 'Baixar informações comerciais'}
           </button>
-          <button className="primary full" onClick={() => setShowBilling(true)}>
-            <ArrowRight size={17} /> Contratar plano mensal
-          </button>
+          {!billing && (
+            <button className="primary full" onClick={() => setShowBilling(true)}>
+              <ArrowRight size={17} /> Contratar plano mensal
+            </button>
+          )}
           <button className="text-button" onClick={onLogout}>Sair</button>
         </div>
         <div className="access-email">{userEmail}</div>

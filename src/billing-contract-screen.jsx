@@ -55,6 +55,8 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
           mode: inviteUser ? 'add_license' : 'first_access',
           targetName: inviteUser?.name || signerName.trim(),
           targetEmail: inviteUser?.email || undefined,
+          signerName: signerName.trim(),
+          targetRole: inviteUser?.role || undefined,
         }
       })
 
@@ -113,6 +115,11 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
         <p className="muted" style={{ marginTop: 0 }}>
           Plano selecionado: <strong>{plan.name}</strong> — {plan.price} por usuário · {licenseQuantity} {licenseQuantity === 1 ? 'usuário' : 'usuários'} · <strong>{(plan.value * licenseQuantity).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</strong>
         </p>
+        {inviteUser && (
+          <p className="muted" style={{ marginTop: 0 }}>
+            Novo usuário: <strong>{inviteUser.name}</strong> ({inviteUser.email}). Hoje será cobrado apenas o valor proporcional até o próximo vencimento da empresa; depois, o valor deste usuário é somado à mensalidade da empresa em uma única cobrança.
+          </p>
+        )}
 
         <div
           style={{

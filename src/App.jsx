@@ -7409,7 +7409,7 @@ function AdminClients({ organizations, reloadOrganizations }) {
   const [members, setMembers] = useState([])
   const [notice, setNotice] = useState('')
   const [showCreate, setShowCreate] = useState(false)
-  const [createForm, setCreateForm] = useState({ name: '', city: '', state: 'SP', radius: 30 })
+  const [createForm, setCreateForm] = useState({ name: '', cnpj: '', city: '', state: 'SP', radius: 30 })
   const [memberForm, setMemberForm] = useState({ name: '', email: '', role: 'member', planId: 'axiva' })
   const [addingMember, setAddingMember] = useState(false)
   const [counts, setCounts] = useState({})
@@ -7454,14 +7454,26 @@ function AdminClients({ organizations, reloadOrganizations }) {
     const userId = sessionData?.session?.user?.id
     if (!userId) return
 
+    // O CNPJ é a trava contra empresas duplicadas (o banco também não aceita CNPJ repetido).
+    const cnpj = String(createForm.cnpj || '').replace(/\D/g, '')
+    if (cnpj.length !== 14) {
+      setNotice('Informe um CNPJ válido com 14 dígitos.')
+      return
+    }
+    const { data: existingOrg } = await supabase.from('organizations').select('name').eq('cnpj', cnpj).maybeSingle()
+    if (existingOrg) {
+      setNotice(`Já existe uma empresa com este CNPJ: ${existingOrg.name}.`)
+      return
+    }
+
     const { data: org, error } = await supabase
       .from('organizations')
-      .insert({ name: createForm.name.trim(), created_by: userId, is_active: true })
+      .insert({ name: createForm.name.trim(), cnpj, created_by: userId, is_active: true })
       .select('id,name')
       .single()
 
     if (error) {
-      setNotice(error.message)
+      setNotice(error.code === '23505' ? 'Já existe uma empresa com este CNPJ.' : error.message)
       return
     }
 
@@ -7478,7 +7490,7 @@ function AdminClients({ organizations, reloadOrganizations }) {
     })
 
     setShowCreate(false)
-    setCreateForm({ name: '', city: '', state: 'SP', radius: 30 })
+    setCreateForm({ name: '', cnpj: '', city: '', state: 'SP', radius: 30 })
     setNotice('Organização criada.')
     await reloadOrganizations()
   }
@@ -7571,6 +7583,10 @@ function AdminClients({ organizations, reloadOrganizations }) {
             <label>
               Nome
               <input value={createForm.name} onChange={e => setCreateForm({...createForm, name: e.target.value})} required />
+            </label>
+            <label>
+              CNPJ
+              <input value={createForm.cnpj} onChange={e => setCreateForm({...createForm, cnpj: e.target.value.replace(/\D/g, '').slice(0, 14)})} placeholder="Somente números (14 dígitos)" inputMode="numeric" maxLength={14} required />
             </label>
             <div className="field-grid three">
               <label>

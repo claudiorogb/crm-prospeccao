@@ -9091,7 +9091,18 @@ export default function App() {
   }, [organization?.id, accountStatus])
 
   async function logout() {
-    await supabase.auth.signOut()
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      // A sessão pode já não existir no servidor (erro 403) e a biblioteca (supabase-js 2.57.4) não limpa o navegador nesse caso.
+      try {
+        Object.keys(localStorage)
+          .filter(key => key.startsWith('sb-') && key.endsWith('-auth-token'))
+          .forEach(key => localStorage.removeItem(key))
+      } catch {}
+      resetOverdueLoginAlerts()
+      clearAxivaAiHistoryStorage()
+      window.location.reload()
+    }
   }
 
   if (loading || (session && accessLoading && !passwordRecovery)) {

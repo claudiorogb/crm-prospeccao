@@ -316,7 +316,7 @@ function AuthScreen() {
       ? 'paid_signup'
       : params.get('trial') === '1' ? 'signup' : 'login'
   })
-  const [form, setForm] = useState({ email: '', password: '', fullName: '', organizationName: '', cnpj: '' })
+  const [form, setForm] = useState({ email: '', password: '', fullName: '', organizationName: '', cnpj: '', phone: '' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [showTrialTerms, setShowTrialTerms] = useState(false)
@@ -326,17 +326,19 @@ function AuthScreen() {
     const displayName = form.fullName.trim().replace(/\s+/g, ' ')
     const organizationName = form.organizationName.trim().replace(/\s+/g, ' ')
     const cnpj = form.cnpj.replace(/\D/g, '')
+    const phone = form.phone.replace(/\D/g, '')
     if (displayName.length < 2) throw new Error('Informe como deseja ser chamado.')
     if (organizationName.length < 2) throw new Error('Informe o nome da empresa.')
     if (cnpj.length !== 14) throw new Error('Informe um CNPJ válido com 14 dígitos.')
-    return { displayName, organizationName, cnpj }
+    if (phone.length < 10 || phone.length > 13) throw new Error('Informe um telefone válido com DDD.')
+    return { displayName, organizationName, cnpj, phone }
   }
 
   async function createTrialAccount({ termsVersion, privacyVersion, acceptedAt }) {
     setLoading(true)
     setMessage('')
     try {
-      const { displayName, organizationName, cnpj } = validateSignup()
+      const { displayName, organizationName, cnpj, phone } = validateSignup()
       const email = form.email.trim().toLowerCase()
       const { data: signupData, error } = await supabase.functions.invoke('signup-with-resend', {
         body: {
@@ -345,6 +347,7 @@ function AuthScreen() {
           fullName: displayName,
           organizationName,
           cnpj,
+          phone,
           onboardingType: 'trial',
           termsVersion,
           privacyVersion,
@@ -396,7 +399,7 @@ function AuthScreen() {
         validateSignup()
         setShowTrialTerms(true)
       } else if (mode === 'paid_signup') {
-        const { displayName, organizationName, cnpj } = validateSignup()
+        const { displayName, organizationName, cnpj, phone } = validateSignup()
         const email = form.email.trim().toLowerCase()
         const planId = new URLSearchParams(window.location.search).get('plan')
         if (!['axiva','axiva_plus','axiva_max'].includes(planId)) throw new Error('Plano de contratação inválido.')
@@ -408,10 +411,16 @@ function AuthScreen() {
             fullName: displayName,
             organizationName,
             cnpj,
+            phone,
             onboardingType: 'paid'
           }
         })
-        if (error) throw error
+        if (error) {
+          let detail = ''
+          try { detail = (await error.context?.json?.())?.error || '' } catch {}
+          throw new Error(detail || error.message || 'Não foi possível concluir o cadastro.')
+        }
+        if (signupData?.error) throw new Error(signupData.error)
 
         localStorage.setItem('axiva_pending_paid_v1', JSON.stringify({
           planId,
@@ -421,11 +430,14 @@ function AuthScreen() {
           asaasEnvironment: new URLSearchParams(window.location.search).get('asaas') === 'sandbox' ? 'sandbox' : 'production'
         }))
 
-        if (!signupData?.session) {
-          setMode('login')
-          setMessage('Cadastro criado. Enviamos um e-mail para confirmação. Depois, entre no CRM para continuar a contratação.')
-        } else {
+        if (signupData?.emailConfirmed) {
+          // Contratação paga de empresa nova: entra direto e o CRM abre o contrato do plano escolhido.
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: form.password })
+          if (signInError) throw new Error('Cadastro criado, mas não foi possível entrar automaticamente. Entre com seu e-mail e senha para continuar a contratação.')
           setMessage('')
+        } else {
+          setMode('login')
+          setMessage(signupData?.message || 'Cadastro criado. Enviamos um e-mail para confirmação. Depois, entre no CRM para continuar a contratação.')
         }
       } else {
         const blocked = loginBlockMessage(CRM_LOGIN_GUARD_KEY)
@@ -490,6 +502,10 @@ function AuthScreen() {
               <label>
                 CNPJ
                 <input value={form.cnpj} onChange={e => setForm({ ...form, cnpj: e.target.value.replace(/\D/g, '').slice(0, 14) })} placeholder="00.000.000/0000-00" inputMode="numeric" maxLength={18} required />
+              </label>
+              <label>
+                Telefone (com DDD)
+                <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 13) })} placeholder="11999999999" inputMode="tel" autoComplete="tel" maxLength={13} required />
               </label>
             </>
           )}
@@ -7631,7 +7647,13 @@ function AdminClients({ organizations, reloadOrganizations }) {
           <article className="panel campaign-card organization-compact-card" key={org.id}>
             <div>
               <span className="eyebrow">{org.is_active ? 'ATIVO' : 'INATIVO'}</span>
-              <h2>{org.name}</h2>
+              <h2
+                style={{ cursor: 'pointer' }}
+                title="Ver dados da empresa"
+                onClick={() => { setSelectedOrgId(org.id); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }) }}
+              >
+                {org.name}
+              </h2>
               <p>
                 {counts[org.id]?.leads ?? 0} leads • {counts[org.id]?.campaigns ?? 0} campanhas • {counts[org.id]?.messages ?? 0} mensagens
               </p>
@@ -7649,8 +7671,32 @@ function AdminClients({ organizations, reloadOrganizations }) {
 
       {selectedOrgId && (
         <section className="panel">
+          {(() => {
+            // Dados informados no cadastro da empresa (sem senha).
+            const org = organizations.find(o => o.id === selectedOrgId) || {}
+            const responsaveis = members.filter(m => m.role === 'owner' || m.role === 'admin')
+            const fmtCnpj = v => String(v || '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') || '—'
+            const fmtPhone = v => String(v || '').replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') || '—'
+            return (
+              <div style={{ marginBottom: 18 }}>
+                <span className="eyebrow">DADOS DA EMPRESA</span>
+                <h2>{org.name}</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 8 }}>
+                  <div><small className="muted">CNPJ</small><div><strong>{org.cnpj ? fmtCnpj(org.cnpj) : '—'}</strong></div></div>
+                  <div><small className="muted">Telefone</small><div><strong>{org.phone ? fmtPhone(org.phone) : '—'}</strong></div></div>
+                  <div><small className="muted">Cadastrada em</small><div><strong>{formatDateTime(org.created_at)}</strong></div></div>
+                  <div><small className="muted">Situação</small><div><strong>{org.is_active ? 'Ativa' : 'Inativa'}{org.trial_used_at ? ' • usou o teste grátis' : ''}</strong></div></div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <small className="muted">Responsáveis (proprietário/administrador)</small>
+                    <div>{responsaveis.length
+                      ? responsaveis.map(m => <div key={m.user_id}><strong>{m.display_name || '—'}</strong> • {m.email || '—'} • {m.role === 'owner' ? 'Proprietário' : 'Administrador'}</div>)
+                      : <span className="muted">Nenhum responsável ativo</span>}</div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
           <span className="eyebrow">USUÁRIOS</span>
-          <h2>{organizations.find(o => o.id === selectedOrgId)?.name}</h2>
 
           <form onSubmit={addMember} className="admin-member-form">
             <input
@@ -9176,7 +9222,7 @@ export default function App() {
 
     const { data } = await supabase
       .from('organizations')
-      .select('id,name,is_active,is_sandbox,created_at,created_by')
+      .select('id,name,is_active,is_sandbox,created_at,created_by,cnpj,phone,trial_used_at')
       .order('created_at', { ascending: true })
 
     setAdminOrganizations(data || [])

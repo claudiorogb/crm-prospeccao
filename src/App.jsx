@@ -1114,16 +1114,6 @@ function CatalogAdmin({ userEmail }) {
     setCatalogPage(0)
   }, [catalogSearch])
 
-  if (contractInvite) {
-    return (
-      <BillingContractScreen
-        planId={contractInvite.planId}
-        onBack={() => setContractInvite(null)}
-        inviteUser={contractInvite}
-      />
-    )
-  }
-
   return (
     <>
       <header className="topbar">
@@ -8550,6 +8540,7 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
   const [form, setForm] = useState({ name: '', email: '', role: 'member', planId: 'axiva' })
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [membersLoading, setMembersLoading] = useState(false)
   const [contractInvite, setContractInvite] = useState(null)
 
   const PLANS = {
@@ -8564,11 +8555,11 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
 
   async function loadMembers() {
     if (!organization?.id) return
-    setLoading(true)
+    setMembersLoading(true)
     const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
       body: { action: 'list_members', organization_id: organization.id }
     })
-    setLoading(false)
+    setMembersLoading(false)
     if (error || data?.error) {
       setNotice(data?.error || error?.message || 'Não foi possível carregar a equipe.')
       return
@@ -8704,6 +8695,16 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
     await loadMembers()
   }
 
+  if (contractInvite) {
+    return (
+      <BillingContractScreen
+        planId={contractInvite.planId}
+        onBack={() => setContractInvite(null)}
+        inviteUser={contractInvite}
+      />
+    )
+  }
+
   return (
     <>
       <header className="topbar">
@@ -8778,7 +8779,7 @@ function OrganizationTeam({ organization, currentUserId, currentRole }) {
               </div>
             </div>
           ))}
-          {!members.length && !loading && <p className="muted">Nenhum usuário adicional cadastrado.</p>}
+          {!members.length && !membersLoading && <p className="muted">Nenhum usuário adicional cadastrado.</p>}
         </div>
       </section>
     </>

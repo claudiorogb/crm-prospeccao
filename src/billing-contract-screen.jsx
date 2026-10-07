@@ -56,6 +56,7 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
           targetName: inviteUser?.name || signerName.trim(),
           targetEmail: inviteUser?.email || undefined,
           signerName: signerName.trim(),
+          targetRole: inviteUser?.role || undefined,
         }
       })
 

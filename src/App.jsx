@@ -8875,6 +8875,7 @@ export default function App() {
   const [adminCommercialPage, setAdminCommercialPage] = useState('dashboard')
   const [adminSandboxSettings, setAdminSandboxSettings] = useState(null)
   const [userPlan, setUserPlan] = useState(null)
+  const [billingBlocked, setBillingBlocked] = useState(false)
   const [pendingTrialError, setPendingTrialError] = useState('')
 
   const sandboxOrganization = useMemo(
@@ -8937,6 +8938,7 @@ export default function App() {
       setIsSystemAdmin(false)
       setOrganizationMembershipRole(null)
       setUserPlan(null)
+      setBillingBlocked(false)
       setAccessLoading(false)
       return
     }
@@ -8946,7 +8948,7 @@ export default function App() {
     async function loadAccess() {
       setAccessLoading(true)
 
-      const [profileResult, membershipResult, adminResult, planResult] = await Promise.all([
+      const [profileResult, membershipResult, adminResult, planResult, suspendedPlanResult] = await Promise.all([
         supabase
           .from('profiles')
           .select('account_status,full_name')
@@ -8964,7 +8966,15 @@ export default function App() {
           .select('user_id')
           .eq('user_id', session.user.id)
           .maybeSingle(),
-        supabase.rpc('get_my_crm_plan')
+        supabase.rpc('get_my_crm_plan'),
+        // Plano suspenso pela cobrança (inadimplência ou assinatura cancelada).
+        supabase
+          .from('user_plan_assignments')
+          .select('status')
+          .eq('user_id', session.user.id)
+          .eq('status', 'suspended')
+          .limit(1)
+          .maybeSingle()
       ])
 
       if (cancelled) return
@@ -9008,6 +9018,7 @@ export default function App() {
       }
 
       setUserPlan(effectivePlan)
+      setBillingBlocked(!effectivePlan && Boolean(suspendedPlanResult.data))
       if (effectivePlan?.plan_id === 'free_30_days' && page === 'team') setPage('dashboard')
 
       setAccountStatus(status)
@@ -9138,6 +9149,19 @@ export default function App() {
         userId={session.user.id}
         userEmail={userEmail}
         onLogout={logout}
+      />
+    )
+  }
+
+  // Inadimplência ou assinatura cancelada: mesmo acesso restrito do Trial vencido (ver Kanban e baixar dados).
+  if (!isSystemAdmin && organization?.id && billingBlocked) {
+    return (
+      <TrialExpiredScreen
+        organization={organization}
+        userId={session.user.id}
+        userEmail={userEmail}
+        onLogout={logout}
+        reason="billing"
       />
     )
   }

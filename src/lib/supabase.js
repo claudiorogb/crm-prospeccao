@@ -7,4 +7,8 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Variáveis do Supabase não configuradas.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    detectSessionInUrl: !window.location.hash.includes('type=signup')
+  }
+})

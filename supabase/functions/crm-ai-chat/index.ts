@@ -447,8 +447,8 @@ Deno.serve(async (req) => {
   // devem ser respondidas diretamente, sem depender do contexto do CRM ou do modelo.
   const normalizedMessage = normalize(message);
   const asksAxivaContact =
-    /\\b(telefone|tel|whatsapp|numero|contato|e-?mail|email)\\b/.test(normalizedMessage) &&
-    /\\b(axiva|suporte|atendimento|falar com|contato)\\b/.test(normalizedMessage);
+    /\b(telefone|tel|whatsapp|numero|contato|e-?mail|email)\b/.test(normalizedMessage) &&
+    /\b(axiva|suporte|atendimento|falar com|contato)\b/.test(normalizedMessage);
 
   if (asksAxivaContact) {
     return json({

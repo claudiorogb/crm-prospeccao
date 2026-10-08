@@ -7,6 +7,13 @@ import {
 import { supabase } from './lib/supabase'
 import './whatsapp-center.css'
 
+// Tipo de arquivo usado no link de mídia recebida: só tipos de mídia comuns; o resto é baixado como arquivo genérico.
+function safeDataMime(mime) {
+  const value = String(mime || '').toLowerCase().split(';')[0].trim()
+  if (value === 'application/pdf' || (/^(image|video|audio)\/[a-z0-9.+-]+$/.test(value) && value !== 'image/svg+xml')) return value
+  return 'application/octet-stream'
+}
+
 function formatTime(value) {
   if (!value) return ''
   try {
@@ -483,7 +490,7 @@ export default function WhatsAppCenter({ organization }) {
     try {
       const data = await invoke('get_media', { conversation_id: message.conversation_id, message_id: message.id })
       const mime = data.mimetype || message.media_metadata?.mime_type || 'application/octet-stream'
-      const url = data.signed_url || (data.base64 ? `data:${mime};base64,${data.base64}` : '')
+      const url = data.signed_url || (data.base64 ? `data:${safeDataMime(mime)};base64,${data.base64}` : '')
       if (!url) throw new Error('Não foi possível abrir esta mídia. Tente novamente.')
       setMediaCache(current => ({
         ...current,
@@ -1143,7 +1150,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
     try {
       const data = await invoke('get_media', { message_id: message.id })
       const mime = data.mimetype || message.media_metadata?.mime_type || 'application/octet-stream'
-      const url = data.signed_url || (data.base64 ? `data:${mime};base64,${data.base64}` : '')
+      const url = data.signed_url || (data.base64 ? `data:${safeDataMime(mime)};base64,${data.base64}` : '')
       if (!url) throw new Error('Não foi possível abrir esta mídia. Tente novamente.')
       setMediaCache(current => ({
         ...current,

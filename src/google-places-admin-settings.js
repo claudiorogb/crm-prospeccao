@@ -214,7 +214,8 @@ async function renderGlobalPanel() {
   } catch (error) {
     panel.dataset.loading = 'false'
     panel.dataset.loaded = 'false'
-    panel.innerHTML = `<div class="notice error">Não foi possível carregar o limite global: ${String(error?.message || error)}</div>`
+    panel.innerHTML = '<div class="notice error"></div>'
+    panel.firstElementChild.textContent = `Não foi possível carregar o limite global: ${String(error?.message || error)}`
   }
 }
 

@@ -8961,18 +8961,18 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
 
   const items = [
     ['overview', 'Visão geral', Shield],
-    ['users', 'Usuários', Users],
     ['whatsapp', 'WhatsApp', Phone],
     ['email', 'E-mail', Send],
+    ['messages', 'Mensagens', MessageSquareText],
     ['queue', 'Fila', ListChecks],
-    ['catalog', 'Catálogo CRM', Tags],
-    ['clients', 'Organizações', Building2],
     ['google', 'Google Places', Database],
+    ['ai', 'IA', Bot],
     ['integrations', 'Integrações', Link2],
     ['defaults', 'Padrões', SlidersHorizontal],
-    ['messages', 'Mensagens', MessageSquareText],
-    ['ai', 'IA', Bot],
+    ['clients', 'Organizações', Building2],
     ['plans', 'Planos', SlidersHorizontal],
+    ['users', 'Usuários', Users],
+    ['catalog', 'Catálogo CRM', Tags],
     ['audit', 'Auditoria', History]
   ]
 

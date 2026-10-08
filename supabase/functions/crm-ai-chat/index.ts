@@ -452,7 +452,7 @@ Deno.serve(async (req) => {
 
   if (asksAxivaContact) {
     return json({
-      answer: "Atendimento Axiva:\\nWhatsApp: 11 92133-5619 (somente mensagens)\\nE-mail: contato@axiva.com.br",
+      answer: "Atendimento Axiva:\nWhatsApp: 11 92133-5619 (somente mensagens)\nE-mail: contato@axiva.com.br",
       conversation_id: requestedConversationId || null,
       data_scopes: [],
     });

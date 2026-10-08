@@ -3578,7 +3578,7 @@ function Leads({ organization, settings, userEmail }) {
                           )}
 
                               <div className="kanban-card-footer">
-                                {status !== 'new' && l.website ? <a className="lead-site-link" href={l.website} target="_blank" rel="noreferrer">Abrir site</a> : <span />}
+                                {status !== 'new' && safeExternalUrl(l.website) ? <a className="lead-site-link" href={safeExternalUrl(l.website)} target="_blank" rel="noreferrer">Abrir site</a> : <span />}
                               </div>
                             </div>
                           )}

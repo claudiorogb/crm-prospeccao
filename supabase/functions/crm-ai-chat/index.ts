@@ -443,6 +443,21 @@ Deno.serve(async (req) => {
     return json({ error: "IA não habilitada para esta empresa." }, 403);
   }
 
+  // Contato oficial da AXIVA: perguntas sobre telefone, WhatsApp, e-mail ou suporte
+  // devem ser respondidas diretamente, sem depender do contexto do CRM ou do modelo.
+  const normalizedMessage = normalize(message);
+  const asksAxivaContact =
+    /\\b(telefone|tel|whatsapp|numero|contato|e-?mail|email)\\b/.test(normalizedMessage) &&
+    /\\b(axiva|suporte|atendimento|falar com|contato)\\b/.test(normalizedMessage);
+
+  if (asksAxivaContact) {
+    return json({
+      answer: "Atendimento Axiva:\\nWhatsApp: 11 92133-5619 (somente mensagens)\\nE-mail: contato@axiva.com.br",
+      conversation_id: requestedConversationId || null,
+      data_scopes: [],
+    });
+  }
+
   const scopes = inferScopes(message);
 
   // Bloqueio preventivo de tentativa explícita de consultar outra organização.

@@ -12,6 +12,7 @@ Deno.serve(async (req) => {
   if (!url || !key) return json({ error: "Server not configured" }, 503);
 
   const token = req.headers.get("x-cleanup-token") || "";
+  if (!token) return json({ error: "Unauthorized" }, 401);
   const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: valid, error: verifyError } = await admin.rpc("verify_file_security_cleanup_token", { p_token: token });
   if (verifyError || valid !== true) return json({ error: "Unauthorized" }, 401);

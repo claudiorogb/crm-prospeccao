@@ -62,6 +62,7 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
   }
 
   // Upgrade: abre o pagamento da diferença no Asaas. O novo plano é liberado quando o Asaas confirmar o pagamento.
+  // Redução: fica agendada para o próximo vencimento (sem pagamento agora). Escolher o plano atual cancela a redução.
   async function startUpgrade(change) {
     setBusy('upgrade:' + change.userId); setError(''); setMessage('')
     try {
@@ -71,6 +72,15 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
         let reason = ''
         try { reason = (await fnError.context?.json?.())?.error || '' } catch {}
         throw new Error(reason || 'Não foi possível iniciar a mudança de plano.')
+      }
+      if (data?.downgradeScheduled || data?.downgradeCancelled || data?.unchanged) {
+        setPendingUpgrade(null)
+        setMessage(data.downgradeScheduled
+          ? 'Mudança agendada: ' + change.memberName + ' passa para o plano ' + change.planName + ' a partir de ' + formatDate(data.effectiveDate) + '. Até lá, continua com o plano atual.'
+          : 'Mudança de plano cancelada. O plano atual foi mantido.')
+        await loadV2()
+        setBusy('')
+        return
       }
       if (!data?.checkoutUrl) throw new Error('Não foi possível abrir o pagamento no Asaas.')
       window.location.assign(data.checkoutUrl)
@@ -183,15 +193,23 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
 
       {canManage && pendingUpgrade && (
         <section className="notice" role="alert" style={{ marginBottom: 16, padding: '16px 18px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
-          <div style={{ fontWeight: 700, color: '#0b192c', marginBottom: 6 }}>Confirmar upgrade de plano</div>
+          <div style={{ fontWeight: 700, color: '#0b192c', marginBottom: 6 }}>{pendingUpgrade.keep ? 'Manter plano atual' : pendingUpgrade.downgrade ? 'Confirmar redução de plano' : 'Confirmar upgrade de plano'}</div>
           <div style={{ color: '#475569', lineHeight: 1.5 }}>
-            Mudar <strong>{pendingUpgrade.memberName}</strong> para o plano <strong>{pendingUpgrade.planName}</strong> — <strong>{money(pendingUpgrade.planValue)}/mês</strong>.
-            <br />
-            Você será direcionado ao Asaas para pagar a diferença proporcional até o próximo vencimento. O novo plano é liberado assim que o Asaas confirmar o pagamento.
+            {pendingUpgrade.keep ? (
+              <>Cancelar a redução agendada e manter <strong>{pendingUpgrade.memberName}</strong> no plano <strong>{pendingUpgrade.planName}</strong>?</>
+            ) : (
+              <>
+                Mudar <strong>{pendingUpgrade.memberName}</strong> para o plano <strong>{pendingUpgrade.planName}</strong> — <strong>{money(pendingUpgrade.planValue)}/mês</strong>.
+                <br />
+                {pendingUpgrade.downgrade
+                  ? 'A redução vale a partir do próximo vencimento. Até lá, o usuário continua com o plano atual, e a próxima mensalidade já vem com o novo valor. Nenhum pagamento é necessário agora.'
+                  : 'Você será direcionado ao Asaas para pagar a diferença proporcional até o próximo vencimento. O novo plano é liberado assim que o Asaas confirmar o pagamento.'}
+              </>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
             <button type="button" className="primary inline-btn" disabled={Boolean(busy)} onClick={() => startUpgrade(pendingUpgrade)}>
-              {busy === 'upgrade:' + pendingUpgrade.userId ? <><Loader2 size={15} className="spin" /> Abrindo pagamento...</> : 'Ir para o pagamento'}
+              {busy === 'upgrade:' + pendingUpgrade.userId ? <><Loader2 size={15} className="spin" /> {pendingUpgrade.downgrade || pendingUpgrade.keep ? 'Salvando...' : 'Abrindo pagamento...'}</> : (pendingUpgrade.keep ? 'Manter plano atual' : pendingUpgrade.downgrade ? 'Agendar redução' : 'Ir para o pagamento')}
             </button>
             <button type="button" className="secondary inline-btn" disabled={Boolean(busy)} onClick={() => setPendingUpgrade(null)}>Cancelar</button>
           </div>
@@ -272,14 +290,20 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
                               const nextPlanId = e.target.value
                               if (!nextPlanId || nextPlanId === lic.plan_id) return
                               const nextPlan = PLANS[nextPlanId]
-                              setPendingUpgrade({ userId: member.user_id, memberName: member.full_name || member.email || 'usuário', planId: nextPlanId, planName: nextPlan.name, planValue: nextPlan.value })
+                              setPendingUpgrade({ userId: member.user_id, memberName: member.full_name || member.email || 'usuário', planId: nextPlanId, planName: nextPlan.name, planValue: nextPlan.value, downgrade: nextPlan.value < PLANS[lic.plan_id].value })
                             }}
                             disabled={Boolean(busy) || Boolean(pendingUpgrade)}
                             style={{ minWidth: 170 }}
                           >
-                            {Object.entries(PLANS).filter(([id, plan]) => id === lic.plan_id || plan.value > PLANS[lic.plan_id].value).map(([id, plan]) => <option key={id} value={id}>{plan.name}</option>)}
+                            {Object.entries(PLANS).map(([id, plan]) => <option key={id} value={id}>{plan.name}</option>)}
                           </select>
-                          {lic.pending_plan_id && PLANS[lic.pending_plan_id] && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Aguardando pagamento do upgrade para {PLANS[lic.pending_plan_id].name}</div>}
+                          {lic.pending_plan_id && PLANS[lic.pending_plan_id] && !lic.pending_effective_date && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Aguardando pagamento do upgrade para {PLANS[lic.pending_plan_id].name}</div>}
+                          {lic.pending_plan_id && PLANS[lic.pending_plan_id] && lic.pending_effective_date && (
+                            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                              Muda para {PLANS[lic.pending_plan_id].name} em {formatDate(lic.pending_effective_date)}.{' '}
+                              <button type="button" className="text-button" style={{ fontSize: 12, padding: 0 }} disabled={Boolean(busy) || Boolean(pendingUpgrade)} onClick={() => setPendingUpgrade({ userId: member.user_id, memberName: member.full_name || member.email || 'usuário', planId: lic.plan_id, planName: PLANS[lic.plan_id].name, planValue: PLANS[lic.plan_id].value, keep: true })}>Manter plano atual</button>
+                            </div>
+                          )}
                         </div>
                       ) : <span>{active ? member.plan_name : 'Sem licença'}</span>}
                     </td>

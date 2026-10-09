@@ -7165,8 +7165,8 @@ function AdminUsers({ organizations, userEmail }) {
       setNotice(error.message || 'Não foi possível arquivar o usuário.')
       return
     }
-    setNotice('Usuário arquivado. Ele não poderá acessar o CRM até ser reativado.')
-    await loadData()
+    setNotice(`Usuário ${item.full_name || item.email} excluído. Ele não aparece mais em Usuários nem em Planos e não poderá acessar o CRM.`)
+    await loadUsers()
   }
 
   async function sendPasswordReset(item) {
@@ -7312,7 +7312,11 @@ function AdminUsers({ organizations, userEmail }) {
                 <span className="row-actions">
                   <button className="secondary mini" onClick={() => sendPasswordReset(item)}>Redefinir senha</button>
                   {!isSelf && (
-                    <button className="text-danger mini" onClick={() => deleteUser(item)}>
+                    <button
+                      className="text-danger mini"
+                      data-confirm-message={`Tem certeza que deseja excluir o usuário “${item.full_name || item.email}”? Ele deixará de aparecer em Usuários e Planos e não poderá mais acessar o CRM. Os dados ficam preservados no banco.`}
+                      onClick={() => deleteUser(item)}
+                    >
                       Excluir
                     </button>
                   )}
@@ -7411,6 +7415,21 @@ function AdminClients({ organizations, reloadOrganizations }) {
   async function toggleOrganization(org) {
     const { error } = await supabase.from('organizations').update({ is_active: !org.is_active }).eq('id', org.id)
     setNotice(error ? error.message : (org.is_active ? 'Organização desativada.' : 'Organização reativada.'))
+    await reloadOrganizations()
+  }
+
+  async function deleteOrganization(org) {
+    setNotice('')
+    const { error } = await supabase.rpc('archive_organization_soft', { target_organization: org.id })
+    if (error) {
+      setNotice(error.message || 'Não foi possível excluir a organização.')
+      return
+    }
+    if (selectedOrgId === org.id) {
+      setSelectedOrgId('')
+      setMembers([])
+    }
+    setNotice(`Organização ${org.name} excluída. Ela e seus vínculos de usuários não aparecem mais nas telas; os dados ficam preservados no banco.`)
     await reloadOrganizations()
   }
 
@@ -7544,6 +7563,13 @@ function AdminClients({ organizations, reloadOrganizations }) {
               <button className="secondary mini" onClick={() => renameOrganization(org)}>Editar nome</button>
               <button className="secondary mini" onClick={() => toggleOrganization(org)}>
                 {org.is_active ? 'Desativar' : 'Ativar'}
+              </button>
+              <button
+                className="text-danger mini"
+                data-confirm-message={`Tem certeza que deseja excluir a organização “${org.name}”? Ela deixará de aparecer em Organizações, Usuários e Planos, e os usuários vinculados perdem o acesso a ela. Os dados ficam preservados no banco.`}
+                onClick={() => deleteOrganization(org)}
+              >
+                Excluir
               </button>
             </div>
           </article>
@@ -9053,6 +9079,7 @@ export default function App() {
     const { data } = await supabase
       .from('organizations')
       .select('id,name,is_active,is_sandbox,created_at,created_by')
+      .is('deleted_at', null)
       .order('created_at', { ascending: true })
 
     setAdminOrganizations(data || [])

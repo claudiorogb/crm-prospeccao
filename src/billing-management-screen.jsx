@@ -35,6 +35,9 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
   // Plano contratado pelo Billing V2 (contrato + Asaas): status e cancelamento.
   const [v2, setV2] = useState(null)
   const [confirmCancelV2, setConfirmCancelV2] = useState(false)
+  // Licenças do Billing V2 por usuário (plano atual e upgrade aguardando pagamento).
+  const [v2Licenses, setV2Licenses] = useState({})
+  const [pendingUpgrade, setPendingUpgrade] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -47,6 +50,34 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
   async function loadV2() {
     const { data } = await supabase.functions.invoke('billing-v2-cancel', { body: { action: 'status' } })
     setV2(data?.hasPlan ? data : null)
+    if (data?.hasPlan) {
+      // Só proprietário/administrador recebe as licenças; para os demais a chamada é recusada e nada muda na tela.
+      try {
+        const { data: st } = await supabase.functions.invoke('billing-v2-production', { body: { action: 'status' } })
+        const map = {}
+        for (const l of (st?.licenses || [])) if (l.user_id) map[l.user_id] = l
+        setV2Licenses(map)
+      } catch {}
+    }
+  }
+
+  // Upgrade: abre o pagamento da diferença no Asaas. O novo plano é liberado quando o Asaas confirmar o pagamento.
+  async function startUpgrade(change) {
+    setBusy('upgrade:' + change.userId); setError(''); setMessage('')
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('billing-v2-production', { body: { action: 'change_plan', userId: change.userId, planId: change.planId } })
+      if (data?.error) throw new Error(data.error)
+      if (fnError) {
+        let reason = ''
+        try { reason = (await fnError.context?.json?.())?.error || '' } catch {}
+        throw new Error(reason || 'Não foi possível iniciar a mudança de plano.')
+      }
+      if (!data?.checkoutUrl) throw new Error('Não foi possível abrir o pagamento no Asaas.')
+      window.location.assign(data.checkoutUrl)
+    } catch (err) {
+      setError(err?.message || 'Não foi possível iniciar a mudança de plano.')
+      setBusy('')
+    }
   }
 
   useEffect(() => { load(); loadV2() }, [])
@@ -150,6 +181,23 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
         </section>
       )}
 
+      {canManage && pendingUpgrade && (
+        <section className="notice" role="alert" style={{ marginBottom: 16, padding: '16px 18px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
+          <div style={{ fontWeight: 700, color: '#0b192c', marginBottom: 6 }}>Confirmar upgrade de plano</div>
+          <div style={{ color: '#475569', lineHeight: 1.5 }}>
+            Mudar <strong>{pendingUpgrade.memberName}</strong> para o plano <strong>{pendingUpgrade.planName}</strong> — <strong>{money(pendingUpgrade.planValue)}/mês</strong>.
+            <br />
+            Você será direcionado ao Asaas para pagar a diferença proporcional até o próximo vencimento. O novo plano é liberado assim que o Asaas confirmar o pagamento.
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button type="button" className="primary inline-btn" disabled={Boolean(busy)} onClick={() => startUpgrade(pendingUpgrade)}>
+              {busy === 'upgrade:' + pendingUpgrade.userId ? <><Loader2 size={15} className="spin" /> Abrindo pagamento...</> : 'Ir para o pagamento'}
+            </button>
+            <button type="button" className="secondary inline-btn" disabled={Boolean(busy)} onClick={() => setPendingUpgrade(null)}>Cancelar</button>
+          </div>
+        </section>
+      )}
+
       <section className="panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div>
@@ -188,6 +236,8 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
             <tbody>
               {members.map(member => {
                 const active = member.plan_status === 'active' && !member.trial_ends_at
+                const lic = v2Licenses[member.user_id]
+                const canUpgrade = canManage && !hasPaid && v2Active && !v2?.cancelled && lic?.status === 'active' && PLANS[lic.plan_id]
                 return (
                   <tr key={member.user_id} style={{ borderTop: '1px solid #e2e8f0' }}>
                     <td style={{ padding: 10 }}><strong>{member.full_name || member.email}</strong><div className="muted" style={{ fontSize: 12 }}>{member.email}</div></td>
@@ -214,6 +264,23 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
                           {!active && <option value="">Sem licença</option>}
                           {Object.entries(PLANS).map(([id, plan]) => <option key={id} value={id}>{plan.name}</option>)}
                         </select>
+                      ) : canUpgrade ? (
+                        <div>
+                          <select
+                            value={lic.plan_id}
+                            onChange={e => {
+                              const nextPlanId = e.target.value
+                              if (!nextPlanId || nextPlanId === lic.plan_id) return
+                              const nextPlan = PLANS[nextPlanId]
+                              setPendingUpgrade({ userId: member.user_id, memberName: member.full_name || member.email || 'usuário', planId: nextPlanId, planName: nextPlan.name, planValue: nextPlan.value })
+                            }}
+                            disabled={Boolean(busy) || Boolean(pendingUpgrade)}
+                            style={{ minWidth: 170 }}
+                          >
+                            {Object.entries(PLANS).filter(([id, plan]) => id === lic.plan_id || plan.value > PLANS[lic.plan_id].value).map(([id, plan]) => <option key={id} value={id}>{plan.name}</option>)}
+                          </select>
+                          {lic.pending_plan_id && PLANS[lic.pending_plan_id] && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Aguardando pagamento do upgrade para {PLANS[lic.pending_plan_id].name}</div>}
+                        </div>
                       ) : <span>{active ? member.plan_name : 'Sem licença'}</span>}
                     </td>
                     <td style={{ padding: 10, textAlign: 'right' }}>{active ? money(member.price_monthly) : '—'}</td>

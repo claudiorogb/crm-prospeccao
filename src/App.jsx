@@ -247,7 +247,14 @@ async function softDeleteRow(table, id, organizationId, extra = {}) {
     }
   })
 
-  if (error) return { error }
+  if (error) {
+    // Mostra o motivo enviado pelo servidor (ex.: exclusão permitida só para administradores).
+    try {
+      const body = await error.context?.json?.()
+      if (body?.error) return { error: new Error(body.error) }
+    } catch {}
+    return { error }
+  }
   if (data?.error) return { error: new Error(data.error) }
   return { data, error: null }
 }

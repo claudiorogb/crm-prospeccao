@@ -361,7 +361,12 @@ function AuthScreen() {
           acceptedAt
         }
       })
-      if (error) throw error
+      if (error) {
+        let detail = ''
+        try { detail = (await error.context?.json?.())?.error || '' } catch {}
+        throw new Error(detail || error.message || 'Não foi possível concluir o cadastro.')
+      }
+      if (signupData?.error) throw new Error(signupData.error)
 
       localStorage.setItem('axiva_pending_trial_v1', JSON.stringify({
         organizationName, cnpj, termsVersion, privacyVersion, acceptedAt
@@ -7107,7 +7112,140 @@ function AdminQueue({ organizations }) {
 }
 
 
+// Administração › Usuários › Usuários excluídos: lista as contas arquivadas e permite reativar.
+// A decisão é feita no servidor (admin_manage_organizations › reactivate_user):
+//  - empresa ativa e pagamento confirmado: acesso restaurado + e-mail de redefinição de senha;
+//  - adicionado pelo administrador da empresa e pagamento pendente: o e-mail sai quando o Asaas confirmar;
+//  - sem empresa: e-mail liberado para novo cadastro e contratação, sem direito ao Trial de 30 dias.
+function AdminArchivedUsers({ onBack }) {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [reactivating, setReactivating] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+
+  async function loadArchived() {
+    setLoading(true)
+    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+      body: { action: 'list_archived_users' }
+    })
+    setLoading(false)
+    if (error || data?.error) {
+      setNotice(data?.error || error?.message || 'Não foi possível carregar os usuários excluídos.')
+      return
+    }
+    setUsers(data?.users || [])
+  }
+
+  useEffect(() => { loadArchived() }, [])
+
+  async function reactivate(item) {
+    if (reactivating) return
+    const label = item.full_name || item.email
+    if (!window.confirm(`Reativar o usuário ${label}?\n\nSe ele estiver ligado a uma empresa com pagamento confirmado, recebe o e-mail para redefinir a senha. Se ainda aguarda pagamento, o e-mail sai quando o pagamento for confirmado. Se não tiver empresa, o e-mail fica liberado para um novo cadastro, sem direito ao período de testes de 30 dias.`)) return
+    setReactivating(item.id)
+    setNotice('')
+    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+      body: { action: 'reactivate_user', user_id: item.id }
+    })
+    setReactivating('')
+    if (error || data?.error) {
+      let detail = data?.error || ''
+      if (!detail) { try { detail = (await error?.context?.json?.())?.error || '' } catch {} }
+      setNotice(detail || error?.message || 'Não foi possível reativar o usuário.')
+      return
+    }
+    const org = data?.organization_name ? ` na empresa ${data.organization_name}` : ''
+    let message = ''
+    if (data?.outcome === 'access_restored') {
+      message = `${label} foi reativado${org}. ${data?.email_sent ? `O e-mail para redefinir a senha foi enviado para ${data.email}.` : ''}`
+    } else if (data?.outcome === 'awaiting_payment') {
+      message = `${label} foi reativado${org}, mas o pagamento da licença ainda não foi confirmado. O e-mail para definir a senha será enviado automaticamente assim que o Asaas confirmar o pagamento.`
+    } else if (data?.outcome === 'email_released') {
+      message = `${label} não está ligado a nenhuma empresa. O e-mail ${data.email} foi liberado para um novo cadastro e para a contratação de um plano, sem direito ao período de testes de 30 dias.${data?.email_sent ? ' O aviso foi enviado para o usuário.' : ''}`
+    } else {
+      message = `${label} foi reativado.`
+    }
+    setNotice([message.trim(), data?.warning].filter(Boolean).join(' '))
+    await loadArchived()
+  }
+
+  const term = searchTerm.trim().toLowerCase()
+  const filtered = users.filter(item => !term || [item.email, item.full_name, item.organization_name]
+    .some(value => String(value || '').toLowerCase().includes(term)))
+
+  return (
+    <>
+      <AdminSectionHeader
+        title="Usuários excluídos"
+        description="Contas excluídas da Administração. Os dados continuam preservados e o usuário pode ser reativado."
+        actions={
+          <>
+            <button className="secondary inline-btn" onClick={onBack}>Voltar para Usuários</button>
+            <button className="secondary inline-btn" onClick={loadArchived} disabled={loading}>
+              <RefreshCw size={16}/> {loading ? 'Atualizando...' : 'Atualizar'}
+            </button>
+          </>
+        }
+      />
+
+      {notice && <div className="notice">{notice}</div>}
+
+      <section className="panel">
+        <div className="admin-user-toolbar">
+          <label>
+            Buscar usuário excluído
+            <input
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Nome, e-mail ou empresa"
+            />
+          </label>
+          <div className="admin-user-summary">
+            <strong>{users.length}</strong>
+            <span>usuários excluídos</span>
+          </div>
+        </div>
+
+        <div className="admin-list">
+          {filtered.map(item => (
+            <div className="admin-list-row" key={item.id}>
+              <div>
+                <strong>{item.full_name || 'Sem nome'}</strong>
+                <span>{item.email}</span>
+                <small>
+                  {item.organization_name ? `Última empresa: ${item.organization_name} · ` : 'Sem empresa · '}
+                  Excluído em {formatDateTime(item.deleted_at)}
+                </small>
+              </div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="primary mini"
+                  onClick={() => reactivate(item)}
+                  disabled={Boolean(reactivating)}
+                >
+                  {reactivating === item.id ? 'Reativando...' : 'Reativar usuário'}
+                </button>
+              </div>
+            </div>
+          ))}
+          {!loading && filtered.length === 0 && (
+            <div className="empty-admin-row">Nenhum usuário excluído.</div>
+          )}
+        </div>
+      </section>
+    </>
+  )
+}
+
 function AdminUsers({ organizations, userEmail }) {
+  const [showArchived, setShowArchived] = useState(false)
+  if (showArchived) return <AdminArchivedUsers onBack={() => setShowArchived(false)} />
+  return <AdminActiveUsers organizations={organizations} userEmail={userEmail} onShowArchived={() => setShowArchived(true)} />
+}
+
+function AdminActiveUsers({ organizations, userEmail, onShowArchived }) {
   const [users, setUsers] = useState([])
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
@@ -7260,9 +7398,12 @@ function AdminUsers({ organizations, userEmail }) {
         title="Usuários"
         description="Todos os acessos do CRM, perfil do sistema, organização vinculada e situação da conta."
         actions={
-          <button className="secondary inline-btn" onClick={loadUsers} disabled={loading}>
-            <RefreshCw size={16}/> {loading ? 'Atualizando...' : 'Atualizar'}
-          </button>
+          <>
+            <button className="secondary inline-btn" onClick={onShowArchived}>Usuários excluídos</button>
+            <button className="secondary inline-btn" onClick={loadUsers} disabled={loading}>
+              <RefreshCw size={16}/> {loading ? 'Atualizando...' : 'Atualizar'}
+            </button>
+          </>
         }
       />
 

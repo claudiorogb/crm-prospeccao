@@ -13,6 +13,44 @@ function json(data: unknown, status = 200) {
   });
 }
 
+const ARCHIVED_EMAIL_DOMAIN = "@arquivado.axiva.com.br";
+const escHtml = (v: unknown) => String(v ?? "").replace(/[<>&"']/g, "");
+
+async function sendResendEmail(to: string, subject: string, html: string, text: string) {
+  const key = Deno.env.get("RESEND_API_KEY") || "";
+  if (!key) return false;
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: "AXIVA CRM <no-reply@auth.axiva.com.br>", to: [to], subject, html, text }),
+  });
+  if (!r.ok) console.error("admin_manage_organizations resend error", (await r.text()).slice(0, 300));
+  return r.ok;
+}
+
+// Reativado com acesso liberado: e-mail para redefinir a senha.
+async function sendPasswordResetEmail(admin: any, email: string, name: string, orgName: string) {
+  const link = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: "https://crm.axiva.com.br/?reset=1" } });
+  const action = link.data?.properties?.action_link;
+  if (link.error || !action) return false;
+  return await sendResendEmail(
+    email,
+    "Seu acesso ao AXIVA CRM foi reativado",
+    "<div style='font-family:Arial,sans-serif;color:#0B192C;max-width:560px;margin:40px auto;line-height:1.5'><h2>Seu acesso ao AXIVA CRM foi reativado</h2><p>Olá, " + escHtml(name) + "!</p><p>Seu acesso à empresa <strong>" + escHtml(orgName) + "</strong> no AXIVA CRM foi reativado. Para entrar, crie uma nova senha pelo botão abaixo:</p><p><a href='" + action + "' style='display:inline-block;padding:12px 20px;background:#00A88F;color:#fff;text-decoration:none;border-radius:8px'>Redefinir senha e acessar</a></p></div>",
+    "Seu acesso ao AXIVA CRM foi reativado. Use o link recebido neste e-mail para redefinir sua senha.",
+  );
+}
+
+// Sem empresa: e-mail liberado para novo cadastro, sem direito ao Trial.
+async function sendEmailReleasedNotice(email: string, name: string) {
+  return await sendResendEmail(
+    email,
+    "Seu e-mail está liberado para um novo cadastro no AXIVA CRM",
+    "<div style='font-family:Arial,sans-serif;color:#0B192C;max-width:560px;margin:40px auto;line-height:1.5'><h2>Você está liberado para um novo cadastro</h2><p>Olá, " + escHtml(name) + "!</p><p>Seu e-mail foi liberado para realizar um novo cadastro no AXIVA CRM e seguir a jornada de contratação de um plano.</p><p>Importante: o período de testes gratuito de 30 dias não está mais disponível para este e-mail.</p><p><a href='https://axiva.com.br/crm/precos' style='display:inline-block;padding:12px 20px;background:#00A88F;color:#fff;text-decoration:none;border-radius:8px'>Ver planos e contratar</a></p></div>",
+    "Seu e-mail foi liberado para um novo cadastro no AXIVA CRM e para a contratação de um plano. O período de testes de 30 dias não está mais disponível para este e-mail. Planos: https://axiva.com.br/crm/precos",
+  );
+}
+
 async function listAllAuthUsers(admin: any) {
   const users: any[] = [];
   let page = 1;
@@ -120,6 +158,75 @@ Deno.serve(async (req) => {
             };
           }),
       });
+    }
+
+    if (action === "list_archived_users") {
+      const { data: archived, error } = await admin.from("profiles")
+        .select("id,full_name,deleted_at")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false });
+      if (error) throw error;
+      const ids = (archived || []).map((p: any) => p.id);
+      if (!ids.length) return json({ users: [] });
+      const authUsers = await listAllAuthUsers(admin);
+      const emailMap = new Map(authUsers.map((u: any) => [u.id, u.email || ""]));
+      const { data: memberships } = await admin.from("organization_members")
+        .select("user_id,created_at,deleted_at,organizations(name)")
+        .in("user_id", ids)
+        .order("created_at", { ascending: false });
+      const orgMap = new Map<string, string>();
+      for (const m of memberships || []) if (!orgMap.has(m.user_id)) orgMap.set(m.user_id, (m as any).organizations?.name || "");
+      return json({
+        users: (archived || [])
+          // Contas cujo e-mail já foi liberado para novo cadastro não voltam para a lista.
+          .filter((p: any) => emailMap.has(p.id) && !String(emailMap.get(p.id)).endsWith(ARCHIVED_EMAIL_DOMAIN))
+          .map((p: any) => ({
+            id: p.id,
+            email: emailMap.get(p.id) || null,
+            full_name: p.full_name || null,
+            deleted_at: p.deleted_at,
+            organization_name: orgMap.get(p.id) || null,
+          })),
+      });
+    }
+
+    if (action === "reactivate_user") {
+      const userId = String(body?.user_id || "");
+      if (!userId) return json({ error: "user_id is required" }, 400);
+      // A decisão (empresa, pagamento, liberação do e-mail) é feita no banco, com o usuário logado.
+      const asActor = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: result, error: rpcError } = await asActor.rpc("admin_reactivate_user", { target_user: userId });
+      if (rpcError) return json({ error: rpcError.message || "Não foi possível reativar o usuário." }, 400);
+
+      const outcome = String(result?.outcome || "");
+      const email = String(result?.email || "");
+      const name = String(result?.full_name || email);
+      let emailSent: boolean | null = null;
+      let warning = "";
+
+      if (outcome === "access_restored") {
+        emailSent = await sendPasswordResetEmail(admin, email, name, String(result?.organization_name || ""));
+        if (!emailSent) warning = "Acesso reativado, mas o e-mail de redefinição de senha não pôde ser enviado. Use o botão Redefinir senha na lista de usuários.";
+      } else if (outcome === "email_released") {
+        // A conta antiga continua arquivada; troca o e-mail dela para liberar o e-mail original para novo cadastro.
+        const archivedEmail = `excluido-${userId.slice(0, 8)}-${Date.now()}${ARCHIVED_EMAIL_DOMAIN}`;
+        const { error: renameError } = await admin.auth.admin.updateUserById(userId, { email: archivedEmail, email_confirm: true });
+        if (renameError) {
+          console.error("reactivate_user rename failed", renameError.message);
+          return json({ error: "Não foi possível liberar o e-mail para novo cadastro. Tente novamente." }, 500);
+        }
+        await admin.from("profiles").update({ updated_at: new Date().toISOString() }).eq("id", userId);
+        emailSent = await sendEmailReleasedNotice(email, name);
+        if (!emailSent) warning = "E-mail liberado, mas o aviso para o usuário não pôde ser enviado.";
+      }
+
+      if (result?.reactivation_id) {
+        await admin.from("axiva_user_reactivations").update({ email_sent: emailSent }).eq("id", result.reactivation_id);
+      }
+      return json({ ok: true, outcome, email, full_name: name, organization_name: result?.organization_name || null, email_sent: emailSent, warning });
     }
 
     if (action === "set_account_status") {

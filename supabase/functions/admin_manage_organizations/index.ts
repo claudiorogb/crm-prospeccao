@@ -41,6 +41,19 @@ async function sendPasswordResetEmail(admin: any, email: string, name: string, o
   );
 }
 
+// Dono da empresa sem pagamento confirmado: volta com acesso restrito e pode contratar um plano.
+async function sendRestrictedAccessEmail(admin: any, email: string, name: string, orgName: string) {
+  const link = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: "https://crm.axiva.com.br/?reset=1" } });
+  const action = link.data?.properties?.action_link;
+  if (link.error || !action) return false;
+  return await sendResendEmail(
+    email,
+    "Seu acesso ao AXIVA CRM foi reativado",
+    "<div style='font-family:Arial,sans-serif;color:#0B192C;max-width:560px;margin:40px auto;line-height:1.5'><h2>Seu acesso ao AXIVA CRM foi reativado</h2><p>Olá, " + escHtml(name) + "!</p><p>Seu acesso à empresa <strong>" + escHtml(orgName) + "</strong> no AXIVA CRM foi reativado com acesso restrito: você pode ver o Kanban e baixar os seus dados. Para voltar a usar todos os recursos, contrate um plano em <strong>Meu plano</strong> depois de entrar.</p><p>Para entrar, crie uma nova senha pelo botão abaixo:</p><p><a href='" + action + "' style='display:inline-block;padding:12px 20px;background:#00A88F;color:#fff;text-decoration:none;border-radius:8px'>Redefinir senha e acessar</a></p></div>",
+    "Seu acesso ao AXIVA CRM foi reativado com acesso restrito (ver o Kanban e baixar os dados). Para usar todos os recursos, contrate um plano em Meu plano. Use o link recebido neste e-mail para redefinir sua senha.",
+  );
+}
+
 // Sem empresa: e-mail liberado para novo cadastro, sem direito ao Trial.
 async function sendEmailReleasedNotice(email: string, name: string) {
   return await sendResendEmail(
@@ -210,6 +223,9 @@ Deno.serve(async (req) => {
       if (outcome === "access_restored") {
         emailSent = await sendPasswordResetEmail(admin, email, name, String(result?.organization_name || ""));
         if (!emailSent) warning = "Acesso reativado, mas o e-mail de redefinição de senha não pôde ser enviado. Use o botão Redefinir senha na lista de usuários.";
+      } else if (outcome === "restricted_access") {
+        emailSent = await sendRestrictedAccessEmail(admin, email, name, String(result?.organization_name || ""));
+        if (!emailSent) warning = "Acesso restrito reativado, mas o e-mail de redefinição de senha não pôde ser enviado. Use o botão Redefinir senha na lista de usuários.";
       } else if (outcome === "email_released") {
         // A conta antiga continua arquivada; troca o e-mail dela para liberar o e-mail original para novo cadastro.
         const archivedEmail = `excluido-${userId.slice(0, 8)}-${Date.now()}${ARCHIVED_EMAIL_DOMAIN}`;

@@ -7115,6 +7115,7 @@ function AdminQueue({ organizations }) {
 // Administração › Usuários › Usuários excluídos: lista as contas arquivadas e permite reativar.
 // A decisão é feita no servidor (admin_manage_organizations › reactivate_user):
 //  - empresa ativa e pagamento confirmado: acesso restaurado + e-mail de redefinição de senha;
+//  - dono da empresa sem pagamento confirmado: volta com acesso restrito (plano suspenso) + e-mail;
 //  - adicionado pelo administrador da empresa e pagamento pendente: o e-mail sai quando o Asaas confirmar;
 //  - sem empresa: e-mail liberado para novo cadastro e contratação, sem direito ao Trial de 30 dias.
 function AdminArchivedUsers({ onBack }) {
@@ -7142,7 +7143,7 @@ function AdminArchivedUsers({ onBack }) {
   async function reactivate(item) {
     if (reactivating) return
     const label = item.full_name || item.email
-    if (!window.confirm(`Reativar o usuário ${label}?\n\nSe ele estiver ligado a uma empresa com pagamento confirmado, recebe o e-mail para redefinir a senha. Se ainda aguarda pagamento, o e-mail sai quando o pagamento for confirmado. Se não tiver empresa, o e-mail fica liberado para um novo cadastro, sem direito ao período de testes de 30 dias.`)) return
+    if (!window.confirm(`Reativar o usuário ${label}?\n\nSe ele estiver ligado a uma empresa com pagamento confirmado, recebe o e-mail para redefinir a senha. Se for dono de uma empresa sem pagamento confirmado, volta com acesso restrito (ver o Kanban, baixar os dados e contratar um plano). Se ainda aguarda pagamento, o e-mail sai quando o pagamento for confirmado. Se não tiver empresa, o e-mail fica liberado para um novo cadastro, sem direito ao período de testes de 30 dias.`)) return
     setReactivating(item.id)
     setNotice('')
     const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
@@ -7159,6 +7160,8 @@ function AdminArchivedUsers({ onBack }) {
     let message = ''
     if (data?.outcome === 'access_restored') {
       message = `${label} foi reativado${org}. ${data?.email_sent ? `O e-mail para redefinir a senha foi enviado para ${data.email}.` : ''}`
+    } else if (data?.outcome === 'restricted_access') {
+      message = `${label} foi reativado${org} com acesso restrito, porque a empresa não tem pagamento confirmado: ele pode ver o Kanban, baixar os dados e contratar um plano em Meu plano. ${data?.email_sent ? `O e-mail para redefinir a senha foi enviado para ${data.email}.` : ''}`
     } else if (data?.outcome === 'awaiting_payment') {
       message = `${label} foi reativado${org}, mas o pagamento da licença ainda não foi confirmado. O e-mail para definir a senha será enviado automaticamente assim que o Asaas confirmar o pagamento.`
     } else if (data?.outcome === 'email_released') {

@@ -3052,10 +3052,26 @@ function Leads({ organization, settings, userEmail }) {
     return `${get('year')}-${get('month')}-${get('day')}`
   }
 
-  function openLeadEditor(lead) {
+  async function openLeadEditor(listLead) {
+    // Busca o cadastro atual do lead: a lista do Kanban não carrega CNPJ nem observações,
+    // e o formulário não pode começar vazio (salvar apagaria os dados já gravados).
+    setMessage('')
+    const { data: fresh, error: freshError } = await supabase
+      .from('leads')
+      .select('id,business_name,cnpj,contact_name,phone,website,email,address,city,state,target_segment_id,segment,last_contact_date,next_contact_date,capture_notes')
+      .eq('id', listLead.id)
+      .eq('organization_id', organization.id)
+      .maybeSingle()
+    if (freshError || !fresh) {
+      setMessage(freshError?.message || 'Não foi possível abrir o cadastro do lead.')
+      return
+    }
+    const lead = { ...listLead, ...fresh }
     setEditingLead(lead)
     setEditLeadForm({
       business_name: lead.business_name || '',
+      cnpj: lead.cnpj || '',
+      capture_notes: lead.capture_notes || '',
       contact_name: lead.contact_name || '',
       phone: lead.phone || '',
       website: lead.website || '',
@@ -3079,6 +3095,8 @@ function Leads({ organization, settings, userEmail }) {
       .from('leads')
       .update({
         business_name: editLeadForm.business_name.trim(),
+        cnpj: editLeadForm.cnpj.trim() || null,
+        capture_notes: editLeadForm.capture_notes.trim() || null,
         contact_name: editLeadForm.contact_name.trim() || null,
         phone: editLeadForm.phone.trim() || null,
         whatsapp_phone: editLeadForm.phone.trim() || null,
@@ -3617,20 +3635,24 @@ function Leads({ organization, settings, userEmail }) {
             <form className="campaign-form" onSubmit={saveLeadEditor}>
               <div className="field-grid">
                 <label>Empresa<input value={editLeadForm.business_name} onChange={e=>setEditLeadForm({...editLeadForm,business_name:e.target.value})} required /></label>
+                <label>CNPJ<input value={editLeadForm.cnpj} inputMode="numeric" maxLength={18} placeholder="00.000.000/0000-00" onChange={e=>setEditLeadForm({...editLeadForm,cnpj:e.target.value})} /></label>
+              </div>
+              <div className="field-grid">
                 <label>Nome do contato<input value={editLeadForm.contact_name} onChange={e=>setEditLeadForm({...editLeadForm,contact_name:e.target.value})} /></label>
-              </div>
-              <div className="field-grid">
                 <label>Telefone / WhatsApp<input value={editLeadForm.phone} onChange={e=>setEditLeadForm({...editLeadForm,phone:e.target.value})} /></label>
-                <label>E-mail<input type="email" value={editLeadForm.email} onChange={e=>setEditLeadForm({...editLeadForm,email:e.target.value})} /></label>
               </div>
               <div className="field-grid">
+                <label>E-mail<input type="email" value={editLeadForm.email} onChange={e=>setEditLeadForm({...editLeadForm,email:e.target.value})} /></label>
                 <label>Site<input value={editLeadForm.website} onChange={e=>setEditLeadForm({...editLeadForm,website:e.target.value})} /></label>
+              </div>
+              <div className="field-grid">
                 <label>Público-alvo
                   <select value={editLeadForm.target_segment_id} onChange={e=>setEditLeadForm({...editLeadForm,target_segment_id:e.target.value})}>
                     <option value="">Não informado</option>
                     {targetSegments.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </label>
+                <span />
               </div>
               <label>Endereço<input value={editLeadForm.address} onChange={e=>setEditLeadForm({...editLeadForm,address:e.target.value})} /></label>
               <div className="field-grid">
@@ -3641,6 +3663,15 @@ function Leads({ organization, settings, userEmail }) {
                 <label>Último contato<input type="date" value={editLeadForm.last_contact_date} onChange={e=>setEditLeadForm({...editLeadForm,last_contact_date:e.target.value})} /></label>
                 <label>Próximo contato<input type="date" value={editLeadForm.next_contact_date} onChange={e=>setEditLeadForm({...editLeadForm,next_contact_date:e.target.value})} /></label>
               </div>
+              <label>
+                Observações
+                <textarea
+                  className="client-textarea"
+                  value={editLeadForm.capture_notes}
+                  onChange={e=>setEditLeadForm({...editLeadForm,capture_notes:e.target.value})}
+                  placeholder="Informações livres sobre o lead: produto de interesse, contexto, detalhes do cadastro..."
+                />
+              </label>
               <div className="form-actions">
                 <button className="primary inline-btn" disabled={loading}>Salvar alterações</button>
                 <button type="button" className="secondary inline-btn" onClick={() => { setEditingLead(null); setEditLeadForm(null) }}>Cancelar</button>

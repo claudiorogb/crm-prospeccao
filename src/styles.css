@@ -4593,3 +4593,7 @@ button:not(:disabled):active,
   .dashboard-redesign-leads-grid-v75 { grid-template-columns:1fr; }
   .dashboard-redesign-leads-grid-v75 > div + div { border-left:0; border-top:1px solid #e2e8f0; }
 }
+
+/* Configurações do Teste › Usuários: nome e e-mail com a mesma largura. */
+.admin-member-form.demo-user-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+@media (max-width: 700px) { .admin-member-form.demo-user-form { grid-template-columns: 1fr; } }

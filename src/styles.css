@@ -3852,7 +3852,8 @@ button:not(:disabled):active,
   text-decoration:none;
 }
 .kanban-company-edit-v72:hover{text-decoration:underline;text-underline-offset:2px}
-.kanban-company-edit-v72:focus-visible{outline:2px solid rgba(15,118,110,.35);outline-offset:2px;border-radius: 6px;inset:0;z-index:1500;background:rgba(15,23,42,.36);display:flex;align-items:center;justify-content:center;padding:20px}
+.kanban-company-edit-v72:focus-visible{outline:2px solid rgba(15,118,110,.35);outline-offset:2px;border-radius: 6px}
+.lead-edit-overlay-v72{position:fixed;inset:0;z-index:1500;background:rgba(15,23,42,.36);display:flex;align-items:center;justify-content:center;padding:20px}
 .lead-edit-modal-v72{width:min(760px,96vw);max-height:90vh;overflow:auto}
 .lead-edit-head-v72{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
 .lead-edit-head-v72 h2{margin:4px 0 0}

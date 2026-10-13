@@ -85,7 +85,9 @@ async function saveOrganizationQuotas(button) {
 
 function bindOrganizationQuotaSave() {
   const button = [...document.querySelectorAll('button')]
-    .find(btn => btn.textContent?.replace(/\s+/g, ' ').trim().includes('Salvar limites'))
+    // Texto exato: "Salvar limites do Teste" (Configurações do Teste › Captação) e
+    // "Salvar limites da empresa" (IA) têm o próprio salvamento e não podem ser capturados aqui.
+    .find(btn => btn.textContent?.replace(/\s+/g, ' ').trim() === 'Salvar limites')
 
   if (!button || button.dataset.axivaVerifiedSave === 'true') return
   button.dataset.axivaVerifiedSave = 'true'

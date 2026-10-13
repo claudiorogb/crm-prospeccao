@@ -8,7 +8,7 @@ export default function AdminTestLimits({ organization }) {
   const load = useCallback(async () => {
     if (organization?.is_sandbox !== true) return
     const { data, error } = await supabase.from('organization_settings')
-      .select('lead_capture_weekly_limit,lead_capture_weekly_usage,google_places_leads_per_capture')
+      .select('lead_capture_weekly_limit,lead_capture_weekly_usage,google_places_leads_per_capture,google_places_calls_per_capture')
       .eq('organization_id', organization.id).single()
     if (error) setNotice(error.message)
     else setValues(data)
@@ -21,7 +21,9 @@ export default function AdminTestLimits({ organization }) {
     const { error } = await supabase.rpc('admin_set_lead_capture_settings', {
       p_organization_id: organization.id,
       p_weekly_limit: values.lead_capture_weekly_limit === '' ? null : Number(values.lead_capture_weekly_limit),
-      p_leads_per_capture: Number(values.google_places_leads_per_capture)
+      p_leads_per_capture: Number(values.google_places_leads_per_capture),
+      // Obrigatório na função do banco; mantém o valor já gravado (buscas no Google por captação).
+      p_calls_per_capture: Number(values.google_places_calls_per_capture || 2)
     })
     setBusy(false)
     setNotice(error ? error.message : 'Limites da empresa Teste atualizados.')

@@ -303,7 +303,8 @@ function isSupportQuestion(message: string) {
 
 function isSalesCoachingQuestion(message: string) {
   const value = normalize(message);
-  return /\b(spin|challenger|solution selling|aida|bant|laer|gpct|gpctba|objecao|objecoes|script|discurso|cold call|cold calling|roleplay|simulacao de vendas|mentor comercial|treinamento de vendas|treinar vendas|vender melhor|tecnica de vendas|tecnicas de vendas|abordagem comercial|melhorar abordagem|melhorar mensagem|revisar mensagem|revisar email|revisar e-mail|revisar whatsapp|qualificacao de lead|qualificar lead|fechamento de venda|negociacao comercial)\b/.test(value);
+  return /\b(spin|challenger|solution selling|aida|bant|laer|gpct|gpctba|objecao|objecoes|script|discurso|cold call|cold calling|roleplay|simulacao de vendas|mentor comercial|treinamento de vendas|treinar vendas|vender melhor|tecnica de vendas|tecnicas de vendas|abordagem comercial|melhorar abordagem|melhorar mensagem|revisar mensagem|revisar email|revisar e-mail|revisar whatsapp|qualificacao de lead|qualificar lead|fechamento de venda|negociacao comercial)\b/.test(value) ||
+    /\b(spin selling|challenger sale|venda consultiva|vendas consultivas|venda de solucoes|venda de solucao|icp|ideal customer profile|perfil de cliente ideal|cliente ideal|inbound|outbound|cadencia|cadencias|multicanal|e-?mails? com valor|referral|referrals|indicacao|indicacoes|pedir indicacao|abm|account based|account-based|role play|simular venda|simular uma venda|simular cliente|simular negociacao|conduzir negociacao|como negociar|mentoria comercial|mentoria de vendas|sales coach|prospeccao ativa|revisar follow-?up|melhorar follow-?up|melhorar script|melhorar e-?mail)\b/.test(value);
 }
 
 function buildInstructions(options: { support?: boolean; salesCoach?: boolean } = {}) {
@@ -447,8 +448,8 @@ Deno.serve(async (req) => {
   // devem ser respondidas diretamente, sem depender do contexto do CRM ou do modelo.
   const normalizedMessage = normalize(message);
   const asksAxivaContact =
-    /\b(telefone|tel|whatsapp|numero|contato|e-?mail|email)\b/.test(normalizedMessage) &&
-    /\b(axiva|suporte|atendimento|falar com|contato)\b/.test(normalizedMessage);
+    /\b(axiva|suporte|atendimento)\b/.test(normalizedMessage) &&
+    /\b(telefone|tel|whatsapp|numero|contato|e-?mail|email|falar|conversar)\b/.test(normalizedMessage);
 
   if (asksAxivaContact) {
     return json({
@@ -668,7 +669,12 @@ Deno.serve(async (req) => {
         model,
         instructions: buildInstructions({
           support: isSupportQuestion(message),
-          salesCoach: isSalesCoachingQuestion(message),
+          // Mantém o Sales Coach ativo durante um roleplay/mentoria já iniciado na conversa,
+          // a menos que a mensagem atual seja uma dúvida de suporte do sistema.
+          salesCoach: isSalesCoachingQuestion(message) || (
+            !isSupportQuestion(message) &&
+            history.some((item: any) => item.role === "user" && isSalesCoachingQuestion(item.content))
+          ),
         }),
         input,
         max_output_tokens: 2400,

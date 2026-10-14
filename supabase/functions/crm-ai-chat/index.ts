@@ -304,7 +304,24 @@ function isSupportQuestion(message: string) {
 function isSalesCoachingQuestion(message: string) {
   const value = normalize(message);
   return /\b(spin|challenger|solution selling|aida|bant|laer|gpct|gpctba|objecao|objecoes|script|discurso|cold call|cold calling|roleplay|simulacao de vendas|mentor comercial|treinamento de vendas|treinar vendas|vender melhor|tecnica de vendas|tecnicas de vendas|abordagem comercial|melhorar abordagem|melhorar mensagem|revisar mensagem|revisar email|revisar e-mail|revisar whatsapp|qualificacao de lead|qualificar lead|fechamento de venda|negociacao comercial)\b/.test(value) ||
-    /\b(spin selling|challenger sale|venda consultiva|vendas consultivas|venda de solucoes|venda de solucao|icp|ideal customer profile|perfil de cliente ideal|cliente ideal|inbound|outbound|cadencia|cadencias|multicanal|e-?mails? com valor|referral|referrals|indicacao|indicacoes|pedir indicacao|abm|account based|account-based|role play|simular venda|simular uma venda|simular cliente|simular negociacao|conduzir negociacao|como negociar|mentoria comercial|mentoria de vendas|sales coach|prospeccao ativa|revisar follow-?up|melhorar follow-?up|melhorar script|melhorar e-?mail)\b/.test(value);
+    /\b(spin selling|challenger sale|venda consultiva|vendas consultivas|venda de solucoes|venda de solucao|icp|ideal customer profile|perfil de cliente ideal|cliente ideal|inbound|outbound|cadencia|cadencias|multicanal|e-?mails? com valor|referral|referrals|indicacao|indicacoes|pedir indicacao|abm|account based|account-based|role play|simular venda|simular uma venda|simular cliente|simular negociacao|conduzir negociacao|como negociar|mentoria comercial|mentoria de vendas|sales coach|prospeccao ativa|revisar follow-?up|melhorar follow-?up|melhorar script|melhorar e-?mail)\b/.test(value) ||
+    /\b(responder|respondo|responda|resposta|escrever|escreva|escrevo|redigir|redija|reescrever|reescreva|revise|revisar)\b.*\b(e-?mail|email|whatsapp|whats|zap|mensagem|cliente|lead|prospect|objecao)\b/.test(value);
+}
+
+// Pedido explícito para falar com a AXIVA / suporte (resposta direta com os canais oficiais).
+// Pedidos de ajuda para escrever ou responder e-mail/WhatsApp a clientes NÃO são pedidos de contato.
+function isAxivaContactRequest(value: string) {
+  const writingHelp = /\b(responder|respondo|responda|resposta|respostas|escrever|escrevo|redigir|redija|revisar|revise|melhorar|melhore|reescrever|reescreva|criar uma mensagem|crie uma mensagem|modelo de mensagem|script|abordagem)\b/.test(value);
+  if (writingHelp) return false;
+
+  const target = "(a |o |com a |com o |com |da |do |de )?(axiva|suporte|atendimento|equipe axiva|equipe da axiva|time da axiva)";
+  const channel = "(telefone|tel|fone|whatsapp|whats|zap|numero|e-?mail|email|contato|contatos|canal|canais)";
+
+  return new RegExp(`\\b(falar|conversar|entrar em contato|contatar|chamar|ligar)\\s+${target}\\b`).test(value) ||
+    new RegExp(`\\b${channel}\\s+(d[aoe]s?|para|pra)\\s+(a |o )?(axiva|suporte|atendimento)\\b`).test(value) ||
+    new RegExp(`\\b(axiva|suporte)\\b.*\\b${channel}\\b`).test(value) &&
+      /\b(qual|quais|como|onde|passa|passe|me (passa|passe|da|de|informe|envia|envie)|preciso|quero)\b/.test(value) ||
+    /\b(atendimento humano|falar com (um |uma )?(humano|atendente|pessoa)|abrir (um )?chamado|preciso de suporte|quero suporte|acionar o suporte)\b/.test(value);
 }
 
 function buildInstructions(options: { support?: boolean; salesCoach?: boolean } = {}) {
@@ -447,9 +464,7 @@ Deno.serve(async (req) => {
   // Contato oficial da AXIVA: perguntas sobre telefone, WhatsApp, e-mail ou suporte
   // devem ser respondidas diretamente, sem depender do contexto do CRM ou do modelo.
   const normalizedMessage = normalize(message);
-  const asksAxivaContact =
-    /\b(axiva|suporte|atendimento)\b/.test(normalizedMessage) &&
-    /\b(telefone|tel|whatsapp|numero|contato|e-?mail|email|falar|conversar)\b/.test(normalizedMessage);
+  const asksAxivaContact = isAxivaContactRequest(normalizedMessage);
 
   if (asksAxivaContact) {
     return json({

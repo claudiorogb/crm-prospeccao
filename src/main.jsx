@@ -34,11 +34,18 @@ async function syncOrganizationRole(session) {
   document.body.dataset.orgRole = data?.role || 'restricted'
 }
 
+// Google Analytics só nas telas públicas (login e cadastro); nunca com usuário logado.
+function syncAnalytics(session) {
+  window.AxivaAnalytics?.setAllowed(!session?.user)
+}
+
 supabase.auth.getSession().then(({ data }) => {
   syncOrganizationRole(data.session)
+  syncAnalytics(data.session)
 })
 
 supabase.auth.onAuthStateChange((_event, session) => {
+  syncAnalytics(session)
   setTimeout(() => syncOrganizationRole(session), 0)
 })
 

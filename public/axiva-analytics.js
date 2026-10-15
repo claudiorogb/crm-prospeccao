@@ -102,7 +102,7 @@
     banner.setAttribute('aria-live', 'polite');
     banner.setAttribute('aria-label', 'Aviso de cookies');
     banner.innerHTML =
-      '<p>Usamos cookies do Google Analytics para entender como o site \u00e9 usado e melhor\u00e1-lo. ' +
+      '<p>Usamos cookies para entender como o site \u00e9 usado e melhor\u00e1-lo. ' +
       'Voc\u00ea pode aceitar ou recusar. <a href="https://axiva.com.br/privacidade#cookies">Pol\u00edtica de Privacidade</a></p>' +
       '<div class="axc-btns"><button type="button" class="axc-no">Recusar</button>' +
       '<button type="button" class="axc-yes">Aceitar</button></div>';

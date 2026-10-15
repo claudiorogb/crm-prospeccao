@@ -3,6 +3,8 @@
  *
  * - Nada do Google é carregado antes de o visitante clicar em "Aceitar".
  * - A escolha fica num cookie de 1 ano em .axiva.com.br (vale para o site e para o CRM).
+ * - Qualquer elemento com o atributo data-cookie-preferences reabre o aviso. Fora do modo
+ *   manual, o link "Preferências de cookies" é colocado sozinho no rodapé da página.
  * - Usar só em páginas públicas. Com data-manual="true", a página decide quando
  *   pode medir chamando window.AxivaAnalytics.setAllowed(true | false).
  */
@@ -22,10 +24,24 @@
     return m ? m[1] : null;
   }
 
+  function cookieDomain() {
+    return /(^|\.)axiva\.com\.br$/.test(location.hostname) ? '; domain=.axiva.com.br' : '';
+  }
+
   function saveChoice(value) {
-    var host = location.hostname;
-    var domain = /(^|\.)axiva\.com\.br$/.test(host) ? '; domain=.axiva.com.br' : '';
-    document.cookie = COOKIE + '=' + value + '; max-age=31536000; path=/; SameSite=Lax' + domain + (location.protocol === 'https:' ? '; Secure' : '');
+    document.cookie = COOKIE + '=' + value + '; max-age=31536000; path=/; SameSite=Lax' + cookieDomain() + (location.protocol === 'https:' ? '; Secure' : '');
+  }
+
+  // Ao recusar depois de ter aceitado: para o envio e apaga os cookies do Google Analytics.
+  function stopGA() {
+    window['ga-disable-' + GA_ID] = true;
+    document.cookie.split('; ').forEach(function (c) {
+      var name = c.split('=')[0];
+      if (name === '_ga' || name.indexOf('_ga_') === 0) {
+        document.cookie = name + '=; max-age=0; path=/' + cookieDomain();
+        document.cookie = name + '=; max-age=0; path=/';
+      }
+    });
   }
 
   // Endereço enviado ao Google sem "#..." e sem o parâmetro email (dado pessoal).
@@ -59,6 +75,7 @@
     saveChoice(value);
     hideBanner();
     if (value === 'accepted' && allowed) loadGA();
+    if (value === 'declined') stopGA();
   }
 
   function showBanner() {
@@ -73,7 +90,7 @@
     text.style.cssText = 'margin:0;flex:1 1 320px;';
     text.appendChild(document.createTextNode('Usamos cookies do Google Analytics para entender, de forma estat\u00edstica, como o site \u00e9 usado. Voc\u00ea aceita? '));
     var link = document.createElement('a');
-    link.href = 'https://axiva.com.br/privacidade';
+    link.href = 'https://axiva.com.br/privacidade#cookies';
     link.textContent = 'Pol\u00edtica de Privacidade';
     link.style.cssText = 'color:#7fe3d3;text-decoration:underline;';
     text.appendChild(link);
@@ -111,6 +128,54 @@
     }
   }
 
-  window.AxivaAnalytics = { setAllowed: setAllowed };
-  if (!manual) setAllowed(true);
+  function openPreferences() {
+    if (!allowed) return;
+    hideBanner();
+    showBanner();
+  }
+
+  function addFooterLink() {
+    var footers = document.querySelectorAll('footer');
+    var footer = footers[footers.length - 1];
+    if (footer && footer.querySelector('[data-cookie-preferences]')) return;
+    var link = document.createElement('a');
+    link.href = '#';
+    link.setAttribute('data-cookie-preferences', '');
+    link.textContent = 'Prefer\u00eancias de cookies';
+    var lastLink = footer && footer.querySelectorAll('a');
+    lastLink = lastLink && lastLink[lastLink.length - 1];
+    if (lastLink && lastLink.parentNode.tagName === 'LI') {
+      // Rodapé em lista: novo item com o mesmo estilo do anterior.
+      var item = document.createElement('li');
+      item.className = lastLink.parentNode.className;
+      link.className = lastLink.className;
+      item.appendChild(link);
+      lastLink.parentNode.parentNode.insertBefore(item, lastLink.parentNode.nextSibling);
+    } else if (lastLink) {
+      // Mesmo lugar e mesmo estilo dos outros links do rodapé.
+      link.className = lastLink.className;
+      lastLink.parentNode.insertBefore(link, lastLink.nextSibling);
+      lastLink.parentNode.insertBefore(document.createTextNode(' '), link);
+    } else {
+      var box = document.createElement('div');
+      box.style.cssText = 'text-align:center;padding:16px;font-size:13px;';
+      link.style.cssText = 'color:inherit;opacity:.75;text-decoration:underline;';
+      box.appendChild(link);
+      (footer || document.body).appendChild(box);
+    }
+  }
+
+  document.addEventListener('click', function (event) {
+    var el = event.target && event.target.closest && event.target.closest('[data-cookie-preferences]');
+    if (!el) return;
+    event.preventDefault();
+    openPreferences();
+  });
+
+  window.AxivaAnalytics = { setAllowed: setAllowed, openPreferences: openPreferences };
+  if (!manual) {
+    setAllowed(true);
+    if (document.body) addFooterLink();
+    else document.addEventListener('DOMContentLoaded', addFooterLink);
+  }
 })();

@@ -538,11 +538,6 @@ function AuthScreen() {
           {mode === 'forgot' && <button type="button" className="secondary full" onClick={() => { setMode('login'); setMessage('') }}>Voltar para entrar</button>}
         </form>
         {message && <div className="notice">{message}</div>}
-        <p className="muted" style={{ marginTop: 18, fontSize: 12, textAlign: 'center' }}>
-          <a href="https://axiva.com.br/privacidade#cookies" target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>Política de Privacidade</a>
-          {' · '}
-          <a href="#" data-cookie-preferences style={{ color: 'inherit' }}>Preferências de cookies</a>
-        </p>
       </section>
     </main>
   )

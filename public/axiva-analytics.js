@@ -78,37 +78,36 @@
     if (value === 'declined') stopGA();
   }
 
+  // Mesmo texto, botões e visual do aviso do site axiva.com.br.
   function showBanner() {
     if (banner || !document.body) return;
-    banner = document.createElement('div');
-    banner.setAttribute('role', 'dialog');
-    banner.setAttribute('aria-label', 'Aviso de cookies');
-    banner.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;max-width:720px;margin:0 auto;' +
-      'background:#0B192C;color:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 8px 30px rgba(0,0,0,.25);' +
-      'font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;display:flex;flex-wrap:wrap;gap:12px;align-items:center;';
-    var text = document.createElement('p');
-    text.style.cssText = 'margin:0;flex:1 1 320px;';
-    text.appendChild(document.createTextNode('Usamos cookies do Google Analytics para entender, de forma estat\u00edstica, como o site \u00e9 usado. Voc\u00ea aceita? '));
-    var link = document.createElement('a');
-    link.href = 'https://axiva.com.br/privacidade#cookies';
-    link.textContent = 'Pol\u00edtica de Privacidade';
-    link.style.cssText = 'color:#7fe3d3;text-decoration:underline;';
-    text.appendChild(link);
-    var actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;gap:8px;';
-    function button(label, value, primary) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = label;
-      b.style.cssText = 'cursor:pointer;border-radius:8px;padding:8px 16px;font:600 14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;' +
-        (primary ? 'background:#00A88F;color:#fff;border:1px solid #00A88F;' : 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);');
-      b.addEventListener('click', function () { choose(value); });
-      return b;
+    if (!document.getElementById('axiva-cookie-css')) {
+      var css = document.createElement('style');
+      css.id = 'axiva-cookie-css';
+      css.textContent =
+        '#axiva-cookie{position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;max-width:560px;margin:0 auto;' +
+        'background:#111827;color:#f9fafb;border-radius:12px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.25);' +
+        'font:14px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;display:flex;flex-wrap:wrap;gap:12px;align-items:center}' +
+        '#axiva-cookie p{margin:0;flex:1 1 260px}' +
+        '#axiva-cookie a{color:#93c5fd;text-decoration:underline}' +
+        '#axiva-cookie .axc-btns{display:flex;gap:8px;flex:0 0 auto}' +
+        '#axiva-cookie button{font:inherit;font-weight:600;border-radius:8px;padding:8px 16px;cursor:pointer;border:1px solid #4b5563}' +
+        '#axiva-cookie .axc-no{background:transparent;color:#f9fafb}' +
+        '#axiva-cookie .axc-yes{background:#f9fafb;color:#111827;border-color:#f9fafb}';
+      document.head.appendChild(css);
     }
-    actions.appendChild(button('Recusar', 'declined', false));
-    actions.appendChild(button('Aceitar', 'accepted', true));
-    banner.appendChild(text);
-    banner.appendChild(actions);
+    banner = document.createElement('div');
+    banner.id = 'axiva-cookie';
+    banner.setAttribute('role', 'dialog');
+    banner.setAttribute('aria-live', 'polite');
+    banner.setAttribute('aria-label', 'Aviso de cookies');
+    banner.innerHTML =
+      '<p>Usamos cookies do Google Analytics para entender como o site \u00e9 usado e melhor\u00e1-lo. ' +
+      'Voc\u00ea pode aceitar ou recusar. <a href="https://axiva.com.br/privacidade#cookies">Pol\u00edtica de Privacidade</a></p>' +
+      '<div class="axc-btns"><button type="button" class="axc-no">Recusar</button>' +
+      '<button type="button" class="axc-yes">Aceitar</button></div>';
+    banner.querySelector('.axc-no').addEventListener('click', function () { choose('declined'); });
+    banner.querySelector('.axc-yes').addEventListener('click', function () { choose('accepted'); });
     document.body.appendChild(banner);
   }
 

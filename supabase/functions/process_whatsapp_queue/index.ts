@@ -178,7 +178,7 @@ async function releaseLeadFromQueueIfNoActiveMessage(admin: any, organizationId:
 
   await admin
     .from("leads")
-    .update({ status: "new", updated_at: new Date().toISOString() })
+    .update({ status: "captured_pending", updated_at: new Date().toISOString() })
     .eq("id", leadId)
     .eq("organization_id", organizationId)
     .eq("status", "queued");

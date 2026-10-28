@@ -34,3 +34,14 @@ test('numeração de páginas mostra primeira, última e vizinhas', async () => 
   assert.deepEqual(visiblePageNumbers(1, 3), [1, 2, 3])
   assert.deepEqual(visiblePageNumbers(5, 10), [1, 'gap-4', 4, 5, 6, 'gap-10', 10])
 })
+
+test('reenvio usa a mensagem escolhida e exige escolha antes de enviar', () => {
+  const fn = readFileSync(new URL('../supabase/functions/enqueue_whatsapp_messages/index.ts', import.meta.url), 'utf8')
+  assert.match(fn, /const template = overrideTemplate \|\| templateByTarget\.get\(lead\.target_segment_id\)/)
+  assert.match(fn, /\.eq\("organization_id", organizationId\)\s*\.eq\("is_active", true\)\s*\.in\("target_segment_id", targetIds\)/)
+  assert.match(sending, /enqueueInChunks\(resendIds, \{ template_target_segment_id: resendTargetSegmentId \}\)/)
+  assert.match(sending, /disabled=\{!selected\.size \|\| loading \|\| resendMissingMessage\}/)
+  assert.match(sending, /Este cliente já recebeu esta mensagem/)
+  assert.match(sending, /recebem a mensagem escolhida abaixo, com as mesmas regras, janela e intervalo/)
+  assert.equal((sending.match(/functions\.invoke\('enqueue_whatsapp_messages'/g) || []).length, 1)
+})

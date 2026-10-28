@@ -21,9 +21,13 @@ import {
   withSelection
 } from './paginated-selection'
 import {
+  chosenTemplateAvailable,
   initialTemplateIdForCampaign,
+  manualRecipientProblem,
+  planChosenTemplateSend,
   resendSelectionProblem,
   templateLabel,
+  templateSelectionProblem,
   templatesForCampaign
 } from './resend-templates.js'
 import AdminTestUsers from './admin-test-users'
@@ -4526,7 +4530,7 @@ function Messages({ organization, userEmail }) {
 
 
 const SENDING_LIST_STATUSES = ['new','queued','captured_pending']
-const SENDING_LEAD_FIELDS = 'id,business_name,phone,website,email,status,target_segment_id,target_segments(name),campaigns(name),city,state'
+const SENDING_LEAD_FIELDS = 'id,business_name,phone,website,email,status,target_segment_id,send_template_id,target_segments(name),campaigns(name),city,state'
 const CONTACTED_LEAD_FIELDS = `${SENDING_LEAD_FIELDS},created_at,updated_at`
 const ENQUEUE_MAX_LEADS_PER_CALL = 1000
 
@@ -4563,7 +4567,8 @@ function MessageSending({ organization, settings, userEmail }) {
     contact_name: '',
     phone: '',
     business_name: '',
-    target_segment_id: ''
+    target_segment_id: '',
+    template_id: ''
   })
   const [showFailures, setShowFailures] = useState(false)
   const [failurePage, setFailurePage] = useState(1)
@@ -5124,6 +5129,18 @@ function MessageSending({ organization, settings, userEmail }) {
     ).values()
   )
 
+  // Mesmas regras do REENVIO: lista as mensagens da campanha e escolhe sozinha quando só há uma.
+  const manualTemplateOptions = templatesForCampaign(templates, manualRecipient.target_segment_id)
+  const manualTemplateProblem = templateSelectionProblem(templates, manualRecipient.target_segment_id, manualRecipient.template_id, '')
+
+  function chooseManualCampaign(targetSegmentId) {
+    setManualRecipient(current => ({
+      ...current,
+      target_segment_id: targetSegmentId,
+      template_id: initialTemplateIdForCampaign(templates, targetSegmentId)
+    }))
+  }
+
   async function addManualRecipient(event) {
     event.preventDefault()
     if (loading) return
@@ -5132,9 +5149,11 @@ function MessageSending({ organization, settings, userEmail }) {
     const businessName = manualRecipient.business_name.trim()
     const phone = manualRecipient.phone.trim()
     const targetSegmentId = manualRecipient.target_segment_id
+    const templateId = manualRecipient.template_id
 
-    if (!contactName || !businessName || !phone || !targetSegmentId) {
-      setMessage('Preencha nome, telefone, empresa e mensagem para adicionar o destinatário.')
+    const formProblem = manualRecipientProblem(manualRecipient, templates)
+    if (formProblem) {
+      setMessage(formProblem)
       return
     }
 
@@ -5156,6 +5175,7 @@ function MessageSending({ organization, settings, userEmail }) {
           contact_name: contactName,
           phone,
           target_segment_id: targetSegmentId,
+          send_template_id: templateId,
           segment: selectedMessage?.label || 'Cadastro manual',
           status: 'new',
           source: 'manual'
@@ -5170,13 +5190,15 @@ function MessageSending({ organization, settings, userEmail }) {
         contact_name: '',
         phone: '',
         business_name: '',
-        target_segment_id: ''
+        target_segment_id: '',
+        template_id: ''
       })
       setSelected(previous => withSelection(previous, [{
         id: data.id,
         business_name: businessName,
         phone,
         target_segment_id: targetSegmentId,
+        send_template_id: templateId,
         status: 'new'
       }], true))
       setMessage('Destinatário adicionado e selecionado para envio.')
@@ -5189,7 +5211,7 @@ function MessageSending({ organization, settings, userEmail }) {
   }
 
   // Chama o servidor em blocos de até 1000 leads (limite da função).
-  async function enqueueInChunks(ids, extraBody = {}) {
+  async function enqueueInChunks(ids, extraBody = {}, outdatedServerText = 'O servidor ainda não está atualizado para usar a mensagem escolhida no reenvio. O reenvio foi cancelado e nada foi enviado.') {
     let data = null
     let error = null
     let queued = 0
@@ -5207,7 +5229,7 @@ function MessageSending({ organization, settings, userEmail }) {
         if (response.data?.batch_id) {
           await supabase.rpc('control_whatsapp_batch', { p_batch_id: response.data.batch_id, p_action: 'cancel' })
         }
-        error = new Error('O servidor ainda não está atualizado para usar a mensagem escolhida no reenvio. O reenvio foi cancelado e nada foi enviado.')
+        error = new Error(outdatedServerText)
         break
       }
       queued += Number(response.data?.queued || 0)
@@ -5237,9 +5259,22 @@ function MessageSending({ organization, settings, userEmail }) {
       Boolean(normalizeWhatsAppNumber(lead.phone)) &&
       (isResend(lead)
         ? resendHasTemplate
-        : templates.some(template => template.target_segment_id === lead.target_segment_id))
+        // Mensagem escolhida no cadastro manual: a conferência é feita em planChosenTemplateSend (bloqueia se indisponível).
+        : lead.send_template_id
+          ? true
+          : templates.some(template => template.target_segment_id === lead.target_segment_id))
 
-    const normalIds = selectedLeads.filter(lead => !isResend(lead) && canQueue(lead)).map(lead => lead.id)
+    // Leads da lista: sem mensagem escolhida, o servidor usa a da campanha (como sempre);
+    // com mensagem escolhida no cadastro manual (send_template_id), vão agrupados por mensagem.
+    const normalLeads = selectedLeads.filter(lead => !isResend(lead) && canQueue(lead))
+    const normalPlan = planChosenTemplateSend(normalLeads, templates)
+    if (normalPlan.unavailable.length) {
+      const names = normalPlan.unavailable.slice(0, 5).map(lead => lead.business_name).join(', ')
+      const more = normalPlan.unavailable.length > 5 ? ` e mais ${normalPlan.unavailable.length - 5}` : ''
+      setMessage(`Nada foi enviado. A mensagem escolhida para ${names}${more} foi excluída ou desativada. Reative a mensagem em Mensagens ou tire esse(s) lead(s) da seleção.`)
+      return
+    }
+    const normalIds = normalLeads.map(lead => lead.id)
     const resendIds = selectedLeads.filter(lead => isResend(lead) && canQueue(lead)).map(lead => lead.id)
     const eligibleCount = normalIds.length + resendIds.length
 
@@ -5256,37 +5291,44 @@ function MessageSending({ organization, settings, userEmail }) {
 
     setLoading(true)
     setMessage('')
-    // Envio normal usa a mensagem do público-alvo; o reenvio usa a mensagem escolhida no bloco REENVIO.
+    // Ordem: envio normal (mensagem da campanha), envios com mensagem escolhida no cadastro manual e, por último, o reenvio.
+    const jobs = [
+      { ids: normalPlan.campaignLeadIds, body: {} },
+      ...normalPlan.templateGroups.map(group => ({
+        ids: group.ids,
+        body: { template_target_segment_id: group.targetSegmentId, template_id: group.templateId },
+        outdatedServerText: 'O servidor não confirmou a mensagem escolhida para o destinatário manual. Esse envio foi cancelado e nada foi enviado com outra mensagem.'
+      })),
+      { ids: resendIds, body: { template_target_segment_id: resendTargetSegmentId, template_id: resendTemplateId } }
+    ].filter(job => job.ids.length)
+
     let data = null
     let error = null
     let queuedSoFar = 0
-    if (normalIds.length) {
-      const result = await enqueueInChunks(normalIds)
-      data = result.data
-      error = result.error
+    const doneIds = []
+    for (const job of jobs) {
+      const result = await enqueueInChunks(job.ids, job.body, job.outdatedServerText)
       queuedSoFar += result.queued
-    }
-    const normalQueued = queuedSoFar
-    if (!error && !data?.error && resendIds.length) {
-      const result = await enqueueInChunks(resendIds, {
-        template_target_segment_id: resendTargetSegmentId,
-        template_id: resendTemplateId
-      })
-      error = result.error
-      queuedSoFar += result.queued
-      data = result.error || result.data?.error
-        ? result.data
-        : { ...result.data, queued: queuedSoFar, first_scheduled_for: data?.first_scheduled_for || result.data?.first_scheduled_for }
+      if (result.error || result.data?.error) {
+        error = result.error
+        data = result.data
+        // Se parte deste grupo já entrou na fila, ele também sai da seleção.
+        if (result.queued > 0) doneIds.push(...job.ids)
+        break
+      }
+      doneIds.push(...job.ids)
+      data = {
+        ...result.data,
+        queued: queuedSoFar,
+        first_scheduled_for: data?.first_scheduled_for || result.data?.first_scheduled_for
+      }
     }
 
     if (error || data?.error) {
       const partial = queuedSoFar > 0 ? ` ${queuedSoFar} mensagem(ns) já tinham sido colocadas na fila antes do erro.` : ''
       setMessage(`${data?.error || error?.message || 'Não foi possível criar a fila de mensagens.'}${partial}`)
       if (queuedSoFar > 0) {
-        const resendStarted = queuedSoFar > normalQueued
-        setSelected(previous => resendStarted
-          ? new Map()
-          : withSelection(previous, normalIds.map(id => ({ id })), false))
+        setSelected(previous => withSelection(previous, doneIds.map(id => ({ id })), false))
         await loadData()
       }
     } else {
@@ -5631,7 +5673,7 @@ function MessageSending({ organization, settings, userEmail }) {
             <p className="muted">Inclua um número que não esteja na lista atual e selecione qual mensagem será usada no envio.</p>
           </div>
         </div>
-        <form className="manual-recipient-form-v73" onSubmit={addManualRecipient}>
+        <form className="manual-recipient-form-v73 manual-recipient-form-v108" onSubmit={addManualRecipient} noValidate>
           <label>Nome
             <input
               value={manualRecipient.contact_name}
@@ -5656,10 +5698,10 @@ function MessageSending({ organization, settings, userEmail }) {
               required
             />
           </label>
-          <label>Mensagem
+          <label>Campanha
             <select
               value={manualRecipient.target_segment_id}
-              onChange={event => setManualRecipient(current => ({ ...current, target_segment_id: event.target.value }))}
+              onChange={event => chooseManualCampaign(event.target.value)}
               required
             >
               <option value="">Selecione</option>
@@ -5668,10 +5710,26 @@ function MessageSending({ organization, settings, userEmail }) {
               ))}
             </select>
           </label>
+          <label>Mensagem
+            <select
+              value={manualRecipient.template_id}
+              onChange={event => setManualRecipient(current => ({ ...current, template_id: event.target.value }))}
+              disabled={!manualRecipient.target_segment_id}
+              required
+            >
+              <option value="">Selecione</option>
+              {manualTemplateOptions.map(template => (
+                <option key={template.id} value={template.id}>{templateLabel(template)}</option>
+              ))}
+            </select>
+          </label>
           <button type="submit" className="primary inline-btn" disabled={loading || manualMessageOptions.length === 0}>
             <Plus size={16}/>{loading ? 'Adicionando...' : 'Adicionar destinatário'}
           </button>
         </form>
+        {manualTemplateProblem && (
+          <p className="resend-warning-v106 manual-template-warning-v108">{manualTemplateProblem}</p>
+        )}
         {manualMessageOptions.length === 0 && (
           <p className="muted">Cadastre uma mensagem para um público-alvo antes de adicionar destinatários manuais.</p>
         )}
@@ -5849,7 +5907,9 @@ function MessageSending({ organization, settings, userEmail }) {
           <article className="panel empty-state"><Send size={30}/><h2>Nenhum lead disponível para envio</h2></article>
         ) : sendingLeads.map(lead => {
           const hasPhone = Boolean(normalizeWhatsAppNumber(lead.phone))
-          const hasTemplate = templates.some(template => template.target_segment_id === lead.target_segment_id)
+          const hasTemplate = lead.send_template_id
+            ? chosenTemplateAvailable(templates, lead)
+            : templates.some(template => template.target_segment_id === lead.target_segment_id)
           const isQueued = lead.status === 'queued' || queuedLeadIds.has(lead.id)
           const canSend = !isQueued && hasPhone && hasTemplate
           const canSelect = !isQueued

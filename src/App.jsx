@@ -20,6 +20,12 @@ import {
   refreshSelection,
   withSelection
 } from './paginated-selection'
+import {
+  initialTemplateIdForCampaign,
+  resendSelectionProblem,
+  templateLabel,
+  templatesForCampaign
+} from './resend-templates.js'
 import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, EmailProspecting, AdminEmailMarketing } from './email-marketing'
@@ -4547,8 +4553,9 @@ function MessageSending({ organization, settings, userEmail }) {
   // Seleção guardada por id (Map id -> lead) para sobreviver à troca de página.
   const [selected, setSelected] = useState(new Map())
   const selectedCountRef = useRef(0)
-  // Mensagem escolhida para o reenvio (id do público-alvo da mensagem, igual ao envio manual).
+  // Reenvio: campanha (público-alvo, igual ao envio manual) e a mensagem exata dessa campanha.
   const [resendTargetSegmentId, setResendTargetSegmentId] = useState('')
+  const [resendTemplateId, setResendTemplateId] = useState('')
   const [resendAlreadyReceivedIds, setResendAlreadyReceivedIds] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -4621,7 +4628,7 @@ function MessageSending({ organization, settings, userEmail }) {
         .order('updated_at', { ascending: false }),
       supabase
         .from('message_templates')
-        .select('id,target_segment_id,name,is_default_for_target,target_segments(name)')
+        .select('id,target_segment_id,name,body,is_active,is_default_for_target,created_at,deleted_at,target_segments(name)')
         .eq('organization_id', organization.id)
         .eq('is_active', true),
       supabase
@@ -4733,9 +4740,8 @@ function MessageSending({ organization, settings, userEmail }) {
   useEffect(() => {
     let active = true
     const leadIds = resendRecipientKey ? resendRecipientKey.split(',') : []
-    const templateIds = templates
-      .filter(template => template.target_segment_id === resendTargetSegmentId)
-      .map(template => template.id)
+    // Compara pela mensagem exata escolhida (template_id do histórico), não pela campanha inteira.
+    const templateIds = resendTemplateId ? [resendTemplateId] : []
     if (!leadIds.length || !templateIds.length) {
       setResendAlreadyReceivedIds(new Set())
       return () => { active = false }
@@ -4757,7 +4763,12 @@ function MessageSending({ organization, settings, userEmail }) {
     }
     checkAlreadyReceived()
     return () => { active = false }
-  }, [resendRecipientKey, resendTargetSegmentId, templates, organization.id])
+  }, [resendRecipientKey, resendTemplateId, organization.id])
+
+  function chooseResendCampaign(targetSegmentId) {
+    setResendTargetSegmentId(targetSegmentId)
+    setResendTemplateId(initialTemplateIdForCampaign(templates, targetSegmentId))
+  }
 
   function goToSendingPage(page) {
     pagesRef.current = { ...pagesRef.current, sending: page }
@@ -4821,7 +4832,9 @@ function MessageSending({ organization, settings, userEmail }) {
   const selectedSendingListCount = [...selected.values()].filter(lead => lead.status !== 'contacted_pending').length
   const resendRecipients = [...selected.values()].filter(lead => lead.status === 'contacted_pending')
   const resendAlreadyReceivedCount = resendRecipients.filter(lead => resendAlreadyReceivedIds.has(lead.id)).length
-  const resendMissingMessage = resendRecipients.length > 0 && !resendTargetSegmentId
+  const resendTemplateOptions = templatesForCampaign(templates, resendTargetSegmentId)
+  const resendProblem = resendSelectionProblem(templates, resendTargetSegmentId, resendTemplateId)
+  const resendMissingMessage = resendRecipients.length > 0 && Boolean(resendProblem)
 
   const selectableContactedLeads = contactedLeads.filter(lead => !queuedLeadIds.has(lead.id))
   const allContactedPageSelected = selectableContactedLeads.length > 0 && selectableContactedLeads.every(lead => contactedSelected.has(lead.id))
@@ -5190,7 +5203,7 @@ function MessageSending({ organization, settings, userEmail }) {
         break
       }
       // Proteção: se o servidor ainda não aplica a mensagem escolhida, cancela o lote na hora.
-      if (extraBody.template_target_segment_id && !response.data?.message_override) {
+      if (extraBody.template_id && response.data?.message_override?.template_id !== extraBody.template_id) {
         if (response.data?.batch_id) {
           await supabase.rpc('control_whatsapp_batch', { p_batch_id: response.data.batch_id, p_action: 'cancel' })
         }
@@ -5213,11 +5226,11 @@ function MessageSending({ organization, settings, userEmail }) {
     // A seleção pode vir de várias páginas e de "Clientes contactados" (reenvio).
     const selectedLeads = [...selected.values()]
     const isResend = lead => lead.status === 'contacted_pending'
-    if (selectedLeads.some(isResend) && !resendTargetSegmentId) {
-      setMessage('Escolha a mensagem do reenvio antes de enviar.')
+    if (selectedLeads.some(isResend) && resendProblem) {
+      setMessage(resendProblem)
       return
     }
-    const resendHasTemplate = templates.some(template => template.target_segment_id === resendTargetSegmentId)
+    const resendHasTemplate = resendTemplateOptions.some(template => template.id === resendTemplateId)
     const canQueue = lead =>
       !queuedLeadIds.has(lead.id) &&
       lead.status !== 'queued' &&
@@ -5255,7 +5268,10 @@ function MessageSending({ organization, settings, userEmail }) {
     }
     const normalQueued = queuedSoFar
     if (!error && !data?.error && resendIds.length) {
-      const result = await enqueueInChunks(resendIds, { template_target_segment_id: resendTargetSegmentId })
+      const result = await enqueueInChunks(resendIds, {
+        template_target_segment_id: resendTargetSegmentId,
+        template_id: resendTemplateId
+      })
       error = result.error
       queuedSoFar += result.queued
       data = result.error || result.data?.error
@@ -5291,6 +5307,7 @@ function MessageSending({ organization, settings, userEmail }) {
       )
       setSelected(new Map())
       setResendTargetSegmentId('')
+      setResendTemplateId('')
       await loadData()
     }
     setLoading(false)
@@ -5666,7 +5683,7 @@ function MessageSending({ organization, settings, userEmail }) {
             <div>
               <span className="eyebrow">REENVIO</span>
               <h2>Clientes contactados selecionados para reenvio ({resendRecipients.length})</h2>
-              <p className="muted">Eles recebem a mensagem escolhida abaixo, com as mesmas regras, janela e intervalo dos demais envios.</p>
+              <p className="muted">Eles recebem a mensagem escolhida abaixo (campanha e mensagem), com as mesmas regras, janela e intervalo dos demais envios.</p>
             </div>
             <button
               type="button"
@@ -5678,22 +5695,36 @@ function MessageSending({ organization, settings, userEmail }) {
             </button>
           </div>
           <div className="resend-message-field-v106">
-            <label>Mensagem
-              <select
-                value={resendTargetSegmentId}
-                onChange={event => setResendTargetSegmentId(event.target.value)}
-                disabled={loading}
-              >
-                <option value="">Selecione</option>
-                {manualMessageOptions.map(item => (
-                  <option key={item.target_segment_id} value={item.target_segment_id}>{item.label}</option>
-                ))}
-              </select>
-            </label>
-            {!resendTargetSegmentId && (
-              <p className="resend-warning-v106">Escolha a mensagem do reenvio para poder enviar.</p>
+            <div className="resend-message-fields-v107">
+              <label>Campanha
+                <select
+                  value={resendTargetSegmentId}
+                  onChange={event => chooseResendCampaign(event.target.value)}
+                  disabled={loading}
+                >
+                  <option value="">Selecione</option>
+                  {manualMessageOptions.map(item => (
+                    <option key={item.target_segment_id} value={item.target_segment_id}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label>Mensagem
+                <select
+                  value={resendTemplateId}
+                  onChange={event => setResendTemplateId(event.target.value)}
+                  disabled={loading || !resendTargetSegmentId}
+                >
+                  <option value="">Selecione</option>
+                  {resendTemplateOptions.map(template => (
+                    <option key={template.id} value={template.id}>{templateLabel(template)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {resendProblem && (
+              <p className="resend-warning-v106">{resendProblem}</p>
             )}
-            {resendTargetSegmentId && resendAlreadyReceivedCount > 0 && (
+            {!resendProblem && resendAlreadyReceivedCount > 0 && (
               <p className="resend-already-v106">
                 {resendAlreadyReceivedCount === 1
                   ? 'Um cliente já recebeu esta mensagem (marcado abaixo). Você poderá confirmar o reenvio ao enviar.'
@@ -5752,7 +5783,7 @@ function MessageSending({ organization, settings, userEmail }) {
             className="primary inline-btn"
             onClick={send}
             disabled={!selected.size || loading || resendMissingMessage}
-            title={resendMissingMessage ? 'Escolha a mensagem do reenvio para continuar' : undefined}
+            title={resendMissingMessage ? resendProblem : undefined}
           >
             <Send size={16}/>{loading ? 'Processando...' : sendActionLabel}
           </button>

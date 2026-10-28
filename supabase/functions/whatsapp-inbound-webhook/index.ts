@@ -207,6 +207,44 @@ function isAutomaticReply(text: string) {
 
   return false;
 }
+// Desempate quando o número que respondeu corresponde a mais de um lead da mesma empresa:
+// vence o lead que recebeu a mensagem mais recente enviada pelo CRM (outbound_messages, status "sent").
+// Devolve null (continua "ambiguous") se nenhum candidato tiver envio, se houver empate real ou erro.
+async function resolveLeadByLatestSentMessage(admin: any, organizationId: string, candidates: any[]) {
+  const candidateIds = candidates.map((lead: any) => lead.id).filter(Boolean);
+  if (candidateIds.length < 2) return null;
+
+  const { data: latestRows, error: latestError } = await admin
+    .from("outbound_messages")
+    .select("lead_id,sent_at")
+    .eq("organization_id", organizationId)
+    .in("lead_id", candidateIds)
+    .eq("status", "sent")
+    .not("sent_at", "is", null)
+    .order("sent_at", { ascending: false })
+    .limit(1);
+  if (latestError) return null;
+
+  const latest = (latestRows || [])[0];
+  if (!latest?.lead_id || !latest?.sent_at) return null;
+
+  // Empate real: outro candidato com envio no mesmo sent_at.
+  const { data: sameTimeRows, error: sameTimeError } = await admin
+    .from("outbound_messages")
+    .select("lead_id")
+    .eq("organization_id", organizationId)
+    .in("lead_id", candidateIds)
+    .eq("status", "sent")
+    .eq("sent_at", latest.sent_at);
+  if (sameTimeError) return null;
+
+  const leadsAtSameTime = new Set((sameTimeRows || []).map((row: any) => row.lead_id));
+  leadsAtSameTime.add(latest.lead_id);
+  if (leadsAtSameTime.size > 1) return null;
+
+  return candidates.find((lead: any) => lead.id === latest.lead_id) || null;
+}
+
 function eventName(payload: any) {
   return String(payload?.event || payload?.type || "").toUpperCase().replace(/[.\-]/g, "_");
 }
@@ -614,11 +652,19 @@ Deno.serve(async (req) => {
   const text = extractText(data);
   let classification = isAutomaticReply(text) ? "automatic" : "human";
   let lead: any = null;
+  let tieBreak: string | null = null;
 
   if (candidates.length === 1) {
     lead = candidates[0];
   } else if (candidates.length > 1) {
-    classification = "ambiguous";
+    // Vários leads com o mesmo número: tenta desempatar pelo envio mais recente do CRM.
+    const winner = await resolveLeadByLatestSentMessage(admin, numberRow.organization_id, candidates);
+    if (winner) {
+      lead = winner;
+      tieBreak = "latest_crm_message";
+    } else {
+      classification = "ambiguous";
+    }
   } else {
     classification = "ignored";
   }
@@ -723,5 +769,5 @@ Deno.serve(async (req) => {
     if (updateError) return json({ error: "Unable to update lead" }, 503);
   }
 
-  return json({ ok: true, classification, lead_id: lead.id });
+  return json({ ok: true, classification, lead_id: lead.id, ...(tieBreak ? { tie_break: tieBreak } : {}) });
 });

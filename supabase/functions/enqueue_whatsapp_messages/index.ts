@@ -131,6 +131,14 @@ Deno.serve(async (req) => {
 
     // Opcional (reenvio): usar a mensagem deste público-alvo em vez da mensagem do público-alvo de cada lead.
     const overrideTargetId = body?.template_target_segment_id ? String(body.template_target_segment_id) : "";
+    // Opcional (reenvio): usar exatamente esta mensagem para todos os leads da chamada.
+    const overrideTemplateId = body?.template_id ? String(body.template_id) : "";
+    if (overrideTemplateId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(overrideTemplateId)) {
+      return new Response(JSON.stringify({ error: "A mensagem escolhida é inválida." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (!organizationId || !leadIds.length) {
       return new Response(JSON.stringify({ error: "organization_id and lead_ids are required" }), {
@@ -265,13 +273,44 @@ Deno.serve(async (req) => {
       if (!templateByTarget.has(template.target_segment_id)) templateByTarget.set(template.target_segment_id, template);
     }
 
-    const overrideTemplate = overrideTargetId ? templateByTarget.get(overrideTargetId) : null;
+    let overrideTemplate: any = overrideTargetId && !overrideTemplateId ? templateByTarget.get(overrideTargetId) : null;
+    if (overrideTemplateId) {
+      // A mensagem precisa ser da mesma empresa, estar ativa e pertencer à campanha informada.
+      const { data: chosenTemplate, error: chosenTemplateError } = await admin
+        .from("message_templates")
+        .select("id,organization_id,target_segment_id,body,is_active,deleted_at")
+        .eq("id", overrideTemplateId)
+        .eq("organization_id", organizationId)
+        .maybeSingle();
+      if (chosenTemplateError) throw chosenTemplateError;
+      const templateProblem = !chosenTemplate
+        ? "A mensagem escolhida não foi encontrada nesta empresa."
+        : !chosenTemplate.is_active || chosenTemplate.deleted_at
+          ? "A mensagem escolhida está inativa ou foi excluída."
+          : overrideTargetId && chosenTemplate.target_segment_id !== overrideTargetId
+            ? "A mensagem escolhida não pertence à campanha selecionada."
+            : "";
+      if (templateProblem) {
+        return new Response(JSON.stringify({ error: templateProblem }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      overrideTemplate = chosenTemplate;
+    }
     if (overrideTargetId && !overrideTemplate) {
       return new Response(JSON.stringify({ error: "A mensagem escolhida não está cadastrada ou está inativa." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const messageOverride = overrideTemplate
+      ? {
+          target_segment_id: overrideTargetId || overrideTemplate.target_segment_id || null,
+          template_id: overrideTemplate.id,
+          requested_template_id: overrideTemplateId || null,
+        }
+      : null;
 
     const eligible: any[] = [];
     const skipped: any[] = [];
@@ -427,9 +466,7 @@ Deno.serve(async (req) => {
         allowed_send_start: allowedStart,
         allowed_send_end: allowedEnd,
         sender_whatsapp_number_id: sender.id,
-        message_override: overrideTemplate
-          ? { target_segment_id: overrideTargetId, template_id: overrideTemplate.id }
-          : null,
+        message_override: messageOverride,
         skipped,
       },
     });
@@ -445,9 +482,7 @@ Deno.serve(async (req) => {
       allowed_send_start: allowedStart,
       allowed_send_end: allowedEnd,
       sender: { id: sender.id, alias: sender.alias, phone_e164: sender.phone_e164 },
-      message_override: overrideTemplate
-        ? { target_segment_id: overrideTargetId, template_id: overrideTemplate.id }
-        : null,
+      message_override: messageOverride,
       first_scheduled_for: messageRows[0]?.scheduled_for || null,
       last_scheduled_for: messageRows[messageRows.length - 1]?.scheduled_for || null,
     }), {

@@ -92,8 +92,24 @@
 .resend-message-field-v106 {
   display: grid;
   gap: 8px;
-  max-width: 420px;
+  max-width: 860px;
   margin-top: 12px;
+}
+/* V107 - Campanha e Mensagem lado a lado */
+.resend-message-fields-v107 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 700px) {
+  .resend-message-fields-v107 {
+    grid-template-columns: 1fr;
+  }
+}
+.resend-message-field-v106 select:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 .resend-message-field-v106 label {
   display: grid;

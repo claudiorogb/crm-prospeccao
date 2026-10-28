@@ -12,6 +12,14 @@ import CustomerImportPanel from './customer-import'
 import CrmFullExport from './crm-full-export'
 import { mergeLeadsWithLocalDrafts } from './kanban-draft-merge.js'
 import { sortKanbanColumn } from './kanban-order.js'
+import {
+  PaginationControls,
+  SelectionToolbarInfo,
+  fetchAllRows,
+  fetchPage,
+  refreshSelection,
+  withSelection
+} from './paginated-selection'
 import AdminTestUsers from './admin-test-users'
 import AdminTestLimits from './admin-test-limits'
 import { EmailMarketing, EmailProspecting, AdminEmailMarketing } from './email-marketing'
@@ -4511,16 +4519,33 @@ function Messages({ organization, userEmail }) {
 
 
 
+const SENDING_LIST_STATUSES = ['new','queued','captured_pending']
+const SENDING_LEAD_FIELDS = 'id,business_name,phone,website,email,status,target_segment_id,target_segments(name),campaigns(name),city,state'
+const CONTACTED_LEAD_FIELDS = `${SENDING_LEAD_FIELDS},created_at,updated_at`
+const ENQUEUE_MAX_LEADS_PER_CALL = 1000
+
 function MessageSending({ organization, settings, userEmail }) {
+  // Página atual da lista de envio (paginada no servidor).
   const [leads, setLeads] = useState([])
+  const [sendingTotal, setSendingTotal] = useState(0)
+  const [sendingPage, setSendingPage] = useState(1)
   const [intakeLeads, setIntakeLeads] = useState([])
   const [intakeView, setIntakeView] = useState(null)
+  // Página atual de "Clientes contactados" (paginada no servidor).
+  const [contactedLeads, setContactedLeads] = useState([])
+  const [contactedTotal, setContactedTotal] = useState(0)
+  const [contactedPage, setContactedPage] = useState(1)
+  const [contactedSelected, setContactedSelected] = useState(new Map())
+  const pagesRef = useRef({ sending: 1, contacted: 1 })
+  const loadSeqRef = useRef(0)
+  const excludedLeadIdsRef = useRef([])
   const [templates, setTemplates] = useState([])
   const [queue, setQueue] = useState([])
   const [batches, setBatches] = useState([])
   const [whatsappNumbers, setWhatsappNumbers] = useState([])
   const disconnectAlertedRef = useRef(false)
-  const [selected, setSelected] = useState(new Set())
+  // Seleção guardada por id (Map id -> lead) para sobreviver à troca de página.
+  const [selected, setSelected] = useState(new Map())
   const selectedCountRef = useRef(0)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -4542,21 +4567,54 @@ function MessageSending({ organization, settings, userEmail }) {
     days: [1, 3, 5]
   })
 
+  function buildSendingLeadsQuery(excludedIds, selectOptions) {
+    let query = supabase
+      .from('leads')
+      .select(SENDING_LEAD_FIELDS, selectOptions)
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .in('status', SENDING_LIST_STATUSES)
+    // Leads com falha de envio não resolvida não aparecem como aptos (mesma regra de antes, agora no servidor).
+    if (excludedIds.length) query = query.not('id', 'in', `(${excludedIds.join(',')})`)
+    return query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+  }
+
+  function buildContactedLeadsQuery(selectOptions) {
+    return supabase
+      .from('leads')
+      .select(CONTACTED_LEAD_FIELDS, selectOptions)
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .eq('status', 'contacted_pending')
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
+  }
+
+  function unresolvedFailedSendingLeadIds(queueRows) {
+    const active = new Set(queueRows.filter(item => ['queued','ready','processing'].includes(item.status)).map(item => item.lead_id))
+    return [...new Set(
+      queueRows
+        .filter(item =>
+          item.status === 'failed' &&
+          item.lead_id &&
+          !active.has(item.lead_id) &&
+          (!item.leads?.status || SENDING_LIST_STATUSES.includes(item.leads.status))
+        )
+        .map(item => item.lead_id)
+    )]
+  }
+
   async function loadData() {
-    const [leadResult, intakeResult, templateResult, queueResult, batchResult, settingsResult, whatsappResult] = await Promise.all([
-      supabase
-        .from('leads')
-        .select('id,business_name,phone,website,email,status,target_segment_id,target_segments(name),campaigns(name),city,state')
-        .eq('organization_id', organization.id)
-        .is('deleted_at', null)
-        .in('status', ['new','queued','captured_pending'])
-        .order('created_at', { ascending: false }),
+    const seq = ++loadSeqRef.current
+    const [intakeResult, templateResult, queueResult, batchResult, settingsResult, whatsappResult] = await Promise.all([
       supabase
         .from('leads')
         .select('id,business_name,phone,website,email,status,target_segment_id,target_segments(name),campaigns(name),city,state,created_at,updated_at')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
-        .in('status', ['captured_pending','contacted_pending'])
+        .in('status', ['captured_pending'])
         .order('updated_at', { ascending: false }),
       supabase
         .from('message_templates')
@@ -4565,7 +4623,7 @@ function MessageSending({ organization, settings, userEmail }) {
         .eq('is_active', true),
       supabase
         .from('outbound_messages')
-        .select('id,lead_id,batch_id,status,scheduled_for,queued_at,sent_at,error_message,created_at,updated_at,leads(business_name)')
+        .select('id,lead_id,batch_id,status,scheduled_for,queued_at,sent_at,error_message,created_at,updated_at,leads(business_name,status)')
         .eq('organization_id', organization.id)
         .in('status', ['queued','ready','processing','failed'])
         .order('created_at', { ascending: false }),
@@ -4589,9 +4647,10 @@ function MessageSending({ organization, settings, userEmail }) {
         .is('deleted_at', null)
     ])
 
-    if (leadResult.error || intakeResult.error || templateResult.error || queueResult.error || batchResult.error || settingsResult.error || whatsappResult.error) {
+    if (seq !== loadSeqRef.current) return
+
+    if (intakeResult.error || templateResult.error || queueResult.error || batchResult.error || settingsResult.error || whatsappResult.error) {
       setMessage(
-        leadResult.error?.message ||
         intakeResult.error?.message ||
         templateResult.error?.message ||
         queueResult.error?.message ||
@@ -4603,7 +4662,29 @@ function MessageSending({ organization, settings, userEmail }) {
       return
     }
 
+    const excludedIds = unresolvedFailedSendingLeadIds(queueResult.data || [])
+    const [leadResult, contactedResult] = await Promise.all([
+      fetchPage(options => buildSendingLeadsQuery(excludedIds, options), pagesRef.current.sending),
+      fetchPage(options => buildContactedLeadsQuery(options), pagesRef.current.contacted)
+    ])
+
+    if (seq !== loadSeqRef.current) return
+
+    if (leadResult.error || contactedResult.error) {
+      setMessage(leadResult.error?.message || contactedResult.error?.message || 'Não foi possível carregar a página de envio.')
+      return
+    }
+
+    excludedLeadIdsRef.current = excludedIds
+    pagesRef.current = { sending: leadResult.page, contacted: contactedResult.page }
+    setSendingPage(leadResult.page)
+    setContactedPage(contactedResult.page)
     setLeads(leadResult.data || [])
+    setSendingTotal(Number(leadResult.count || 0))
+    setContactedLeads(contactedResult.data || [])
+    setContactedTotal(Number(contactedResult.count || 0))
+    setSelected(previous => refreshSelection(previous, [...(leadResult.data || []), ...(contactedResult.data || [])]))
+    setContactedSelected(previous => refreshSelection(previous, contactedResult.data || []))
     setIntakeLeads(intakeResult.data || [])
     setTemplates(templateResult.data || [])
     setQueue(queueResult.data || [])
@@ -4637,8 +4718,20 @@ function MessageSending({ organization, settings, userEmail }) {
   }, [organization.id])
 
   useEffect(() => {
-    selectedCountRef.current = selected.size
-  }, [selected])
+    selectedCountRef.current = selected.size + contactedSelected.size
+  }, [selected, contactedSelected])
+
+  function goToSendingPage(page) {
+    pagesRef.current = { ...pagesRef.current, sending: page }
+    setSendingPage(page)
+    loadData()
+  }
+
+  function goToContactedPage(page) {
+    pagesRef.current = { ...pagesRef.current, contacted: page }
+    setContactedPage(page)
+    loadData()
+  }
 
   useEffect(() => {
     const timer = setInterval(() => setScheduleClock(Date.now()), 30000)
@@ -4685,7 +4778,14 @@ function MessageSending({ organization, settings, userEmail }) {
     lead.status !== 'queued'
   )
 
-  const allSelectableSelected = selectableLeads.length > 0 && selectableLeads.every(lead => selected.has(lead.id))
+  const allPageSelectableSelected = selectableLeads.length > 0 && selectableLeads.every(lead => selected.has(lead.id))
+  const selectedOnSendingPage = sendingLeads.filter(lead => selected.has(lead.id)).length
+  const selectedSendingListCount = [...selected.values()].filter(lead => lead.status !== 'contacted_pending').length
+  const resendRecipients = [...selected.values()].filter(lead => lead.status === 'contacted_pending')
+
+  const selectableContactedLeads = contactedLeads.filter(lead => !queuedLeadIds.has(lead.id))
+  const allContactedPageSelected = selectableContactedLeads.length > 0 && selectableContactedLeads.every(lead => contactedSelected.has(lead.id))
+  const selectedOnContactedPage = contactedLeads.filter(lead => contactedSelected.has(lead.id)).length
 
   function hhmmToMinutes(value) {
     const match = String(value || '').match(/^(\d{1,2}):(\d{2})/)
@@ -4733,29 +4833,78 @@ function MessageSending({ organization, settings, userEmail }) {
     .filter(Boolean)
     .join(', ') || 'Nenhum dia configurado'
 
-  function toggleLead(id, checked) {
-    setSelected(previous => {
-      const next = new Set(previous)
-      if (checked) next.add(id)
-      else next.delete(id)
-      return next
-    })
+  function toggleLead(lead, checked) {
+    setSelected(previous => withSelection(previous, [lead], checked))
   }
 
+  // "Selecionar todos desta página": mantém o que já foi marcado nas outras páginas.
   function toggleAll(checked) {
-    setSelected(checked ? new Set(selectableLeads.map(lead => lead.id)) : new Set())
+    setSelected(previous => withSelection(previous, selectableLeads, checked))
     setMessage('')
+  }
+
+  async function selectAllResults(buildQuery, setTarget, label) {
+    if (loading) return
+    setLoading(true)
+    setMessage('')
+    try {
+      const rows = await fetchAllRows(buildQuery)
+      const selectable = rows.filter(lead => !queuedLeadIds.has(lead.id) && lead.status !== 'queued')
+      setTarget(previous => withSelection(previous, selectable, true))
+      const skipped = rows.length - selectable.length
+      setMessage(`${selectable.length} ${label} selecionado(s) em todas as páginas.${skipped > 0 ? ` ${skipped} já estão na fila de envio e não foram selecionados.` : ''}`)
+    } catch (error) {
+      setMessage(error?.message || 'Não foi possível selecionar todos os resultados.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function selectAllSendingResults() {
+    const excludedIds = excludedLeadIdsRef.current
+    return selectAllResults(() => buildSendingLeadsQuery(excludedIds), setSelected, 'lead(s)')
+  }
+
+  function selectAllContactedResults() {
+    return selectAllResults(() => buildContactedLeadsQuery(), setContactedSelected, 'cliente(s)')
+  }
+
+  function clearSendingSelection() {
+    setSelected(new Map())
+    setMessage('')
+  }
+
+  function toggleContactedLead(lead, checked) {
+    setContactedSelected(previous => withSelection(previous, [lead], checked))
+  }
+
+  function toggleAllContacted(checked) {
+    setContactedSelected(previous => withSelection(previous, selectableContactedLeads, checked))
+    setMessage('')
+  }
+
+  // Leva os clientes contactados selecionados para o fluxo normal de envio, já como destinatários.
+  function startResend() {
+    const picked = [...contactedSelected.values()]
+    if (!picked.length) return
+    setSelected(previous => withSelection(previous, picked, true))
+    setContactedSelected(new Map())
+    setIntakeView(null)
+    setMessage(`${picked.length} cliente(s) contactado(s) preenchido(s) como destinatário(s) do reenvio. Confira abaixo e clique em "${sendActionLabel}".`)
   }
 
   async function discardSelected() {
     if (!selected.size || loading) return
 
-    const ids = leads
-      .filter(lead => selected.has(lead.id) && !queuedLeadIds.has(lead.id) && lead.status !== 'queued')
+    // Descartar continua valendo só para leads da lista de envio (clientes contactados ficam de fora).
+    const ids = [...selected.values()]
+      .filter(lead => ['new','captured_pending'].includes(lead.status) && !queuedLeadIds.has(lead.id))
       .map(lead => lead.id)
 
     if (!ids.length) {
-      setMessage('Nenhum dos leads selecionados pode ser descartado enquanto estiver na fila de envio.')
+      setMessage(resendRecipients.length
+        ? 'Clientes contactados selecionados para reenvio não são descartados por aqui. Nenhum lead da lista pode ser descartado.'
+        : 'Nenhum dos leads selecionados pode ser descartado enquanto estiver na fila de envio.')
       return
     }
 
@@ -4774,7 +4923,7 @@ function MessageSending({ organization, settings, userEmail }) {
       setMessage(error.message || 'Não foi possível descartar os leads selecionados.')
     } else {
       setMessage(`${ids.length} captação(ões) descartada(s). Os registros permanecem preservados no banco.`)
-      setSelected(new Set())
+      setSelected(previous => withSelection(previous, ids.map(id => ({ id })), false))
       await loadData()
     }
     setLoading(false)
@@ -4889,6 +5038,8 @@ function MessageSending({ organization, settings, userEmail }) {
           : 'Novo'
 
       setMessage(`${lead.business_name} foi enviado para o Kanban em ${targetLabel}.`)
+      setContactedSelected(previous => withSelection(previous, [lead], false))
+      setSelected(previous => withSelection(previous, [lead], false))
       await loadData()
     } catch (error) {
       setMessage(error?.message || 'Não foi possível enviar o lead para o Kanban.')
@@ -4968,11 +5119,13 @@ function MessageSending({ organization, settings, userEmail }) {
         business_name: '',
         target_segment_id: ''
       })
-      setSelected(previous => {
-        const next = new Set(previous)
-        next.add(data.id)
-        return next
-      })
+      setSelected(previous => withSelection(previous, [{
+        id: data.id,
+        business_name: businessName,
+        phone,
+        target_segment_id: targetSegmentId,
+        status: 'new'
+      }], true))
       setMessage('Destinatário adicionado e selecionado para envio.')
       await loadData()
     } catch (error) {
@@ -4985,7 +5138,8 @@ function MessageSending({ organization, settings, userEmail }) {
   async function send() {
     if (!selected.size || loading) return
 
-    const selectedLeads = leads.filter(lead => selected.has(lead.id))
+    // A seleção pode vir de várias páginas e de "Clientes contactados" (reenvio).
+    const selectedLeads = [...selected.values()]
     const eligibleIds = selectedLeads
       .filter(lead =>
         !queuedLeadIds.has(lead.id) &&
@@ -5003,12 +5157,34 @@ function MessageSending({ organization, settings, userEmail }) {
 
     setLoading(true)
     setMessage('')
-    const { data, error } = await supabase.functions.invoke('enqueue_whatsapp_messages', {
-      body: { organization_id: organization.id, lead_ids: eligibleIds }
-    })
+    // O servidor aceita até 1000 leads por chamada; seleções maiores viram envios consecutivos.
+    let data = null
+    let error = null
+    let queuedSoFar = 0
+    for (let offset = 0; offset < eligibleIds.length; offset += ENQUEUE_MAX_LEADS_PER_CALL) {
+      const response = await supabase.functions.invoke('enqueue_whatsapp_messages', {
+        body: { organization_id: organization.id, lead_ids: eligibleIds.slice(offset, offset + ENQUEUE_MAX_LEADS_PER_CALL) }
+      })
+      if (response.error || response.data?.error) {
+        error = response.error
+        data = response.data
+        break
+      }
+      queuedSoFar += Number(response.data?.queued || 0)
+      data = {
+        ...response.data,
+        queued: queuedSoFar,
+        first_scheduled_for: data?.first_scheduled_for || response.data?.first_scheduled_for
+      }
+    }
 
     if (error || data?.error) {
-      setMessage(data?.error || error?.message || 'Não foi possível criar a fila de mensagens.')
+      const partial = queuedSoFar > 0 ? ` ${queuedSoFar} mensagem(ns) já tinham sido colocadas na fila antes do erro.` : ''
+      setMessage(`${data?.error || error?.message || 'Não foi possível criar a fila de mensagens.'}${partial}`)
+      if (queuedSoFar > 0) {
+        setSelected(new Map())
+        await loadData()
+      }
     } else {
       const firstScheduled = data?.first_scheduled_for ? new Date(data.first_scheduled_for) : null
       const lastScheduled = data?.last_scheduled_for ? new Date(data.last_scheduled_for) : null
@@ -5025,14 +5201,13 @@ function MessageSending({ organization, settings, userEmail }) {
           ? `${data?.queued || 0} mensagem(ns) encaminhada(s) para envio. O processamento é automático.${ignoredText}`
           : `${data?.queued || 0} mensagem(ns) agendada(s). Primeiro envio: ${first}. Último envio: ${last}.${ignoredText}`
       )
-      setSelected(new Set())
+      setSelected(new Map())
       await loadData()
     }
     setLoading(false)
   }
 
   const capturedIntakeLeads = intakeLeads.filter(lead => lead.status === 'captured_pending')
-  const contactedIntakeLeads = intakeLeads.filter(lead => lead.status === 'contacted_pending')
 
   const failedMessages = queue
     .filter(item => item.status === 'failed')
@@ -5134,8 +5309,39 @@ function MessageSending({ organization, settings, userEmail }) {
 
         {message && <div className="notice">{message}</div>}
 
+        {contactedTotal > 0 && (
+          <section className="panel sending-toolbar">
+            <label className="select-all">
+              <input
+                type="checkbox"
+                checked={allContactedPageSelected}
+                onChange={event => toggleAllContacted(event.target.checked)}
+                disabled={!selectableContactedLeads.length}
+              />
+              Selecionar todos desta página
+            </label>
+            <SelectionToolbarInfo
+              selectedCount={contactedSelected.size}
+              selectedOnPage={selectedOnContactedPage}
+              total={contactedTotal}
+              allResultsSelected={contactedSelected.size >= contactedTotal}
+              onSelectAllResults={selectAllContactedResults}
+              onClear={() => { setContactedSelected(new Map()); setMessage('') }}
+              loading={loading}
+              itemLabel="clientes"
+            />
+            {contactedSelected.size > 0 && (
+              <div className="sending-bulk-actions-v52">
+                <button type="button" className="primary inline-btn" onClick={startResend} disabled={loading}>
+                  <Send size={16}/>Reenviar mensagem ({contactedSelected.size})
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="panel">
-          {contactedIntakeLeads.length === 0 ? (
+          {contactedLeads.length === 0 ? (
             <div className="empty-state">
               <CheckCircle2 size={30}/>
               <h2>Nenhum cliente contactado aguardando decisão</h2>
@@ -5143,8 +5349,15 @@ function MessageSending({ organization, settings, userEmail }) {
             </div>
           ) : (
             <div className="admin-list">
-              {contactedIntakeLeads.map(lead => (
-                <div className="admin-list-row" key={lead.id}>
+              {contactedLeads.map(lead => (
+                <div className="admin-list-row contacted-select-row-v105" key={lead.id}>
+                  <input
+                    type="checkbox"
+                    checked={contactedSelected.has(lead.id)}
+                    onChange={event => toggleContactedLead(lead, event.target.checked)}
+                    disabled={queuedLeadIds.has(lead.id)}
+                    aria-label={`Selecionar ${lead.business_name} para reenvio`}
+                  />
                   <div>
                     <strong>{lead.business_name}</strong>
                     <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'} • {lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
@@ -5167,6 +5380,13 @@ function MessageSending({ organization, settings, userEmail }) {
             </div>
           )}
         </section>
+
+        <PaginationControls
+          page={contactedPage}
+          total={contactedTotal}
+          onPageChange={goToContactedPage}
+          itemLabel="clientes"
+        />
       </>
     )
   }
@@ -5269,7 +5489,7 @@ function MessageSending({ organization, settings, userEmail }) {
             Leads captados ({capturedIntakeLeads.length})
           </button>
           <button type="button" className="secondary inline-btn" onClick={() => { setIntakeView('contacted'); setMessage('') }}>
-            Clientes contactados ({contactedIntakeLeads.length})
+            Clientes contactados ({contactedTotal})
           </button>
           <button type="button" className="secondary inline-btn" onClick={refreshSendingData} disabled={refreshing}>
             <RefreshCw size={16}/>{refreshing ? 'Atualizando...' : 'Atualizar'}
@@ -5351,12 +5571,61 @@ function MessageSending({ organization, settings, userEmail }) {
         )}
       </section>
 
+      {resendRecipients.length > 0 && (
+        <section className="panel resend-recipients-v105">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">REENVIO</span>
+              <h2>Clientes contactados selecionados para reenvio ({resendRecipients.length})</h2>
+              <p className="muted">Eles recebem a mensagem cadastrada para o público-alvo, com as mesmas regras, janela e intervalo dos demais envios.</p>
+            </div>
+            <button
+              type="button"
+              className="secondary mini"
+              onClick={() => setSelected(previous => withSelection(previous, resendRecipients, false))}
+              disabled={loading}
+            >
+              Remover todos do reenvio
+            </button>
+          </div>
+          <div className="resend-chip-list-v105">
+            {resendRecipients.slice(0, 30).map(lead => (
+              <span className="resend-chip-v105" key={lead.id}>
+                {lead.business_name}
+                <button
+                  type="button"
+                  onClick={() => toggleLead(lead, false)}
+                  disabled={loading}
+                  aria-label={`Remover ${lead.business_name} do reenvio`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {resendRecipients.length > 30 && <span className="muted">e mais {resendRecipients.length - 30}</span>}
+          </div>
+        </section>
+      )}
+
       <section className="panel sending-toolbar">
         <label className="select-all">
-          <input type="checkbox" checked={allSelectableSelected} onChange={event => toggleAll(event.target.checked)} />
-          Selecionar todos
+          <input
+            type="checkbox"
+            checked={allPageSelectableSelected}
+            onChange={event => toggleAll(event.target.checked)}
+            disabled={!selectableLeads.length}
+          />
+          Selecionar todos desta página
         </label>
-        <span>{selected.size} selecionado(s)</span>
+        <SelectionToolbarInfo
+          selectedCount={selected.size}
+          selectedOnPage={selectedOnSendingPage}
+          total={sendingTotal}
+          allResultsSelected={selectedSendingListCount >= sendingTotal}
+          onSelectAllResults={selectAllSendingResults}
+          onClear={clearSendingSelection}
+          loading={loading}
+        />
         <div className="sending-bulk-actions-v52">
           <button type="button" className="secondary danger inline-btn" onClick={discardSelected} disabled={!selected.size || loading}>
             <Trash2 size={16}/>Descartar selecionados
@@ -5432,7 +5701,7 @@ function MessageSending({ organization, settings, userEmail }) {
           const canSelect = !isQueued
           return (
             <article className="panel sending-row" key={lead.id}>
-              <input type="checkbox" checked={selected.has(lead.id)} onChange={event => toggleLead(lead.id, event.target.checked)} disabled={!canSelect} aria-label={`Selecionar ${lead.business_name}`} />
+              <input type="checkbox" checked={selected.has(lead.id)} onChange={event => toggleLead(lead, event.target.checked)} disabled={!canSelect} aria-label={`Selecionar ${lead.business_name}`} />
               <div><strong>{lead.business_name}</strong><span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'}</span></div>
               <span>{lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
               <span>
@@ -5447,6 +5716,12 @@ function MessageSending({ organization, settings, userEmail }) {
           )
         })}
       </section>
+
+      <PaginationControls
+        page={sendingPage}
+        total={sendingTotal}
+        onPageChange={goToSendingPage}
+      />
     </>
   )
 }

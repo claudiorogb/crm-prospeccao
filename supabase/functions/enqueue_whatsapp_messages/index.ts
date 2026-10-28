@@ -129,6 +129,9 @@ Deno.serve(async (req) => {
       ? [...new Set(body.lead_ids.map((x: unknown) => String(x)).filter(Boolean))]
       : [];
 
+    // Opcional (reenvio): usar a mensagem deste público-alvo em vez da mensagem do público-alvo de cada lead.
+    const overrideTargetId = body?.template_target_segment_id ? String(body.template_target_segment_id) : "";
+
     if (!organizationId || !leadIds.length) {
       return new Response(JSON.stringify({ error: "organization_id and lead_ids are required" }), {
         status: 400,
@@ -242,7 +245,9 @@ Deno.serve(async (req) => {
       [...failedDeliveryLeadIds].filter((leadId: any) => !activeDeliveryLeadIds.has(leadId))
     );
 
-    const targetIds = [...new Set((leads || []).map((l: any) => l.target_segment_id).filter(Boolean))];
+    const targetIds = overrideTargetId
+      ? [overrideTargetId]
+      : [...new Set((leads || []).map((l: any) => l.target_segment_id).filter(Boolean))];
     const { data: templates, error: templatesError } = targetIds.length
       ? await admin
           .from("message_templates")
@@ -260,11 +265,19 @@ Deno.serve(async (req) => {
       if (!templateByTarget.has(template.target_segment_id)) templateByTarget.set(template.target_segment_id, template);
     }
 
+    const overrideTemplate = overrideTargetId ? templateByTarget.get(overrideTargetId) : null;
+    if (overrideTargetId && !overrideTemplate) {
+      return new Response(JSON.stringify({ error: "A mensagem escolhida não está cadastrada ou está inativa." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const eligible: any[] = [];
     const skipped: any[] = [];
     for (const lead of leads || []) {
       const phone = normalizePhone(lead.phone);
-      const template = templateByTarget.get(lead.target_segment_id);
+      const template = overrideTemplate || templateByTarget.get(lead.target_segment_id);
       if (["discarded", "won", "lost", "not_interested", "queued"].includes(lead.status)) {
         skipped.push({ lead_id: lead.id, reason: `status_${lead.status}` });
         continue;
@@ -414,6 +427,9 @@ Deno.serve(async (req) => {
         allowed_send_start: allowedStart,
         allowed_send_end: allowedEnd,
         sender_whatsapp_number_id: sender.id,
+        message_override: overrideTemplate
+          ? { target_segment_id: overrideTargetId, template_id: overrideTemplate.id }
+          : null,
         skipped,
       },
     });
@@ -429,6 +445,9 @@ Deno.serve(async (req) => {
       allowed_send_start: allowedStart,
       allowed_send_end: allowedEnd,
       sender: { id: sender.id, alias: sender.alias, phone_e164: sender.phone_e164 },
+      message_override: overrideTemplate
+        ? { target_segment_id: overrideTargetId, template_id: overrideTemplate.id }
+        : null,
       first_scheduled_for: messageRows[0]?.scheduled_for || null,
       last_scheduled_for: messageRows[messageRows.length - 1]?.scheduled_for || null,
     }), {

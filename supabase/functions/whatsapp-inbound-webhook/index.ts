@@ -170,6 +170,10 @@ function isAutomaticReply(text: string) {
   if (automatedReceptionPattern.test(t)) return true;
 
   const contextualAutomationPatterns = [
+    // Respostas automáticas confirmadas nos testes de classificação.
+    /agradece seu contato.*como podemos ajudar/,
+    /obrigado pelo contato.*em breve retorno/,
+    /bem-vindo.*fale com.*fale com/,
     /nosso horario de atendimento/,
     /horario de atendimento e/,
     /bem[- ]?vindo.*atendimento/,
@@ -203,6 +207,44 @@ function isAutomaticReply(text: string) {
 
   return false;
 }
+// Desempate quando o número que respondeu corresponde a mais de um lead da mesma empresa:
+// vence o lead que recebeu a mensagem mais recente enviada pelo CRM (outbound_messages, status "sent").
+// Devolve null (continua "ambiguous") se nenhum candidato tiver envio, se houver empate real ou erro.
+async function resolveLeadByLatestSentMessage(admin: any, organizationId: string, candidates: any[]) {
+  const candidateIds = candidates.map((lead: any) => lead.id).filter(Boolean);
+  if (candidateIds.length < 2) return null;
+
+  const { data: latestRows, error: latestError } = await admin
+    .from("outbound_messages")
+    .select("lead_id,sent_at")
+    .eq("organization_id", organizationId)
+    .in("lead_id", candidateIds)
+    .eq("status", "sent")
+    .not("sent_at", "is", null)
+    .order("sent_at", { ascending: false })
+    .limit(1);
+  if (latestError) return null;
+
+  const latest = (latestRows || [])[0];
+  if (!latest?.lead_id || !latest?.sent_at) return null;
+
+  // Empate real: outro candidato com envio no mesmo sent_at.
+  const { data: sameTimeRows, error: sameTimeError } = await admin
+    .from("outbound_messages")
+    .select("lead_id")
+    .eq("organization_id", organizationId)
+    .in("lead_id", candidateIds)
+    .eq("status", "sent")
+    .eq("sent_at", latest.sent_at);
+  if (sameTimeError) return null;
+
+  const leadsAtSameTime = new Set((sameTimeRows || []).map((row: any) => row.lead_id));
+  leadsAtSameTime.add(latest.lead_id);
+  if (leadsAtSameTime.size > 1) return null;
+
+  return candidates.find((lead: any) => lead.id === latest.lead_id) || null;
+}
+
 function eventName(payload: any) {
   return String(payload?.event || payload?.type || "").toUpperCase().replace(/[.\-]/g, "_");
 }
@@ -244,7 +286,9 @@ Deno.serve(async (req) => {
 
     if (numberListError) return json({ error: "Unable to list WhatsApp instances" }, 503);
 
-    const webhookUrl = "https://lhnzpxjjfalxmlkjysor.supabase.co/functions/v1/whatsapp-inbound-webhook?token=pJVRbLZllIz2WSSdWtrJV-GVstV33ld7Xix5Mc2PIos";
+    const { data: inboundToken, error: inboundTokenError } = await admin.rpc("get_whatsapp_inbound_token");
+    if (inboundTokenError || !inboundToken) return json({ error: "Webhook token not configured" }, 503);
+    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-inbound-webhook?token=${encodeURIComponent(String(inboundToken))}`;
     const results: any[] = [];
 
     for (const item of numbers || []) {
@@ -275,13 +319,13 @@ Deno.serve(async (req) => {
   }
 
   const token = url.searchParams.get("token") || "";
-  const { data: secretRow } = await admin
+  // Aceita o token atual (e o próximo, durante a troca de chave). Os valores ficam só como hash no banco.
+  const { data: secretRows } = await admin
     .from("system_runtime_secrets")
     .select("secret_hash")
-    .eq("name", "whatsapp_inbound_webhook")
-    .maybeSingle();
-
-  if (!token || !secretRow?.secret_hash || (await sha256(token)) !== secretRow.secret_hash) {
+    .in("name", ["whatsapp_inbound_webhook", "whatsapp_inbound_webhook_next"]);
+  const tokenHash = token ? await sha256(token) : "";
+  if (!token || !(secretRows || []).some((r: any) => r?.secret_hash && r.secret_hash === tokenHash)) {
     return json({ error: "Unauthorized" }, 401);
   }
 
@@ -608,11 +652,19 @@ Deno.serve(async (req) => {
   const text = extractText(data);
   let classification = isAutomaticReply(text) ? "automatic" : "human";
   let lead: any = null;
+  let tieBreak: string | null = null;
 
   if (candidates.length === 1) {
     lead = candidates[0];
   } else if (candidates.length > 1) {
-    classification = "ambiguous";
+    // Vários leads com o mesmo número: tenta desempatar pelo envio mais recente do CRM.
+    const winner = await resolveLeadByLatestSentMessage(admin, numberRow.organization_id, candidates);
+    if (winner) {
+      lead = winner;
+      tieBreak = "latest_crm_message";
+    } else {
+      classification = "ambiguous";
+    }
   } else {
     classification = "ignored";
   }
@@ -717,5 +769,5 @@ Deno.serve(async (req) => {
     if (updateError) return json({ error: "Unable to update lead" }, 503);
   }
 
-  return json({ ok: true, classification, lead_id: lead.id });
+  return json({ ok: true, classification, lead_id: lead.id, ...(tieBreak ? { tie_break: tieBreak } : {}) });
 });

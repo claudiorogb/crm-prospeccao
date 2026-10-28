@@ -1,0 +1,89 @@
+/* V105 - paginação e seleção entre páginas (Enviar mensagens / Clientes contactados) */
+.selection-info-v105 {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: #475569;
+  font-size: 13px;
+}
+.link-button-v105 {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #00866f;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link-button-v105:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+.sending-pagination-v105 button {
+  min-width: 40px;
+}
+.pagination-gap-v105 {
+  align-self: center;
+  padding: 0 2px;
+  color: #94a3b8;
+}
+.admin-list-row.contacted-select-row-v105 {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+}
+.contacted-select-row-v105 > input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: #00a88f;
+  cursor: pointer;
+}
+.contacted-select-row-v105 > input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+.resend-chip-list-v105 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.resend-chip-v105 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid #ccebe5;
+  border-radius: 999px;
+  background: #f0faf8;
+  color: #0f172a;
+  font-size: 13px;
+}
+.resend-chip-v105 button {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1;
+}
+.resend-chip-v105 button:hover {
+  background: #dcefeb;
+  color: #0f172a;
+}
+@media (max-width: 650px) {
+  .admin-list-row.contacted-select-row-v105 {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+  .admin-list-row.contacted-select-row-v105 > .row-actions {
+    grid-column: 2;
+  }
+}

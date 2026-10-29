@@ -10108,6 +10108,14 @@ export default function App() {
                   active={adminCommercialPage === 'overdue-returns'}
                   onOpen={() => { setAdminCommercialPage('overdue-returns'); setMobileMenuOpen(false) }}
                 />}
+                {sandboxOrganization && (
+                  <button
+                    className={`nav-item ${adminCommercialPage === 'goals' ? 'active' : ''}`}
+                    onClick={() => { setAdminCommercialPage('goals'); setMobileMenuOpen(false) }}
+                  >
+                    <Target size={18}/> Metas e relatórios
+                  </button>
+                )}
                 {adminSandboxSettings?.feature_flags?.ai_assistant === true && (
                   <button
                     className={`nav-item ${adminCommercialPage === 'ai-assistant' ? 'active' : ''}`}
@@ -10226,6 +10234,9 @@ export default function App() {
                 sessionStorage.setItem('crm_focus_lead', JSON.stringify({ id: lead.id, business_name: lead.business_name }))
                 setAdminCommercialPage('sales-funnel')
               }} />
+          )}
+          {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'goals' && (
+            <GoalsPage organization={sandboxOrganization} userEmail={userEmail} userId={session?.user?.id} canEdit={true} />
           )}
           {commercialMode && sandboxOrganization && adminSandboxSettings?.feature_flags?.ai_assistant === true && adminCommercialPage === 'ai-assistant' && (
             <AiAssistant userEmail={userEmail} />

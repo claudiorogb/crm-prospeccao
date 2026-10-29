@@ -1,5 +1,6 @@
 import React from 'react'
 import { ChevronRight } from 'lucide-react'
+import './duplicates-tab.css'
 import { supabase } from './lib/supabase'
 import { findDuplicateGroups } from './duplicates-rules.js'
 
@@ -35,12 +36,12 @@ export default function DuplicatesTab({ groups, onOpenLead }) {
     <>
       <p className="muted" style={{ padding: '0 4px 8px' }}>Estes leads parecem ser a mesma empresa. Nada é mesclado ou apagado automaticamente: abra cada um e decida.</p>
       {groups.map(group => (
-        <article className="today-row-v111" key={group.key} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        <article className="dup-group-v1" key={group.key}>
           <strong>{group.reason}: {group.key.split(':').slice(1).join(':')}</strong>
           {group.leads.map(lead => (
-            <div key={lead.id} style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
-              <span>{lead.business_name} • {STATUS[lead.status] || lead.status}{lead.campaigns?.name ? ` • ${lead.campaigns.name}` : ''}</span>
-              <button type="button" className="secondary inline-btn" onClick={() => onOpenLead(lead)}>Abrir lead <ChevronRight size={15} /></button>
+            <div className="dup-lead-v1" key={lead.id}>
+              <span><b>{lead.business_name}</b> • {STATUS[lead.status] || lead.status}{lead.campaigns?.name ? ` • ${lead.campaigns.name}` : ''}</span>
+              <button type="button" className="secondary inline-btn" onClick={() => onOpenLead(lead)}>Abrir {lead.business_name} <ChevronRight size={15} /></button>
             </div>
           ))}
         </article>

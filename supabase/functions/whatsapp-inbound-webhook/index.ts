@@ -745,6 +745,23 @@ Deno.serve(async (req) => {
 
   if (!lead) return json({ ok: true, classification, message_type: messageType });
 
+  // A conversa é criada pelo gatilho do banco com o lead do evento; se ela já existia sem lead, vincula agora
+  // (é o que faz o ícone do WhatsApp aparecer no card do Kanban).
+  const { data: linkedConversations } = await admin.from("whatsapp_conversations")
+    .update({ lead_id: lead.id, updated_at: new Date().toISOString() })
+    .eq("organization_id", numberRow.organization_id)
+    .eq("whatsapp_number_id", numberRow.id)
+    .eq("contact_phone", senderPhone)
+    .is("lead_id", null)
+    .select("id");
+  for (const conv of linkedConversations || []) {
+    await admin.from("whatsapp_messages")
+      .update({ lead_id: lead.id })
+      .eq("organization_id", numberRow.organization_id)
+      .eq("conversation_id", conv.id)
+      .is("lead_id", null);
+  }
+
   const notePrefix = classification === "automatic"
     ? "Resposta automática detectada (não alterou o funil)"
     : "Resposta recebida pelo WhatsApp";

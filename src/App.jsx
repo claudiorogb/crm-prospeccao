@@ -49,6 +49,7 @@ import MessageTemplateItem from './message-template-item'
 import TodayPage, { loadTodayLeads, brazilToday } from './today-page'
 import { lossReasonLabel, lossReasonPromptText, parseLossReasonAnswer } from './loss-reasons.js'
 import { buildToday } from './today-rules'
+import GoalsPage from './goals-page.jsx'
 
 
 const UF_OPTIONS = [
@@ -10343,6 +10344,9 @@ export default function App() {
               <MessageSquareText size={18}/> Assistente IA
             </button>
           )}
+          <button className={`nav-item ${page === 'goals' ? 'active' : ''}`} onClick={() => { setPage('goals'); setMobileMenuOpen(false) }}>
+            <Target size={18}/> Metas e relatórios
+          </button>
           <OverdueReturnsNavItem
             organization={organization}
             active={page === 'overdue-returns'}
@@ -10414,6 +10418,14 @@ export default function App() {
         )}
         {page === 'team' && userPlan?.plan_id !== 'free_30_days' && (organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (
           <OrganizationTeam organization={organization} currentUserId={session.user.id} currentRole={organizationMembershipRole} />
+        )}
+        {page === 'goals' && (
+          <GoalsPage
+            organization={organization}
+            userEmail={userLabel}
+            userId={session.user.id}
+            canEdit={isSystemAdmin || organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin'}
+          />
         )}
         {page === 'overdue-returns' && (
           <OverdueReturnsPage

@@ -30,3 +30,20 @@ test('campanhas e perdas', () => {
   assert.equal(byCampaign(leads).find(c => c.name === 'X').replied, 3)
   assert.deepEqual(lossBreakdown(leads, c => 'Preço'), [['Preço', 1]])
 })
+
+import { forecast, normalizeProbabilities } from '../src/reports-rules.js'
+test('previsão pondera pela chance da etapa e do vendedor', () => {
+  const ls = [
+    { status: 'proposal', proposal_value: 1000, assigned_to: 'a' },
+    { status: 'negotiation', proposal_value: 1000, renegotiated_value: 800, assigned_to: 'b' },
+    { status: 'interested', assigned_to: 'a' },
+    { status: 'won', contract_value: 5000, assigned_to: 'a' }
+  ]
+  const f = forecast(ls, { proposal: 50, negotiation: 50 }, [{ user_id: 'a', display_name: 'Ana' }, { user_id: 'b', display_name: 'Beto' }])
+  assert.equal(f.total, 500 + 400)
+  assert.equal(f.sellers.find(s => s.name === 'Ana').weighted, 500)
+  assert.equal(f.count, 3)
+})
+test('probabilidade inválida volta ao padrão', () => {
+  assert.deepEqual(normalizeProbabilities({ interested: 'x', proposal: 150, negotiation: 70 }), { interested: 10, proposal: 30, negotiation: 70 })
+})

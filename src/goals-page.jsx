@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { brazilToday } from './today-page.jsx'
 import { lossReasonLabel } from './loss-reasons.js'
-import { monthStart, bySeller, companyProgress, byCampaign, funnelCounts, lossBreakdown, avgDaysToWin } from './reports-rules.js'
+import { monthStart, bySeller, companyProgress, byCampaign, funnelCounts, lossBreakdown, avgDaysToWin, forecast, normalizeProbabilities, FORECAST_STAGES } from './reports-rules.js'
 import './goals-page.css'
 
-const FIELDS = 'id,status,campaign_id,assigned_to,contract_value,contract_signed_at,status_changed_at,created_at,loss_reason,campaigns(name)'
+const FIELDS = 'id,status,campaign_id,assigned_to,contract_value,contract_signed_at,status_changed_at,created_at,loss_reason,proposal_value,renegotiated_value,campaigns(name)'
 const BATCH = 1000
 const MAX_ROWS = 20000
 
@@ -44,16 +44,19 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
   const [message, setMessage] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [drafts, setDrafts] = useState({})
+  const [probs, setProbs] = useState(null)
+  const [probDraft, setProbDraft] = useState(null)
 
   const load = useCallback(async () => {
-    const [leadRes, memberRes, goalRes] = await Promise.all([
+    const [leadRes, memberRes, goalRes, probRes] = await Promise.all([
       loadLeads(organization.id),
       supabase.from('organization_members').select('user_id,display_name').eq('organization_id', organization.id).eq('is_active', true).is('deleted_at', null),
-      supabase.from('sales_goals').select('id,user_id,period,target_won_count,target_value').eq('organization_id', organization.id)
+      supabase.from('sales_goals').select('id,user_id,period,target_won_count,target_value').eq('organization_id', organization.id),
+      supabase.from('forecast_settings').select('probabilities').eq('organization_id', organization.id).maybeSingle()
     ])
-    const err = leadRes.error || memberRes.error || goalRes.error
+    const err = leadRes.error || memberRes.error || goalRes.error || probRes.error
     if (err) { setMessage(err.message || 'Não foi possível carregar.'); return }
-    setMessage(''); setLeads(leadRes.rows); setMembers(memberRes.data || []); setGoals(goalRes.data || []); setLoaded(true)
+    setMessage(''); setLeads(leadRes.rows); setMembers(memberRes.data || []); setGoals(goalRes.data || []); setProbs(normalizeProbabilities(probRes.data?.probabilities)); setLoaded(true)
   }, [organization.id])
 
   useEffect(() => { setLoaded(false); load() }, [load])
@@ -65,6 +68,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
   const campaigns = useMemo(() => byCampaign(leads), [leads])
   const funnel = useMemo(() => funnelCounts(leads), [leads])
   const losses = useMemo(() => lossBreakdown(leads, lossReasonLabel), [leads])
+  const fc = useMemo(() => forecast(leads, probs, members), [leads, probs, members])
   const avgDays = useMemo(() => avgDaysToWin(leads), [leads])
 
   async function saveGoal(key, uid) {
@@ -81,6 +85,13 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
     setDrafts(old => { const n = { ...old }; delete n[key]; return n })
     setMessage('Meta salva.')
     load()
+  }
+
+  async function saveProbs() {
+    const next = normalizeProbabilities(probDraft)
+    const { error } = await supabase.from('forecast_settings').upsert({ organization_id: organization.id, probabilities: next, updated_at: new Date().toISOString() }, { onConflict: 'organization_id' })
+    if (error) { setMessage(`Não foi possível salvar as probabilidades: ${error.message}`); return }
+    setProbDraft(null); setMessage('Probabilidades salvas.'); load()
   }
 
   function GoalEditor({ k, uid, goal }) {
@@ -130,6 +141,18 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
               </div>
             ))}
             <p className="muted goals-note">Barras: 1ª = quantidade de negócios ganhos, 2ª = valor dos contratos. Considera a data de assinatura do contrato.</p>
+          </section>
+
+          <section className="panel goals-card">
+            <h2>Previsão de vendas <small className="muted">(estimativa)</small></h2>
+            <p><strong>{money(fc.total)}</strong> previstos • {money(fc.openTotal)} em negócios abertos ({fc.count})</p>
+            <table className="goals-table"><thead><tr><th>Etapa</th><th>Negócios</th><th>Valor em aberto</th><th>Chance</th><th>Previsto</th></tr></thead>
+              <tbody>{fc.byStage.map(r => <tr key={r.stage}><td>{r.label}</td><td>{r.count}</td><td>{money(r.open)}</td>
+                <td>{canEdit ? <input type="number" min="0" max="100" style={{ width: 64 }} aria-label={`Chance de fechar em ${r.label}`} value={probDraft ? probDraft[r.stage] : r.probability} onChange={e => setProbDraft({ ...(probDraft || probs), [r.stage]: e.target.value })} /> : null}{canEdit ? '%' : `${r.probability}%`}</td>
+                <td>{money(r.weighted)}</td></tr>)}</tbody></table>
+            {canEdit && <p><button type="button" className="secondary mini" disabled={!probDraft} onClick={saveProbs}>Salvar probabilidades</button></p>}
+            {(canEdit ? fc.sellers : fc.sellers.filter(x => x.user_id === userId)).map(x => <div className="goals-row" key={x.user_id || 'none'}><strong>{x.name}</strong><span>{x.count} negócio(s) • {money(x.weighted)} previstos</span></div>)}
+            <p className="muted goals-note">Estimativa: valor da proposta (ou renegociado) × chance da etapa. Negócios sem valor de proposta contam como R$ 0. As chances são definidas pela sua empresa.</p>
           </section>
 
           <section className="panel goals-card">

@@ -74,3 +74,40 @@ export function avgDaysToWin(leads) {
   const days = leads.filter(l => l.status === 'won' && l.created_at).map(l => (new Date(wonDate(l)) - new Date(l.created_at)) / 86400000).filter(d => d >= 0)
   return days.length ? Math.round(days.reduce((a, b) => a + b, 0) / days.length) : null
 }
+
+// ---- Previsão de vendas (estimativa) ----
+export const FORECAST_STAGES = [['interested', 'Interessado'], ['proposal', 'Proposta'], ['negotiation', 'Negociação']]
+export const DEFAULT_PROBABILITIES = { interested: 10, proposal: 30, negotiation: 60 }
+
+export function normalizeProbabilities(raw) {
+  const out = {}
+  for (const [stage] of FORECAST_STAGES) {
+    const n = Number(raw?.[stage])
+    out[stage] = Number.isFinite(n) && n >= 0 && n <= 100 ? n : DEFAULT_PROBABILITIES[stage]
+  }
+  return out
+}
+
+export function openValue(lead) {
+  const reneg = num(lead.renegotiated_value)
+  if (lead.status === 'negotiation' && reneg > 0) return reneg
+  return num(lead.proposal_value)
+}
+
+export function forecast(leads, probabilities, members) {
+  const probs = normalizeProbabilities(probabilities)
+  const open = leads.filter(l => FORECAST_STAGES.some(([s]) => s === l.status))
+  const weighted = l => openValue(l) * (probs[l.status] / 100)
+  const sum = list => list.reduce((s, l) => s + weighted(l), 0)
+  const byStage = FORECAST_STAGES.map(([stage, label]) => {
+    const list = open.filter(l => l.status === stage)
+    return { stage, label, count: list.length, open: list.reduce((s, l) => s + openValue(l), 0), weighted: sum(list), probability: probs[stage] }
+  })
+  const sellers = members.map(m => {
+    const list = open.filter(l => l.assigned_to === m.user_id)
+    return { user_id: m.user_id, name: m.display_name || 'Usuário', count: list.length, weighted: sum(list) }
+  })
+  const rest = open.filter(l => !members.some(m => m.user_id === l.assigned_to))
+  if (rest.length) sellers.push({ user_id: null, name: 'Sem vendedor', count: rest.length, weighted: sum(rest) })
+  return { total: sum(open), openTotal: open.reduce((s, l) => s + openValue(l), 0), count: open.length, byStage, sellers }
+}

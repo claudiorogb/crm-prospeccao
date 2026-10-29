@@ -50,6 +50,7 @@ import TodayPage, { loadTodayLeads, brazilToday } from './today-page'
 import { lossReasonLabel, lossReasonPromptText, parseLossReasonAnswer } from './loss-reasons.js'
 import { buildToday } from './today-rules'
 import GoalsPage from './goals-page.jsx'
+import WhatsappCadencePanel from './whatsapp-cadence-panel.jsx'
 
 
 const UF_OPTIONS = [
@@ -1963,6 +1964,8 @@ function Campaigns({ organization, settings, userEmail }) {
           </article>
         ))}
       </section>
+
+      <WhatsappCadencePanel organization={organization} segments={segments} templates={templates} />
     </>
   )
 }

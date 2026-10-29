@@ -27,6 +27,28 @@ function normalizePhone(value: unknown) {
   return d;
 }
 
+// Chave só para comparar números: ignora o nono dígito dos celulares brasileiros, porque o cadastro
+// e o WhatsApp nem sempre escrevem o mesmo celular do mesmo jeito (com ou sem o 9 depois do DDD).
+function phoneMatchKey(value: unknown) {
+  const d = normalizePhone(value);
+  if (!d.startsWith("55")) return d;
+  const ddd = d.slice(2, 4);
+  let rest = d.slice(4);
+  // Só celulares antigos de 8 dígitos (que começam com 6 a 9) ganharam o 9; fixos (2 a 5) não entram.
+  if (rest.length === 9 && /^9[6-9]/.test(rest)) rest = rest.slice(1);
+  if (rest.length !== 8) return d;
+  return `55${ddd}${rest}`;
+}
+
+function leadMatchesPhone(lead: any, senderPhone: string) {
+  const senderKey = phoneMatchKey(senderPhone);
+  if (!senderKey) return false;
+  return [lead?.whatsapp_phone, lead?.phone]
+    .map(phoneMatchKey)
+    .filter(Boolean)
+    .includes(senderKey);
+}
+
 function extractText(data: any) {
   const message = data?.message || data?.data?.message || {};
   const candidates = [
@@ -524,9 +546,7 @@ Deno.serve(async (req) => {
       .eq("organization_id", numberRow.organization_id)
       .is("deleted_at", null)
       .neq("status", "discarded");
-    const matches = (leadRows || []).filter((lead: any) =>
-      [normalizePhone(lead.whatsapp_phone), normalizePhone(lead.phone)].filter(Boolean).includes(senderPhone)
-    );
+    const matches = (leadRows || []).filter((lead: any) => leadMatchesPhone(lead, senderPhone));
     const leadId = matches.length === 1 ? matches[0].id : null;
     const contactName = extractContactName(data);
     const preview = (text || (messageType === "audio" ? "Áudio enviado pelo celular" : messageType === "image" ? "Imagem enviada pelo celular" : messageType === "video" ? "Vídeo enviado pelo celular" : messageType === "document" ? "Documento enviado pelo celular" : "Mensagem enviada pelo celular")).slice(0, 240);
@@ -644,10 +664,7 @@ Deno.serve(async (req) => {
 
   if (leadError) return json({ error: "Unable to resolve lead" }, 503);
 
-  const candidates = (leadRows || []).filter((lead: any) => {
-    const phones = [normalizePhone(lead.whatsapp_phone), normalizePhone(lead.phone)].filter(Boolean);
-    return phones.includes(senderPhone);
-  });
+  const candidates = (leadRows || []).filter((lead: any) => leadMatchesPhone(lead, senderPhone));
 
   const text = extractText(data);
   let classification = isAutomaticReply(text) ? "automatic" : "human";

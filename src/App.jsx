@@ -47,6 +47,7 @@ import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } fr
 import whatsappIcon from './whatsapp-icon.png'
 import MessageTemplateItem from './message-template-item'
 import TodayPage, { loadTodayLeads, brazilToday } from './today-page'
+import { lossReasonLabel, lossReasonPromptText, parseLossReasonAnswer } from './loss-reasons.js'
 import { buildToday } from './today-rules'
 
 
@@ -2479,7 +2480,7 @@ function Leads({ organization, settings, userEmail }) {
   async function loadTerminalPreview(status, currentFilter, memberNames) {
     let query = supabase
       .from('leads')
-      .select('id,organization_id,campaign_id,target_segment_id,business_name,segment,phone,website,email,address,city,state,status,contact_name,last_contact_date,last_contacted_at,next_contact_date,commercial_notes,proposal_value,proposal_sent_at,renegotiated_value,contract_value,contract_signed_at,lost_from_status,captured_by,assigned_to,created_at,status_changed_at,campaigns(name),target_segments(name)')
+      .select('id,organization_id,campaign_id,target_segment_id,business_name,segment,phone,website,email,address,city,state,status,contact_name,last_contact_date,last_contacted_at,next_contact_date,commercial_notes,proposal_value,proposal_sent_at,renegotiated_value,contract_value,contract_signed_at,lost_from_status,loss_reason,captured_by,assigned_to,created_at,status_changed_at,campaigns(name),target_segments(name)')
       .eq('organization_id', organization.id)
       .eq('status', status)
       .is('deleted_at', null)
@@ -2766,13 +2767,18 @@ function Leads({ organization, settings, userEmail }) {
     }
 
     let repositoryNote = null
-    if (status === 'not_interested') {
-      repositoryNote = window.prompt('Informe o motivo do não interesse:')
-      if (repositoryNote === null) return
-      if (!repositoryNote.trim()) {
-        window.alert('Informe o motivo do não interesse antes de enviar o lead para Leads sem interesse.')
+    let lossReason = null
+    if (status === 'not_interested' || (status === 'lost' && currentStatus !== 'lost')) {
+      const title = status === 'lost' ? 'Informe o motivo da perda:' : 'Informe o motivo do não interesse:'
+      const answer = window.prompt(lossReasonPromptText(title))
+      if (answer === null) return
+      const parsed = parseLossReasonAnswer(answer)
+      if (!parsed) {
+        window.alert(status === 'lost' ? 'Informe o motivo da perda antes de marcar o lead como Perdido.' : 'Informe o motivo do não interesse antes de enviar o lead para Leads sem interesse.')
         return
       }
+      lossReason = parsed.code
+      repositoryNote = parsed.note || lossReasonLabel(parsed.code)
     }
 
     if (status === 'discarded') {
@@ -2792,6 +2798,7 @@ function Leads({ organization, settings, userEmail }) {
       if (initialContractValue !== null) payload.contract_value = initialContractValue
     }
     if (status === 'lost' && currentStatus !== 'lost') payload.lost_from_status = currentStatus
+    if (lossReason) payload.loss_reason = lossReason
     if (repositoryNote !== null && repositoryNote.trim()) payload.commercial_notes = repositoryNote.trim()
 
     const { data: stageChange, error } = await supabase
@@ -2886,7 +2893,7 @@ function Leads({ organization, settings, userEmail }) {
 
     const { data: stageChange, error } = await supabase
       .from('leads')
-      .update({ status: fallback, lost_from_status: null, updated_at: new Date().toISOString() })
+      .update({ status: fallback, lost_from_status: null, loss_reason: null, updated_at: new Date().toISOString() })
       .eq('id', lead.id)
       .eq('organization_id', organization.id)
       .select('status_changed_at')
@@ -2894,7 +2901,7 @@ function Leads({ organization, settings, userEmail }) {
 
     if (error) setMessage(error.message)
     else {
-      setLeads(old => old.map(item => item.id === lead.id ? { ...item, status: fallback, lost_from_status: null, status_changed_at: stageChange.status_changed_at } : item))
+      setLeads(old => old.map(item => item.id === lead.id ? { ...item, status: fallback, lost_from_status: null, loss_reason: null, status_changed_at: stageChange.status_changed_at } : item))
       setMessage(`${lead.business_name} voltou para ${statusLabel[fallback]} com todo o histórico preservado.`)
     }
   }
@@ -3627,6 +3634,7 @@ function Leads({ organization, settings, userEmail }) {
                               Recuperar lead
                             </button>
                           )}
+                          {status === 'lost' && l.loss_reason && <small className="muted">Motivo da perda: {lossReasonLabel(l.loss_reason)}</small>}
 
                               <div className="kanban-card-footer">
                                 {status !== 'new' && safeExternalUrl(l.website) ? <a className="lead-site-link" href={safeExternalUrl(l.website)} target="_blank" rel="noreferrer">Abrir site</a> : <span />}
@@ -6220,7 +6228,7 @@ function NotInterestedRepository({ organization, userEmail }) {
   async function loadData() {
     const { data, error } = await supabase
       .from('leads')
-      .select('id,business_name,phone,website,email,city,state,status,commercial_notes,status_changed_at,updated_at,campaigns(name)')
+      .select('id,business_name,phone,website,email,city,state,status,commercial_notes,loss_reason,status_changed_at,updated_at,campaigns(name)')
       .eq('organization_id', organization.id)
       .in('status', ['not_interested','discarded','lost'])
       .order('status_changed_at', { ascending: false, nullsFirst: false })
@@ -6294,6 +6302,7 @@ function NotInterestedRepository({ organization, userEmail }) {
               )}
               <div className="repository-note-v33">
                 <span>Observações</span>
+                {lead.loss_reason && <p><strong>Motivo:</strong> {lossReasonLabel(lead.loss_reason)}</p>}
                 <p>{lead.commercial_notes || 'Nenhuma observação registrada.'}</p>
               </div>
             </div>

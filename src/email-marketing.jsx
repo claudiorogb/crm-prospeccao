@@ -236,6 +236,25 @@ function EmailProspectingSequence({ organization, connection }) {
     return 'D1 agendado'
   }
 
+  // Quantos e-mails (de 3) já foram enviados a um contato: sequence_step é a etapa atual/próxima.
+  // Etapa N em fila/enviando/falha = N-1 enviados; "sent" = a etapa N já foi enviada.
+  function emailsSentCount(row) {
+    const step = Math.min(3, Math.max(1, Number(row?.sequence_step || 1)))
+    return row?.status === 'sent' ? step : step - 1
+  }
+
+  // Último e-mail enviado da prospecção, olhando só os contatos que ainda estão na sequência
+  // (quem respondeu ou foi parado não segura o andamento da campanha).
+  function prospectingRunProgress(rows) {
+    const active = rows.filter(row => !['cancelled', 'replied'].includes(row.status))
+    if (rows.length > 0 && active.length === 0) return 'Envio encerrado (sem contatos ativos)'
+    if (active.every(row => row.status === 'sent')) return 'Concluído o envio dos e-mails da campanha'
+    const reached = Math.min(...active.filter(row => row.status !== 'sent').map(emailsSentCount))
+    if (reached >= 2) return 'E-mail 2 enviado'
+    if (reached === 1) return 'E-mail 1 enviado'
+    return 'Aguardando envio do E-mail 1'
+  }
+
   function nextProspectingSend(leadId) {
     const row = prospectingState[leadId]
     if (!row?.next_attempt_at || row.replied_at || row.status === 'replied' || row.status === 'sent' || row.status === 'failed') return '—'
@@ -446,7 +465,7 @@ function EmailProspectingSequence({ organization, connection }) {
             return (
               <div className="email-prospecting-run" key={run.id}>
                 <button type="button" className="email-prospecting-run-toggle" onClick={() => setOpenProspectingId(opened ? null : run.id)}>
-                  <span>{run.name}</span>
+                  <span>{run.name}<em className="email-prospecting-run-progress">{prospectingRunProgress(rows)}</em></span>
                   <small>{rows.length} contato{rows.length === 1 ? '' : 's'} {opened ? '▲' : '▼'}</small>
                 </button>
                 {opened && (

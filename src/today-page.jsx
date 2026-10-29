@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, RefreshCw } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { ACTIVE_STATUSES, addDays, buildToday, daysBetween } from './today-rules'
+import DuplicatesTab, { loadDuplicateGroups } from './duplicates-tab.jsx'
 import './today-page.css'
 
 const LEAD_FIELDS = 'id,business_name,contact_name,phone,whatsapp_phone,status,next_contact_date,last_contact_date,last_contacted_at,proposal_sent_at,status_changed_at,updated_at,created_at,assigned_to,city,state,target_segments(name),campaigns(name)'
@@ -46,7 +47,8 @@ const TABS = [
   { id: 'attention', label: 'Alertas de risco', icon: AlertTriangle },
   { id: 'overdue', label: 'Atrasados', icon: CalendarDays },
   { id: 'today', label: 'Hoje', icon: CalendarDays },
-  { id: 'upcoming', label: 'Próximos 7 dias', icon: CalendarDays }
+  { id: 'upcoming', label: 'Próximos 7 dias', icon: CalendarDays },
+  { id: 'duplicates', label: 'Duplicados', icon: CalendarDays }
 ]
 
 export default function TodayPage({ organization, userEmail, onOpenLead, userId }) {
@@ -57,6 +59,7 @@ export default function TodayPage({ organization, userEmail, onOpenLead, userId 
   const [onlyMine, setOnlyMine] = useState(false)
   const [busyId, setBusyId] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [dupGroups, setDupGroups] = useState([])
   const today = brazilToday()
 
   const refresh = useCallback(async () => {
@@ -66,6 +69,13 @@ export default function TodayPage({ organization, userEmail, onOpenLead, userId 
     else { setMessage(''); setLeads(rows); setLoaded(true) }
     setRefreshing(false)
   }, [organization.id])
+
+  const refreshDuplicates = useCallback(async () => {
+    const { error, groups } = await loadDuplicateGroups(organization.id)
+    if (!error) setDupGroups(groups)
+  }, [organization.id])
+
+  useEffect(() => { refreshDuplicates() }, [refreshDuplicates])
 
   useEffect(() => {
     setLoaded(false)
@@ -78,7 +88,7 @@ export default function TodayPage({ organization, userEmail, onOpenLead, userId 
   const scoped = useMemo(() => (onlyMine && userId ? leads.filter(lead => lead.assigned_to === userId) : leads), [leads, onlyMine, userId])
   const data = useMemo(() => buildToday(scoped, today), [scoped, today])
 
-  const counts = { attention: data.risks.length, overdue: data.overdue.length, today: data.dueToday.length, upcoming: data.upcoming.length }
+  const counts = { attention: data.risks.length, overdue: data.overdue.length, today: data.dueToday.length, upcoming: data.upcoming.length, duplicates: dupGroups.length }
   // Abre na primeira aba que tem algo; o usuário pode trocar depois.
   const activeTab = tab || (TABS.find(item => counts[item.id] > 0)?.id ?? 'overdue')
 
@@ -138,6 +148,8 @@ export default function TodayPage({ organization, userEmail, onOpenLead, userId 
   let body
   if (!loaded) {
     body = <p className="muted today-empty-v111">Carregando…</p>
+  } else if (activeTab === 'duplicates') {
+    body = <DuplicatesTab groups={dupGroups} onOpenLead={onOpenLead} />
   } else if (activeTab === 'attention') {
     body = data.risks.length === 0
       ? <Empty title="Nenhum alerta de risco" text="Leads em andamento sem retorno aparecem aqui quando passam do prazo da etapa." />
@@ -188,7 +200,7 @@ export default function TodayPage({ organization, userEmail, onOpenLead, userId 
               <input type="checkbox" checked={onlyMine} onChange={event => setOnlyMine(event.target.checked)} /> Só meus leads
             </label>
           )}
-          <button type="button" className="secondary inline-btn" onClick={refresh} disabled={refreshing}>
+          <button type="button" className="secondary inline-btn" onClick={() => { refresh(); refreshDuplicates() }} disabled={refreshing}>
             <RefreshCw size={16} /> {refreshing ? 'Atualizando...' : 'Atualizar'}
           </button>
           <div className="user-badge">{userEmail}</div>

@@ -3,12 +3,14 @@ import { supabase } from './lib/supabase'
 import MarketingListImport from './marketing-list-import'
 import NewsletterMailingPanel from './newsletter-mailing-panel'
 import EmailCampaignHistory from './email-campaign-history'
+import { PaginationControls } from './paginated-selection'
 import './email-marketing.css'
 
 const BUCKET = 'email-campaign-attachments'
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 const MAX_TOTAL_BYTES = 15 * 1024 * 1024
 const CAMPAIGN_PAGE_SIZE = 20
+const PROSPECT_PAGE_SIZE = 20
 
 const EMAIL_VARIABLE_TOKENS = [
   ['{saudacao}', 'Saudação'],
@@ -154,6 +156,11 @@ function EmailProspectingSequence({ organization, connection }) {
   const [prospectingRuns, setProspectingRuns] = useState([])
   const [prospectingRecipients, setProspectingRecipients] = useState([])
   const [openProspectingId, setOpenProspectingId] = useState(null)
+  // "Contatos do CRM": 20 por página; a seleção (Set de ids) continua valendo entre páginas.
+  const [leadPage, setLeadPage] = useState(1)
+  const leadPageCount = Math.max(1, Math.ceil(leads.length / PROSPECT_PAGE_SIZE))
+  const safeLeadPage = Math.min(Math.max(1, leadPage), leadPageCount)
+  const pagedLeads = leads.slice((safeLeadPage - 1) * PROSPECT_PAGE_SIZE, safeLeadPage * PROSPECT_PAGE_SIZE)
   const [recipientActionId, setRecipientActionId] = useState(null)
   const subjectRef = useRef(null)
   const firstRef = useRef(null)
@@ -434,7 +441,7 @@ function EmailProspectingSequence({ organization, connection }) {
           </div>
           {leads.length === 0 ? (
             <p className="muted">Nenhum lead elegível com e-mail no momento.</p>
-          ) : leads.map(lead => (
+          ) : pagedLeads.map(lead => (
             <label className={`email-prospect-row ${lead.email_marketing_opt_out ? 'disabled' : ''}`} key={lead.id}>
               <input type="checkbox" disabled={Boolean(lead.email_marketing_opt_out)} checked={selected.has(lead.id)} onChange={e => toggle(lead.id, e.target.checked)} />
               <span><strong>{lead.business_name}</strong><small>{lead.email}{lead.city ? ` • ${lead.city}${lead.state ? `/${lead.state}` : ''}` : ''}{lead.email_marketing_opt_out ? ' • Recebimento cancelado' : ''}</small></span>
@@ -442,6 +449,7 @@ function EmailProspectingSequence({ organization, connection }) {
               {lead.website && <a href={/^https?:\/\//i.test(lead.website) ? lead.website : `https://${lead.website}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Site</a>}
             </label>
           ))}
+          <PaginationControls page={safeLeadPage} total={leads.length} pageSize={PROSPECT_PAGE_SIZE} onPageChange={setLeadPage} itemLabel="contatos" />
         </div>
 
         <label className="email-consent-check">

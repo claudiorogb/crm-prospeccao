@@ -45,6 +45,7 @@ import BillingPlanScreen from './billing-plan-screen'
 import BillingContractScreen from './billing-contract-screen'
 import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
 import whatsappIcon from './whatsapp-icon.png'
+import MessageTemplateItem from './message-template-item'
 
 
 const UF_OPTIONS = [
@@ -4299,6 +4300,7 @@ function Messages({ organization, userEmail }) {
   const [segments, setSegments] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [openTemplateId, setOpenTemplateId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const messageTextareaRef = useRef(null)
@@ -4506,19 +4508,15 @@ function Messages({ organization, userEmail }) {
         {templates.length===0 ? (
           <article className="panel empty-state"><MessageSquareText size={34}/><h2>Nenhum modelo criado</h2><p>Crie mensagens específicas para seus públicos-alvo.</p></article>
         ) : templates.map(t=>(
-          <article className="panel message-card" key={t.id}>
-            <div className="message-card-main">
-              <span className="eyebrow">{t.target_segments?.name || t.segment}</span>
-              <h2>{t.name} {t.is_default_for_target && <span className="inline-default-badge">Padrão</span>}</h2>
-              <p>{t.body}</p>
-            </div>
-            <div className="message-card-actions">
-              <span className={`template-status ${t.is_active?'active':'inactive'}`}>{t.is_active?'Ativo':'Inativo'}</span>
-              <button className="secondary" onClick={()=>editTemplate(t)}>Editar</button>
-              <button className="secondary" onClick={()=>toggleActive(t)}>{t.is_active?'Desativar':'Ativar'}</button>
-              <button className="text-danger" onClick={()=>deleteTemplate(t)}><Trash2 size={14}/> Arquivar</button>
-            </div>
-          </article>
+          <MessageTemplateItem
+            key={t.id}
+            template={t}
+            open={openTemplateId===t.id}
+            onToggle={()=>setOpenTemplateId(current=>current===t.id?null:t.id)}
+            onEdit={()=>{editTemplate(t);window.scrollTo({top:0,behavior:'smooth'})}}
+            onToggleActive={()=>toggleActive(t)}
+            onArchive={()=>deleteTemplate(t)}
+          />
         ))}
       </section>
     </>

@@ -1,0 +1,13 @@
+/* Lista compacta de modelos de mensagem */
+.message-item-v110{padding:0;overflow:hidden}
+.message-item-head-v110{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.message-item-head-v110:hover{background:#f8fafc}
+.message-item-head-v110:focus-visible{outline:2px solid rgba(15,118,110,.45);outline-offset:-2px}
+.message-item-titles-v110{display:grid;gap:3px;min-width:0}
+.message-item-titles-v110 strong{font-size:1.05rem;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.message-item-inactive-v110{font-size:11px}
+.message-item-chevron-v110{flex:none;color:#64748b;transition:transform .15s ease}
+.message-item-v110.is-open .message-item-chevron-v110{transform:rotate(180deg)}
+.message-item-body-v110{padding:4px 18px 16px;border-top:1px solid #e2e8f0;display:grid;gap:12px}
+.message-item-body-v110 p{margin:12px 0 0;color:#475569;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.message-item-actions-v110{flex-wrap:wrap;white-space:normal}

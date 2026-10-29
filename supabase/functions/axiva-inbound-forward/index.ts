@@ -154,22 +154,26 @@ Deno.serve(async (request: Request) => {
         if(Array.isArray(matches)&&matches.length===1)matchedRecipient=matches[0];
       }
     }
+    // Resposta que não pôde ser ligada com segurança a um contato: nunca é descartada.
+    // Vai para o destino padrão com um aviso, sem mexer no funil nem parar nenhuma sequência.
+    let unlinkedReason = "";
     if(replyToken||isSystemReply||isCustomReply){
       if(!matchedRecipient){
-        await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: "Prospecting reply could not be matched safely" }).eq("received_email_id", receivedId);
-        return json({ ok: true, ignored: true });
+        unlinkedReason = "Prospecting reply could not be matched safely";
+      } else {
+        const { data: campaign, error: campaignError } = await admin
+          .from("email_campaigns")
+          .select("provider,sequence_mode")
+          .eq("id", matchedRecipient.campaign_id)
+          .eq("organization_id", matchedRecipient.organization_id)
+          .maybeSingle();
+        if (campaignError) throw campaignError;
+        if (!campaign?.sequence_mode || campaign?.provider !== "resend") {
+          unlinkedReason = "Reply is not attached to an active Resend prospecting sequence";
+        }
       }
-      const { data: campaign, error: campaignError } = await admin
-        .from("email_campaigns")
-        .select("provider,sequence_mode")
-        .eq("id", matchedRecipient.campaign_id)
-        .eq("organization_id", matchedRecipient.organization_id)
-        .maybeSingle();
-      if (campaignError) throw campaignError;
-      if (!campaign?.sequence_mode || campaign?.provider !== "resend") {
-        await admin.from("axiva_inbound_forwarding").update({ status: "failed", updated_at: new Date().toISOString(), last_error: "Reply is not attached to an active Resend prospecting sequence" }).eq("received_email_id", receivedId);
-        return json({ ok: true, ignored: true });
-      }
+    }
+    if(matchedRecipient && !unlinkedReason){
       const { error: markError } = await admin.rpc("email_mark_prospecting_reply", { p_recipient_id: matchedRecipient.id });
       if (markError) throw markError;
       const { data: connection, error: connectionError } = await admin
@@ -194,20 +198,27 @@ Deno.serve(async (request: Request) => {
       content_type: attachment.mimeType,
       content_id: attachment.contentId?.replace(/^<|>$/g, "") || undefined,
     }));
+    const baseSubject = original.subject || received.subject || "(sem assunto)";
+    const notice = `AVISO: esta resposta NÃO foi vinculada a nenhum contato do CRM (o remetente ou a referência ao e-mail original não conferiu). O contato não foi movido para "Respondeu" e nenhuma sequência foi interrompida. Remetente: ${sender}.`;
+    const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const forwardText = unlinkedReason ? `${notice}\n\n----------\n\n${original.text || ""}` : (original.text || undefined);
+    const forwardHtml = unlinkedReason
+      ? `<div style="border:2px solid #b45309;background:#fffbeb;color:#78350f;padding:10px 12px;margin-bottom:14px;font-family:Arial,sans-serif;font-size:14px"><strong>${escapeHtml(notice)}</strong></div>${original.html || ""}`
+      : (original.html || undefined);
     const { data, error } = await resend.emails.send({
       from: `"${display} via AXIVA" <${FORWARD_FROM}>`,
       to: [target],
       replyTo: replyAddress,
-      subject: original.subject || received.subject || "(sem assunto)",
-      text: original.text || undefined,
-      html: original.html || undefined,
+      subject: unlinkedReason ? `[Não vinculada] ${baseSubject}` : baseSubject,
+      text: forwardText,
+      html: forwardHtml,
       attachments: attachments.length ? attachments : undefined,
       headers: { "X-AXIVA-Original-From": sender },
     });
     if (error || !data?.id) throw new Error(`Resend forward failed: ${error?.name || "provider error"}`);
-    const { error: saveError } = await admin.from("axiva_inbound_forwarding").update({ status: "forwarded", forwarded_email_id: data.id, updated_at: new Date().toISOString(), last_error: null }).eq("received_email_id", receivedId);
+    const { error: saveError } = await admin.from("axiva_inbound_forwarding").update({ status: "forwarded", forwarded_email_id: data.id, updated_at: new Date().toISOString(), last_error: unlinkedReason ? `Forwarded without contact link: ${unlinkedReason}`.slice(0, 160) : null }).eq("received_email_id", receivedId);
     if (saveError) throw new Error("Unable to record successful forwarding");
-    return json({ ok: true, prospecting_reply: Boolean(replyToken||isSystemReply||isCustomReply) });
+    return json({ ok: true, prospecting_reply: Boolean(replyToken||isSystemReply||isCustomReply) && !unlinkedReason, ...(unlinkedReason ? { unlinked: true } : {}) });
   } catch (error) {
     console.error("Inbound forwarding error", error);
     const failureMessage = error instanceof Error ? error.message : String((error as any)?.message || error || "Forwarding failed");

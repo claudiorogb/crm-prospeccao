@@ -1,0 +1,5 @@
+.cadence-v1{margin-top:16px}
+.cadence-row-v1{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 0;border-top:1px solid rgba(128,128,128,.18)}
+.cadence-row-v1 strong{min-width:160px}
+.cadence-row-v1 input[type=number]{width:60px;margin:0 4px}
+.cadence-row-v1 select{max-width:260px}

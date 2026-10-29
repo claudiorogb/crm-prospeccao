@@ -94,7 +94,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
     setProbDraft(null); setMessage('Probabilidades salvas.'); load()
   }
 
-  function GoalEditor({ k, uid, goal }) {
+  function goalEditor(k, uid, goal) {
     const d = drafts[k] || {}
     const set = patch => setDrafts(old => ({ ...old, [k]: { ...old[k], ...patch } }))
     return (
@@ -124,7 +124,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
               <div className="goals-row">
                 <span>{company.won} ganho(s) • {money(company.value)}</span>
                 <Bar pct={company.pctCount} /><Bar pct={company.pctValue} />
-                <GoalEditor k="company" uid={null} goal={company.goal} />
+                {goalEditor('company', null, company.goal)}
               </div>
             </section>
           )}
@@ -137,7 +137,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
                 <strong>{s.name}</strong>
                 <span>{s.won} ganho(s) • {money(s.value)}</span>
                 <Bar pct={s.pctCount} /><Bar pct={s.pctValue} />
-                {canEdit && s.user_id && <GoalEditor k={s.user_id} uid={s.user_id} goal={s.goal} />}
+                {canEdit && s.user_id && goalEditor(s.user_id, s.user_id, s.goal)}
               </div>
             ))}
             <p className="muted goals-note">Barras: 1ª = quantidade de negócios ganhos, 2ª = valor dos contratos. Considera a data de assinatura do contrato.</p>

@@ -4,14 +4,22 @@ import './whatsapp-cadence-panel.css'
 
 // Cadência automática de follow-up por campanha. Desligada por padrão.
 // Os envios continuam passando pela fila normal (janela, dias, limite diário, intervalo e pausa).
-export default function WhatsappCadencePanel({ organization, segments, templates }) {
+export default function WhatsappCadencePanel({ organization }) {
+  const [segments, setSegments] = useState([])
+  const [templates, setTemplates] = useState([])
   const [rows, setRows] = useState({})
   const [message, setMessage] = useState('')
   const [open, setOpen] = useState(false)
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('whatsapp_cadences').select('*').eq('organization_id', organization.id)
+    const [cad, seg, tpl] = await Promise.all([
+      supabase.from('whatsapp_cadences').select('*').eq('organization_id', organization.id),
+      supabase.from('target_segments').select('id,name').eq('organization_id', organization.id).is('deleted_at', null).eq('is_active', true).order('name'),
+      supabase.from('message_templates').select('id,name,body,target_segment_id,is_active,deleted_at').eq('organization_id', organization.id)
+    ])
+    const { data, error } = cad
     if (error) { setMessage(error.message); return }
+    setSegments(seg.data || []); setTemplates(tpl.data || [])
     setRows(Object.fromEntries((data || []).map(row => [row.target_segment_id, row])))
   }, [organization.id])
 

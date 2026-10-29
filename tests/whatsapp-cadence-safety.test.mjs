@@ -18,5 +18,5 @@ test('respeita pausa, janela, dias e limite diário; função não é exposta', 
     assert.ok(sql.includes(piece), piece)
 })
 test('painel aparece na tela Mensagens', () => {
-  assert.match(fs.readFileSync('src/App.jsx', 'utf8'), /<WhatsappCadencePanel organization=\{organization\}/)
+  assert.match(fs.readFileSync('src/App.jsx', 'utf8'), /<WhatsappCadencePanel organization=\{organization\} />)
 })

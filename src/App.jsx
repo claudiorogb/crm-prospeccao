@@ -1965,7 +1965,6 @@ function Campaigns({ organization, settings, userEmail }) {
         ))}
       </section>
 
-      <WhatsappCadencePanel organization={organization} segments={segments} templates={templates} />
     </>
   )
 }
@@ -5716,6 +5715,8 @@ function MessageSending({ organization, settings, userEmail }) {
           </div>
         </div>
       </section>
+
+      <WhatsappCadencePanel organization={organization} />
 
       <section className="panel manual-recipient-panel-v73">
         <div className="panel-head">

@@ -406,3 +406,6 @@
   .email-dns-record-card{grid-template-columns:1fr}
   .email-dns-record-card .email-dns-value{grid-column:auto}
 }
+
+/* Andamento da prospecção (último e-mail enviado) */
+.email-prospecting-run-progress{display:block;font-style:normal;font-weight:600;font-size:.8rem;color:#0f766e;margin-top:2px}

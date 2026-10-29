@@ -4546,6 +4546,8 @@ function MessageSending({ organization, settings, userEmail }) {
   const [contactedTotal, setContactedTotal] = useState(0)
   const [contactedPage, setContactedPage] = useState(1)
   const [contactedSelected, setContactedSelected] = useState(new Map())
+  // Data/hora do último envio de cada cliente contactado (lead_id -> ISO), calculada a cada carga da página.
+  const [contactedLastSent, setContactedLastSent] = useState({})
   const pagesRef = useRef({ sending: 1, contacted: 1 })
   const loadSeqRef = useRef(0)
   const excludedLeadIdsRef = useRef([])
@@ -4689,6 +4691,40 @@ function MessageSending({ organization, settings, userEmail }) {
       setMessage(leadResult.error?.message || contactedResult.error?.message || 'Não foi possível carregar a página de envio.')
       return
     }
+
+    // Último envio de cada cliente da página: maior horário entre as mensagens enviadas pelo CRM
+    // e as enviadas pelo celular (conversa do WhatsApp). Recalculado em toda carga/atualização.
+    const contactedIds = (contactedResult.data || []).map(item => item.id)
+    const lastSentMap = {}
+    if (contactedIds.length) {
+      const [crmSent, phoneSent] = await Promise.all([
+        supabase
+          .from('outbound_messages')
+          .select('lead_id,sent_at')
+          .eq('organization_id', organization.id)
+          .in('lead_id', contactedIds)
+          .eq('status', 'sent')
+          .not('sent_at', 'is', null)
+          .order('sent_at', { ascending: false })
+          .limit(2000),
+        supabase
+          .from('whatsapp_messages')
+          .select('lead_id,occurred_at')
+          .eq('organization_id', organization.id)
+          .in('lead_id', contactedIds)
+          .eq('direction', 'outbound')
+          .order('occurred_at', { ascending: false })
+          .limit(2000)
+      ])
+      for (const row of crmSent.data || []) {
+        if (row.lead_id && (!lastSentMap[row.lead_id] || row.sent_at > lastSentMap[row.lead_id])) lastSentMap[row.lead_id] = row.sent_at
+      }
+      for (const row of phoneSent.data || []) {
+        if (row.lead_id && (!lastSentMap[row.lead_id] || row.occurred_at > lastSentMap[row.lead_id])) lastSentMap[row.lead_id] = row.occurred_at
+      }
+    }
+    if (seq !== loadSeqRef.current) return
+    setContactedLastSent(lastSentMap)
 
     excludedLeadIdsRef.current = excludedIds
     pagesRef.current = { sending: leadResult.page, contacted: contactedResult.page }
@@ -5510,6 +5546,9 @@ function MessageSending({ organization, settings, userEmail }) {
                     <strong>{lead.business_name}</strong>
                     <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'} • {lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
                     <small>{lead.phone || 'Sem telefone'}{lead.email ? ` • ${lead.email}` : ''}</small>
+                    <small className="last-sent-v110"><strong>Último envio:</strong> {contactedLastSent[lead.id]
+                      ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(contactedLastSent[lead.id]))
+                      : '—'}</small>
                     {(lead.website || lead.email) && (
                       <small className="lead-contact-links">
                         {lead.website && <ExternalWebsiteLink value={lead.website} />}

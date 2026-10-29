@@ -171,3 +171,6 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Último envio em "Clientes contactados" */
+.last-sent-v110{color:#0f766e}

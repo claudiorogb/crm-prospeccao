@@ -46,6 +46,8 @@ import BillingContractScreen from './billing-contract-screen'
 import TrialTermsScreen, { AXIVA_TRIAL_TERMS_VERSION, AXIVA_PRIVACY_VERSION } from './trial-terms-screen'
 import whatsappIcon from './whatsapp-icon.png'
 import MessageTemplateItem from './message-template-item'
+import TodayPage, { loadTodayLeads, brazilToday } from './today-page'
+import { buildToday } from './today-rules'
 
 
 const UF_OPTIONS = [
@@ -6635,17 +6637,14 @@ function overdueDays(dateValue) {
 }
 
 function OverdueReturnsNavItem({ organization, active, onOpen }) {
+  // Item "Hoje": o contador reúne retornos atrasados e alertas de risco (cada lead conta uma vez).
   const [count, setCount] = useState(0)
 
   useEffect(() => {
     let mounted = true
     async function refresh() {
-      const { data } = await supabase
-        .from('leads')
-        .select('id,status,next_contact_date,last_contact_date')
-        .eq('organization_id', organization.id)
-        .lt('next_contact_date', currentBrazilDate())
-      if (mounted) setCount((data || []).filter(isOverdueReturn).length)
+      const { error, rows } = await loadTodayLeads(organization.id)
+      if (mounted && !error) setCount(buildToday(rows, brazilToday()).attentionCount)
     }
     refresh()
     const timer = setInterval(refresh, 30000)
@@ -6658,7 +6657,7 @@ function OverdueReturnsNavItem({ organization, active, onOpen }) {
         <CalendarDays size={18}/>
         {count > 0 && <strong>{count > 99 ? '99+' : count}</strong>}
       </span>
-      Retornos atrasados
+      Hoje
     </button>
   )
 }
@@ -6703,73 +6702,9 @@ function OverdueReturnsAlert({ organization, onOpen, userId }) {
   )
 }
 
-function OverdueReturnsPage({ organization, userEmail, onOpenLead }) {
-  const [leads, setLeads] = useState([])
-  const [message, setMessage] = useState('')
-
-  const statusNames = {
-    new: 'Novo', qualified: 'Qualificado', queued: 'Na fila', contacted: 'Contatado',
-    replied: 'Respondeu', interested: 'Interessado', proposal: 'Proposta'
-  }
-
-  async function loadData() {
-    const { data, error } = await supabase
-      .from('leads')
-      .select('id,business_name,contact_name,phone,status,next_contact_date,last_contact_date,city,state,target_segments(name),campaigns(name)')
-      .eq('organization_id', organization.id)
-      .lt('next_contact_date', currentBrazilDate())
-      .order('next_contact_date', { ascending: true })
-
-    if (error) setMessage(error.message)
-    else {
-      setMessage('')
-      setLeads((data || []).filter(isOverdueReturn))
-    }
-  }
-
-  useEffect(() => {
-    loadData()
-    const timer = setInterval(loadData, 15000)
-    return () => clearInterval(timer)
-  }, [organization.id])
-
-  return (
-    <>
-      <header className="topbar compact-subpage-header">
-        <div>
-          <span className="eyebrow">ACOMPANHAMENTO</span>
-          <h1>Retornos atrasados</h1>
-          <p className="muted">Esta lista não retira o lead do funil. Ela funciona como uma fila de acompanhamento dos contatos vencidos.</p>
-        </div>
-        <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
-      </header>
-
-      {message && <div className="notice error">{message}</div>}
-
-      <section className="overdue-list-v45">
-        {leads.length === 0 ? (
-          <article className="panel empty-state">
-            <CalendarDays size={34}/>
-            <h2>Nenhum retorno atrasado</h2>
-            <p>Quando um próximo contato vencer sem atendimento, ele aparecerá aqui automaticamente.</p>
-          </article>
-        ) : leads.map(lead => (
-          <article className="panel overdue-row-v45" key={lead.id}>
-            <div className="overdue-company-v45">
-              <strong>{lead.business_name}</strong>
-              <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'}</span>
-            </div>
-            <div><span>Contato</span><strong>{lead.contact_name || 'Não informado'}</strong></div>
-            <div><span>Telefone / WhatsApp</span><strong>{lead.phone || 'Não informado'}</strong></div>
-            <div><span>Retorno previsto</span><strong>{lead.next_contact_date ? new Date(`${lead.next_contact_date}T12:00:00`).toLocaleDateString('pt-BR') : '—'}</strong></div>
-            <div><span>Atraso</span><strong className="overdue-days-v45">{overdueDays(lead.next_contact_date)} dia(s)</strong></div>
-            <div><span>Etapa do funil</span><strong>{statusNames[lead.status] || lead.status}</strong></div>
-            <button className="secondary inline-btn" onClick={() => onOpenLead(lead)}>Abrir lead <ChevronRight size={16}/></button>
-          </article>
-        ))}
-      </section>
-    </>
-  )
+function OverdueReturnsPage({ organization, userEmail, onOpenLead, userId }) {
+  // Tela "Hoje": retornos (atrasados, de hoje e dos próximos dias) e alertas de risco.
+  return <TodayPage organization={organization} userEmail={userEmail} onOpenLead={onOpenLead} userId={userId} />
 }
 
 function PlatformSalesOverview({ userEmail }) {
@@ -10273,7 +10208,7 @@ export default function App() {
             <SalesPage organization={sandboxOrganization} userEmail={userEmail} />
           )}
           {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'overdue-returns' && (
-            <OverdueReturnsPage organization={sandboxOrganization} userEmail={userEmail}
+            <OverdueReturnsPage organization={sandboxOrganization} userEmail={userEmail} userId={session?.user?.id}
               onOpenLead={lead => {
                 sessionStorage.setItem('crm_focus_lead', JSON.stringify({ id: lead.id, business_name: lead.business_name }))
                 setAdminCommercialPage('sales-funnel')
@@ -10475,6 +10410,7 @@ export default function App() {
           <OverdueReturnsPage
             organization={organization}
             userEmail={userLabel}
+            userId={session.user.id}
             onOpenLead={(lead) => {
               sessionStorage.setItem('crm_focus_lead', JSON.stringify({ id: lead.id, business_name: lead.business_name }))
               setPage('sales-funnel')

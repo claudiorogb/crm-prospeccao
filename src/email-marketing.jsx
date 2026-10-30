@@ -1,3 +1,4 @@
+import HelpTip from './help-tip.jsx'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
 import MarketingListImport from './marketing-list-import'
@@ -392,8 +393,9 @@ function EmailProspectingSequence({ organization, connection }) {
       <div className="email-section-title">
         <div>
           <span className="eyebrow">PROSPECÇÃO POR E-MAIL</span>
-          <h2>Sequência automática D1 · D4 · D8</h2>
-          <p className="muted">Primeiro contato no Dia 1, follow-up no Dia 4 e último contato no Dia 8. Se o lead responder, os próximos envios são cancelados e ele vai para Respondeu.</p>
+          <h2>Sequência automática D1 · D4 · D8
+            <HelpTip label="Como funciona a sequência D1 · D4 · D8" text="Primeiro contato no Dia 1, follow-up no Dia 4 e último contato no Dia 8. Se o lead responder, os próximos envios são cancelados e ele vai para Respondeu." />
+          </h2>
         </div>
         {connection?.provider === 'gmail' && (
           <button type="button" className="secondary" onClick={authorizeProspecting} disabled={loading}>

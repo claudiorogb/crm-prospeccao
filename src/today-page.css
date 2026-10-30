@@ -31,3 +31,7 @@
   .today-row-v111{grid-template-columns:1fr}
   .today-actions-v111{justify-content:flex-start;flex-wrap:wrap}
 }
+
+/* Botões e texto à esquerda, para não ficarem sob o ícone flutuante da IA */
+.today-header-left{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:12px}
+.today-header-left .topbar-actions{justify-content:flex-start;margin-left:0}

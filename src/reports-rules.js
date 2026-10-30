@@ -11,7 +11,31 @@ export function wonDate(lead) {
 }
 
 export function wonInMonth(leads, month) {
-  return leads.filter(l => l.status === 'won' && monthStart(wonDate(l)) === month)
+  return wonInMonths(leads, [month])
+}
+
+export function wonInMonths(leads, months) {
+  const set = new Set([].concat(months))
+  return leads.filter(l => l.status === 'won' && set.has(monthStart(wonDate(l))))
+}
+
+// Meses (YYYY-MM-01) cobertos pela visão: mês, trimestre, semestre ou ano que contém `anchor`.
+export const PERIOD_TYPES = [['month', 'Mês', 1], ['quarter', 'Trimestre', 3], ['semester', 'Semestre', 6], ['year', 'Ano', 12]]
+export function periodMonths(type, anchor) {
+  const size = (PERIOD_TYPES.find(([id]) => id === type) || PERIOD_TYPES[0])[2]
+  const year = Number(String(anchor).slice(0, 4))
+  const month = Number(String(anchor).slice(5, 7)) - 1
+  const first = Math.floor(month / size) * size
+  return Array.from({ length: size }, (_, i) => `${year}-${String(first + i + 1).padStart(2, '0')}-01`)
+}
+
+// Soma as metas mensais dos meses da visão (null quando não há meta cadastrada).
+export function sumGoals(goals, months, userId) {
+  const set = new Set([].concat(months))
+  const list = goals.filter(g => (g.user_id || null) === (userId || null) && set.has(g.period))
+  if (!list.length) return null
+  const sum = key => (list.some(g => g[key] != null) ? list.reduce((t, g) => t + num(g[key]), 0) : null)
+  return { target_won_count: sum('target_won_count'), target_value: sum('target_value') }
 }
 
 export function progress(leads, goal) {
@@ -22,10 +46,10 @@ export function progress(leads, goal) {
 }
 
 export function bySeller(leads, month, members, goals) {
-  const wonLeads = wonInMonth(leads, month)
+  const wonLeads = wonInMonths(leads, month)
   const rows = members.map(m => {
     const mine = wonLeads.filter(l => l.assigned_to === m.user_id)
-    const goal = goals.find(g => g.user_id === m.user_id && g.period === month)
+    const goal = sumGoals(goals, month, m.user_id)
     return { user_id: m.user_id, name: m.display_name || 'Usuário', goal, ...progress(mine, goal) }
   })
   const unassigned = wonLeads.filter(l => !l.assigned_to || !members.some(m => m.user_id === l.assigned_to))
@@ -34,8 +58,8 @@ export function bySeller(leads, month, members, goals) {
 }
 
 export function companyProgress(leads, month, goals) {
-  const goal = goals.find(g => !g.user_id && g.period === month)
-  return { goal, ...progress(wonInMonth(leads, month), goal) }
+  const goal = sumGoals(goals, month, null)
+  return { goal, ...progress(wonInMonths(leads, month), goal) }
 }
 
 export function byCampaign(leads) {

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { brazilToday } from './today-page.jsx'
 import { lossReasonLabel } from './loss-reasons.js'
-import { monthStart, bySeller, companyProgress, byCampaign, funnelCounts, lossBreakdown, avgDaysToWin, forecast, normalizeProbabilities, FORECAST_STAGES } from './reports-rules.js'
+import { monthStart, periodMonths, PERIOD_TYPES, bySeller, companyProgress, byCampaign, funnelCounts, lossBreakdown, avgDaysToWin, forecast, normalizeProbabilities, FORECAST_STAGES } from './reports-rules.js'
 import './goals-page.css'
 
 const FIELDS = 'id,status,campaign_id,assigned_to,contract_value,contract_signed_at,status_changed_at,created_at,loss_reason,proposal_value,renegotiated_value,campaigns(name)'
@@ -24,6 +24,14 @@ async function loadLeads(organizationId) {
 
 const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const monthLabel = m => new Date(`${m}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+function periodLabel(type, list) {
+  if (type === 'month') return monthLabel(list[0])
+  const year = list[0].slice(0, 4)
+  const first = Number(list[0].slice(5, 7))
+  if (type === 'quarter') return `${Math.ceil(first / 3)}º trimestre de ${year}`
+  if (type === 'semester') return `${first <= 6 ? 1 : 2}º semestre de ${year}`
+  return `Ano de ${year}`
+}
 
 function shiftMonth(month, delta) {
   const d = new Date(`${month}T12:00:00`)
@@ -37,7 +45,8 @@ function Bar({ pct }) {
 }
 
 export default function GoalsPage({ organization, userEmail, userId, canEdit }) {
-  const [month, setMonth] = useState(() => monthStart(brazilToday()))
+  const [anchor, setAnchor] = useState(() => monthStart(brazilToday()))
+  const [periodType, setPeriodType] = useState('month')
   const [leads, setLeads] = useState([])
   const [members, setMembers] = useState([])
   const [goals, setGoals] = useState([])
@@ -61,15 +70,22 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
 
   useEffect(() => { setLoaded(false); load() }, [load])
 
-  const company = useMemo(() => companyProgress(leads, month, goals), [leads, month, goals])
-  const sellers = useMemo(() => bySeller(leads, month, members, goals), [leads, month, members, goals])
+  const months = useMemo(() => periodMonths(periodType, anchor), [periodType, anchor])
+  const month = months[0]
+  const isMonthView = periodType === 'month'
+  const inPeriod = useMemo(() => {
+    const set = new Set(months)
+    return leads.filter(l => set.has(monthStart(String(l.created_at || '').slice(0, 10))))
+  }, [leads, months])
+  const company = useMemo(() => companyProgress(leads, months, goals), [leads, months, goals])
+  const sellers = useMemo(() => bySeller(leads, months, members, goals), [leads, months, members, goals])
   const mineOnly = !canEdit
   const visibleSellers = mineOnly ? sellers.filter(s => s.user_id === userId) : sellers
-  const campaigns = useMemo(() => byCampaign(leads), [leads])
-  const funnel = useMemo(() => funnelCounts(leads), [leads])
-  const losses = useMemo(() => lossBreakdown(leads, lossReasonLabel), [leads])
+  const campaigns = useMemo(() => byCampaign(inPeriod), [inPeriod])
+  const funnel = useMemo(() => funnelCounts(inPeriod), [inPeriod])
+  const losses = useMemo(() => lossBreakdown(inPeriod, lossReasonLabel), [inPeriod])
   const fc = useMemo(() => forecast(leads, probs, members), [leads, probs, members])
-  const avgDays = useMemo(() => avgDaysToWin(leads), [leads])
+  const avgDays = useMemo(() => avgDaysToWin(inPeriod), [inPeriod])
 
   async function saveGoal(key, uid) {
     const draft = drafts[key] || {}
@@ -113,10 +129,16 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
       {!loaded ? <p className="muted">Carregando…</p> : (
         <div className="goals-v1">
           <div className="goals-month">
-            <button type="button" className="secondary mini" onClick={() => setMonth(shiftMonth(month, -1))}>‹</button>
-            <strong>{monthLabel(month)}</strong>
-            <button type="button" className="secondary mini" onClick={() => setMonth(shiftMonth(month, 1))}>›</button>
+            <div className="goals-period-tabs" role="tablist" aria-label="Período">
+              {PERIOD_TYPES.map(([id, label]) => (
+                <button key={id} type="button" role="tab" aria-selected={periodType === id} className={periodType === id ? 'primary mini' : 'secondary mini'} onClick={() => setPeriodType(id)}>{label}</button>
+              ))}
+            </div>
+            <button type="button" className="secondary mini" aria-label="Período anterior" onClick={() => setAnchor(shiftMonth(month, -months.length))}>‹</button>
+            <strong>{periodLabel(periodType, months)}</strong>
+            <button type="button" className="secondary mini" aria-label="Próximo período" onClick={() => setAnchor(shiftMonth(month, months.length))}>›</button>
           </div>
+          {!isMonthView && <p className="muted goals-note">Nesta visão as metas são a soma das metas mensais. Para definir ou alterar uma meta, use a visão "Mês".</p>}
 
           {canEdit && (
             <section className="panel goals-card">
@@ -124,7 +146,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
               <div className="goals-row">
                 <span>{company.won} ganho(s) • {money(company.value)}</span>
                 <Bar pct={company.pctCount} /><Bar pct={company.pctValue} />
-                {goalEditor('company', null, company.goal)}
+                {isMonthView && goalEditor('company', null, company.goal)}
               </div>
             </section>
           )}
@@ -137,14 +159,14 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
                 <strong>{s.name}</strong>
                 <span>{s.won} ganho(s) • {money(s.value)}</span>
                 <Bar pct={s.pctCount} /><Bar pct={s.pctValue} />
-                {canEdit && s.user_id && goalEditor(s.user_id, s.user_id, s.goal)}
+                {canEdit && isMonthView && s.user_id && goalEditor(s.user_id, s.user_id, s.goal)}
               </div>
             ))}
             <p className="muted goals-note">Barras: 1ª = quantidade de negócios ganhos, 2ª = valor dos contratos. Considera a data de assinatura do contrato.</p>
           </section>
 
           <section className="panel goals-card">
-            <h2>Previsão de vendas <small className="muted">(estimativa)</small></h2>
+            <h2>Previsão de vendas <small className="muted">(estimativa, negócios abertos hoje)</small></h2>
             <p><strong>{money(fc.total)}</strong> previstos • {money(fc.openTotal)} em negócios abertos ({fc.count})</p>
             <table className="goals-table"><thead><tr><th>Etapa</th><th>Negócios</th><th>Valor em aberto</th><th>Chance</th><th>Previsto</th></tr></thead>
               <tbody>{fc.byStage.map(r => <tr key={r.stage}><td>{r.label}</td><td>{r.count}</td><td>{money(r.open)}</td>
@@ -156,19 +178,19 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
           </section>
 
           <section className="panel goals-card">
-            <h2>Funil geral</h2>
+            <h2>Funil do período <small className="muted">(leads captados no período)</small></h2>
             <div className="goals-funnel">{funnel.map(([label, n]) => <div key={label}><strong>{n}</strong><span>{label}</span></div>)}</div>
             {avgDays !== null && <p className="muted">Tempo médio da captação até o ganho: {avgDays} dia(s).</p>}
           </section>
 
           <section className="panel goals-card">
-            <h2>Resposta por campanha</h2>
+            <h2>Resposta por campanha <small className="muted">(leads captados no período)</small></h2>
             <table className="goals-table"><thead><tr><th>Campanha</th><th>Leads</th><th>Contatados</th><th>Responderam</th><th>Taxa</th><th>Ganhos</th></tr></thead>
               <tbody>{campaigns.map(c => <tr key={c.name}><td>{c.name}</td><td>{c.total}</td><td>{c.contacted}</td><td>{c.replied}</td><td>{c.replyRate === null ? '—' : `${c.replyRate}%`}</td><td>{c.won}</td></tr>)}</tbody></table>
           </section>
 
           <section className="panel goals-card">
-            <h2>Motivos de perda e de não interesse</h2>
+            <h2>Motivos de perda e de não interesse <small className="muted">(leads captados no período)</small></h2>
             {losses.length === 0 ? <p className="muted">Nenhum registro ainda.</p> : <ul className="goals-losses">{losses.map(([label, n]) => <li key={label}><span>{label}</span><strong>{n}</strong></li>)}</ul>}
           </section>
         </div>

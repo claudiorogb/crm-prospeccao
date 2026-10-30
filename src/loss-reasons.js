@@ -6,6 +6,7 @@ export const LOSS_REASONS = [
   ['no_response', 'Parou de responder'],
   ['timing', 'Não é o momento'],
   ['no_need', 'Não tem necessidade'],
+  ['has_crm', 'Já tem CRM de outra empresa'],
   ['other', 'Outro']
 ]
 

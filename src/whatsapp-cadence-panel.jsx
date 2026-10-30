@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
+import HelpTip from './help-tip.jsx'
 import './whatsapp-cadence-panel.css'
 
 const TOKENS = [['{saudacao}', 'Saudação'], ['{empresa}', 'Empresa'], ['{cidade}', 'Cidade'], ['{uf}', 'UF'], ['{telefone}', 'Telefone'], ['{segmento}', 'Segmento'], ['{email}', 'E-mail']]
@@ -143,13 +144,9 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0 }) {
       <div className="cadence-head-v2">
         <div>
           <span className="eyebrow">PROSPECÇÃO POR WHATSAPP</span>
-          <h2>Sequência automática de follow-up</h2>
-          <p className="muted">
-            Crie a cadência e inicie o envio das mensagens da campanha. Ao iniciar o envio, a cadência fica vinculada a ele, sai desta tela e
-            segue em "Cadências em andamento". Se o lead não responder, o CRM envia o 1º follow-up após {form.step1_delay_days || 3} dia(s)
-            e, se houver, o 2º após mais {form.step2_delay_days || 5} dia(s). Se o lead responder, os próximos envios são cancelados.
-            Pausar ou cancelar o envio também para a cadência. Respeita o horário, os dias, o limite diário e o intervalo já configurados.
-          </p>
+          <h2>Sequência automática de follow-up
+            <HelpTip label="Como funciona a sequência automática de follow-up" text={`Crie a cadência e inicie o envio das mensagens da campanha. Ao iniciar o envio, a cadência fica vinculada a ele. Se o lead não responder, o CRM envia o 1º follow-up após ${form.step1_delay_days || 3} dias e, se ainda assim o lead não responder, envia o último após ${form.step2_delay_days || 5} dias. Se o lead responder, os próximos envios são cancelados.`} />
+          </h2>
         </div>
       </div>
 

@@ -270,8 +270,14 @@ function EmailProspectingSequence({ organization, connection }) {
   }
 
   useEffect(() => {
-    setSelected(new Set())
-    setMessage('')
+    // Leads enviados da tela "Enviar mensagens" (sem telefone) chegam já selecionados.
+    let preselected = []
+    try {
+      preselected = JSON.parse(sessionStorage.getItem('crm_email_preselect') || '[]')
+      sessionStorage.removeItem('crm_email_preselect')
+    } catch {}
+    setSelected(new Set(Array.isArray(preselected) ? preselected : []))
+    setMessage(preselected.length ? `${preselected.length} lead(s) selecionado(s) para a prospecção. Escreva a sequência e clique em "Iniciar sequência".` : '')
     loadProspects()
   }, [organization?.id])
 
@@ -377,6 +383,9 @@ function EmailProspectingSequence({ organization, connection }) {
       if (error) throw error
       const row = Array.isArray(data) ? data[0] : data
       setMessage(`Sequência iniciada para ${row?.recipient_count || selected.size} lead(s). D1 agora, D4 em 3 dias e D8 em 7 dias, salvo se houver resposta.`)
+      // Quem entrou na sequência sai da lista de envio por WhatsApp e fica em Contatos do CRM.
+      await supabase.from('leads').update({ email_contacts_at: new Date().toISOString() })
+        .eq('organization_id', organization.id).in('id', [...selected]).is('email_contacts_at', null)
       setSelected(new Set())
       setForm({ name: '', subject: '', first: '', followup1: '', followup2: '' })
       setBasisConfirmed(false)

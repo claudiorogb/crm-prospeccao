@@ -6,7 +6,7 @@ import {
   Pause, Play, RefreshCw, XCircle, CheckCircle2, Activity, UserPlus,
   Save, ChevronDown, Menu, X, CalendarDays, Clock, UserRound, Bot
 } from 'lucide-react'
-import { Link2 } from 'lucide-react'
+import { Link2, Mail } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import CustomerImportPanel from './customer-import'
 import CrmFullExport from './crm-full-export'
@@ -4552,7 +4552,7 @@ const SENDING_LEAD_FIELDS = 'id,business_name,phone,website,email,status,target_
 const CONTACTED_LEAD_FIELDS = `${SENDING_LEAD_FIELDS},created_at,updated_at`
 const ENQUEUE_MAX_LEADS_PER_CALL = 1000
 
-function MessageSending({ organization, settings, userEmail }) {
+function MessageSending({ organization, settings, userEmail, onOpenEmailProspecting }) {
   const [cadenceRefresh, setCadenceRefresh] = useState(0)
   // Página atual da lista de envio (paginada no servidor).
   const [leads, setLeads] = useState([])
@@ -4610,6 +4610,7 @@ function MessageSending({ organization, settings, userEmail }) {
       .eq('organization_id', organization.id)
       .is('deleted_at', null)
       .in('status', SENDING_LIST_STATUSES)
+      .is('email_contacts_at', null) // leads já movidos para Contatos do CRM (e-mail) saem desta lista
     // Leads com falha de envio não resolvida não aparecem como aptos (mesma regra de antes, agora no servidor).
     if (excludedIds.length) query = query.not('id', 'in', `(${excludedIds.join(',')})`)
     return query
@@ -5006,6 +5007,75 @@ function MessageSending({ organization, settings, userEmail }) {
     setMessage(`${picked.length} cliente(s) contactado(s) preenchido(s) como destinatário(s) do reenvio. Confira abaixo e clique em "${sendActionLabel}".`)
   }
 
+  // Leads sem telefone (só e-mail): saem desta lista e vão para "Contatos do CRM" (prospecção por e-mail).
+  function selectedEmailLeads() {
+    return [...selected.values()].filter(lead => lead.email && String(lead.email).trim() && !queuedLeadIds.has(lead.id))
+  }
+
+  async function markMovedToEmailContacts(ids) {
+    if (!ids.length) return null
+    const { error } = await supabase
+      .from('leads')
+      .update({ email_contacts_at: new Date().toISOString() })
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .in('id', ids)
+    return error
+  }
+
+  async function moveSelectedToContacts() {
+    if (!selected.size || loading) return
+    const withEmail = selectedEmailLeads()
+    const ids = withEmail.map(lead => lead.id)
+    if (!ids.length) { setMessage('Nenhum dos leads selecionados tem e-mail para ser movido para Contatos.'); return }
+    if (!window.confirm(`Mover ${ids.length} lead(s) para Contatos do CRM sem enviar nada? Eles saem desta tela e nenhum e-mail ou mensagem será enviado agora.`)) return
+    setLoading(true); setMessage('')
+    const error = await markMovedToEmailContacts(ids)
+    if (error) setMessage(error.message || 'Não foi possível mover os leads para Contatos.')
+    else {
+      setMessage(`${ids.length} lead(s) movido(s) para Contatos do CRM. Nada foi enviado.`)
+      setSelected(previous => withSelection(previous, ids.map(id => ({ id })), false))
+      await loadData()
+    }
+    setLoading(false)
+  }
+
+  async function sendSelectedByEmail() {
+    if (!selected.size || loading) return
+    const withEmail = selectedEmailLeads()
+    const ids = withEmail.map(lead => lead.id)
+    if (!ids.length) { setMessage('Nenhum dos leads selecionados tem e-mail.'); return }
+    setLoading(true); setMessage('')
+    // Quem já está numa prospecção por e-mail (enviada ou na fila) não recebe outro e-mail: só muda de tela.
+    const { data: existing, error: lookupError } = await supabase
+      .from('email_campaign_recipients')
+      .select('lead_id')
+      .eq('organization_id', organization.id)
+      .eq('recipient_source', 'crm_prospecting')
+      .in('lead_id', ids)
+      .neq('status', 'cancelled')
+    if (lookupError) { setMessage(lookupError.message || 'Não foi possível verificar os e-mails já enviados.'); setLoading(false); return }
+    const alreadyIn = new Set((existing || []).map(row => row.lead_id))
+    const alreadyIds = ids.filter(id => alreadyIn.has(id))
+    const newIds = ids.filter(id => !alreadyIn.has(id))
+    if (alreadyIds.length) {
+      const error = await markMovedToEmailContacts(alreadyIds)
+      if (error) { setMessage(error.message || 'Não foi possível mover os leads para Contatos.'); setLoading(false); return }
+    }
+    if (!newIds.length) {
+      setMessage(`${alreadyIds.length} lead(s) já estavam em prospecção por e-mail: foram movidos para Contatos sem novo envio.`)
+      setSelected(previous => withSelection(previous, ids.map(id => ({ id })), false))
+      await loadData()
+      setLoading(false)
+      return
+    }
+    // Os demais vão para a tela de prospecção por e-mail já selecionados; saem desta lista quando a sequência iniciar.
+    try { sessionStorage.setItem('crm_email_preselect', JSON.stringify(newIds)) } catch {}
+    setSelected(previous => withSelection(previous, ids.map(id => ({ id })), false))
+    setLoading(false)
+    if (onOpenEmailProspecting) onOpenEmailProspecting()
+  }
+
   async function discardSelected() {
     if (!selected.size || loading) return
 
@@ -5021,7 +5091,7 @@ function MessageSending({ organization, settings, userEmail }) {
       return
     }
 
-    if (!window.confirm(`Descartar ${ids.length} captação(ões) selecionada(s)? Os registros serão preservados no banco e poderão ser recuperados em Leads sem interesse.`)) return
+    if (!window.confirm(`Excluir ${ids.length} captação(ões) selecionada(s)? Os registros serão preservados no banco e poderão ser recuperados em Leads sem interesse.`)) return
 
     setLoading(true)
     setMessage('')
@@ -5035,7 +5105,7 @@ function MessageSending({ organization, settings, userEmail }) {
     if (error) {
       setMessage(error.message || 'Não foi possível descartar os leads selecionados.')
     } else {
-      setMessage(`${ids.length} captação(ões) descartada(s). Os registros permanecem preservados no banco.`)
+      setMessage(`${ids.length} captação(ões) excluída(s). Os registros permanecem preservados no banco.`)
       setSelected(previous => withSelection(previous, ids.map(id => ({ id })), false))
       await loadData()
     }
@@ -5906,7 +5976,13 @@ function MessageSending({ organization, settings, userEmail }) {
         />
         <div className="sending-bulk-actions-v52">
           <button type="button" className="secondary danger inline-btn" onClick={discardSelected} disabled={!selected.size || loading}>
-            <Trash2 size={16}/>Descartar selecionados
+            <Trash2 size={16}/>Excluir selecionados
+          </button>
+          <button type="button" className="secondary inline-btn" onClick={moveSelectedToContacts} disabled={!selected.size || loading} title="Move para Contatos do CRM sem enviar nada">
+            <Users size={16}/>Mover para Contatos
+          </button>
+          <button type="button" className="secondary inline-btn" onClick={sendSelectedByEmail} disabled={!selected.size || loading} title="Abre a prospecção por e-mail com os leads selecionados">
+            <Mail size={16}/>Enviar por e-mail
           </button>
           <button
             className="primary inline-btn"
@@ -6041,7 +6117,7 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
       {section === 'campaigns' && settings?.feature_flags?.campaigns !== false && <Campaigns organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
-      {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} />}
+      {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} onOpenEmailProspecting={() => setSection('email-prospecting')} />}
       {section === 'email-prospecting' && <EmailProspecting organization={organization} userEmail={userEmail} />}
       {section === 'email-connection' && <EmailMarketing organization={organization} userEmail={userEmail} mode="connection" />}
       {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} mode="marketing" />}

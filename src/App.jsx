@@ -50,6 +50,7 @@ import TodayPage, { loadTodayLeads, brazilToday } from './today-page'
 import { lossReasonLabel, lossReasonPromptText, parseLossReasonAnswer } from './loss-reasons.js'
 import { buildToday } from './today-rules'
 import GoalsPage from './goals-page.jsx'
+import HelpTip from './help-tip.jsx'
 import WhatsappCadencePanel, { attachPendingCadence } from './whatsapp-cadence-panel.jsx'
 
 
@@ -5732,8 +5733,9 @@ function MessageSending({ organization, settings, userEmail }) {
       <section className="panel manual-recipient-panel-v73">
         <div className="panel-head">
           <div>
-            <h2>Adicionar destinatário manualmente</h2>
-            <p className="muted">Inclua um número que não esteja na lista atual e selecione qual mensagem será usada no envio.</p>
+            <h2>Adicionar destinatário manualmente
+              <HelpTip label="Como adicionar um destinatário manualmente" text="Inclua um número que não esteja na lista atual e selecione qual mensagem será usada no envio." />
+            </h2>
           </div>
         </div>
         <form className="manual-recipient-form-v73 manual-recipient-form-v108" onSubmit={addManualRecipient} noValidate>

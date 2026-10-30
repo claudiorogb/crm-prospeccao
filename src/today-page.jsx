@@ -188,7 +188,7 @@ export default function TodayPage({ organization, userEmail, onOpenLead, userId 
 
   return (
     <>
-      <header className="topbar compact-subpage-header">
+      <header className="topbar compact-subpage-header today-header-left">
         <div>
           <span className="eyebrow">ACOMPANHAMENTO</span>
           <h1>Hoje</h1>

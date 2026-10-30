@@ -47,3 +47,20 @@ test('previsão pondera pela chance da etapa e do vendedor', () => {
 test('probabilidade inválida volta ao padrão', () => {
   assert.deepEqual(normalizeProbabilities({ interested: 'x', proposal: 150, negotiation: 70 }), { interested: 10, proposal: 30, negotiation: 70 })
 })
+
+test('períodos: trimestre, semestre e ano somam meses e metas', async () => {
+  const { periodMonths, sumGoals, bySeller, companyProgress } = await import('../src/reports-rules.js')
+  assert.deepEqual(periodMonths('quarter', '2026-05-01'), ['2026-04-01', '2026-05-01', '2026-06-01'])
+  assert.equal(periodMonths('semester', '2026-08-01')[0], '2026-07-01')
+  assert.equal(periodMonths('year', '2026-08-01').length, 12)
+  const goals = [
+    { user_id: null, period: '2026-04-01', target_won_count: 2, target_value: 1000 },
+    { user_id: null, period: '2026-05-01', target_won_count: 3, target_value: 500 },
+  ]
+  assert.deepEqual(sumGoals(goals, periodMonths('quarter', '2026-04-01'), null), { target_won_count: 5, target_value: 1500 })
+  assert.equal(sumGoals(goals, ['2026-09-01'], null), null)
+  const leads = [{ status: 'won', assigned_to: 'u1', won_at: '2026-05-10T12:00:00Z', created_at: '2026-05-01T12:00:00Z', proposal_value: 100 }]
+  const c = companyProgress(leads, periodMonths('quarter', '2026-04-01'), goals)
+  assert.equal(c.goal.target_won_count, 5)
+  assert.ok(Array.isArray(bySeller(leads, periodMonths('year', '2026-01-01'), [{ user_id: 'u1', display_name: 'A' }], goals)))
+})

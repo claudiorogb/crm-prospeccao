@@ -2495,7 +2495,13 @@ function Leads({ organization, settings, userEmail }) {
     if (currentFilter.segment !== 'all') query = query.eq('target_segment_id', currentFilter.segment)
     const safeSearch = currentFilter.search.trim().replace(/[,%()]/g, ' ')
     if (safeSearch) {
-      query = query.or(`business_name.ilike.%${safeSearch}%,city.ilike.%${safeSearch}%,phone.ilike.%${safeSearch}%`)
+      // Também encontra pelo nome do vendedor (responsável, ou quem captou quando não há responsável).
+      const needle = safeSearch.toLowerCase()
+      const sellerIds = [...(memberNames || new Map()).entries()].filter(([, name]) => String(name).toLowerCase().includes(needle)).map(([id]) => id)
+      const sellerFilter = sellerIds.length
+        ? `,assigned_to.in.(${sellerIds.join(',')}),and(assigned_to.is.null,captured_by.in.(${sellerIds.join(',')}))`
+        : ''
+      query = query.or(`business_name.ilike.%${safeSearch}%,city.ilike.%${safeSearch}%,phone.ilike.%${safeSearch}%${sellerFilter}`)
     }
 
     const { data, error } = await query
@@ -3289,7 +3295,7 @@ function Leads({ organization, settings, userEmail }) {
       {message && <div className="notice">{message}</div>}
 
       <section className="panel leads-toolbar">
-        <div className="search-box"><Search size={17}/><input value={filter.search} onChange={e=>setFilter({...filter,search:e.target.value})} placeholder="Buscar empresa, cidade ou telefone" /></div>
+        <div className="search-box"><Search size={17}/><input value={filter.search} onChange={e=>setFilter({...filter,search:e.target.value})} placeholder="Buscar empresa, cidade, telefone ou vendedor" /></div>
         <select value={filter.segment} onChange={e=>setFilter({...filter,segment:e.target.value})}>
           <option value="all">Todos os públicos</option>
           {targetSegments.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}

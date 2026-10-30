@@ -50,7 +50,7 @@ import TodayPage, { loadTodayLeads, brazilToday } from './today-page'
 import { lossReasonLabel, lossReasonPromptText, parseLossReasonAnswer } from './loss-reasons.js'
 import { buildToday } from './today-rules'
 import GoalsPage from './goals-page.jsx'
-import WhatsappCadencePanel from './whatsapp-cadence-panel.jsx'
+import WhatsappCadencePanel, { attachPendingCadence } from './whatsapp-cadence-panel.jsx'
 
 
 const UF_OPTIONS = [
@@ -4546,6 +4546,7 @@ const CONTACTED_LEAD_FIELDS = `${SENDING_LEAD_FIELDS},created_at,updated_at`
 const ENQUEUE_MAX_LEADS_PER_CALL = 1000
 
 function MessageSending({ organization, settings, userEmail }) {
+  const [cadenceRefresh, setCadenceRefresh] = useState(0)
   // Página atual da lista de envio (paginada no servidor).
   const [leads, setLeads] = useState([])
   const [sendingTotal, setSendingTotal] = useState(0)
@@ -5262,6 +5263,7 @@ function MessageSending({ organization, settings, userEmail }) {
     let data = null
     let error = null
     let queued = 0
+    const batchIds = []
     for (let offset = 0; offset < ids.length; offset += ENQUEUE_MAX_LEADS_PER_CALL) {
       const response = await supabase.functions.invoke('enqueue_whatsapp_messages', {
         body: { organization_id: organization.id, lead_ids: ids.slice(offset, offset + ENQUEUE_MAX_LEADS_PER_CALL), ...extraBody }
@@ -5280,13 +5282,14 @@ function MessageSending({ organization, settings, userEmail }) {
         break
       }
       queued += Number(response.data?.queued || 0)
+      if (response.data?.batch_id) batchIds.push(response.data.batch_id)
       data = {
         ...response.data,
         queued,
         first_scheduled_for: data?.first_scheduled_for || response.data?.first_scheduled_for
       }
     }
-    return { data, error, queued }
+    return { data, error, queued, batchIds }
   }
 
   async function send() {
@@ -5348,6 +5351,7 @@ function MessageSending({ organization, settings, userEmail }) {
       })),
       { ids: resendIds, body: { template_target_segment_id: resendTargetSegmentId, template_id: resendTemplateId } }
     ].filter(job => job.ids.length)
+    const cadenceBatchIds = []
 
     let data = null
     let error = null
@@ -5355,6 +5359,7 @@ function MessageSending({ organization, settings, userEmail }) {
     const doneIds = []
     for (const job of jobs) {
       const result = await enqueueInChunks(job.ids, job.body, job.outdatedServerText)
+      if (job.ids !== resendIds) cadenceBatchIds.push(...(result.batchIds || []))
       queuedSoFar += result.queued
       if (result.error || result.data?.error) {
         error = result.error
@@ -5369,6 +5374,12 @@ function MessageSending({ organization, settings, userEmail }) {
         queued: queuedSoFar,
         first_scheduled_for: data?.first_scheduled_for || result.data?.first_scheduled_for
       }
+    }
+
+    if (cadenceBatchIds.length) {
+      // Vincula a cadência salva (se houver) a este envio. Falhar aqui não afeta o envio.
+      const linked = await attachPendingCadence(organization.id, cadenceBatchIds)
+      if (linked.attached) setCadenceRefresh(value => value + 1)
     }
 
     if (error || data?.error) {
@@ -5716,7 +5727,7 @@ function MessageSending({ organization, settings, userEmail }) {
         </div>
       </section>
 
-      <WhatsappCadencePanel organization={organization} />
+      <WhatsappCadencePanel organization={organization} refreshKey={cadenceRefresh} />
 
       <section className="panel manual-recipient-panel-v73">
         <div className="panel-head">

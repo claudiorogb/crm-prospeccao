@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const sql = fs.readFileSync('supabase/migrations/20261029130000_whatsapp_cadence.sql', 'utf8')
+const sql = fs.readFileSync('supabase/migrations/20261029130000_whatsapp_cadence.sql', 'utf8') + fs.readFileSync('supabase/migrations/20261030140000_whatsapp_cadence_per_send.sql', 'utf8')
 
 test('cadência vem desligada por padrão e é opt-in', () => {
   assert.match(sql, /enabled boolean not null default false/)
@@ -18,5 +18,14 @@ test('respeita pausa, janela, dias e limite diário; função não é exposta', 
     assert.ok(sql.includes(piece), piece)
 })
 test('painel aparece na tela Enviar mensagens', () => {
-  assert.match(fs.readFileSync("src/App.jsx", "utf8"), /<WhatsappCadencePanel organization=\{organization\} \/>/)
+  assert.match(fs.readFileSync("src/App.jsx", "utf8"), /<WhatsappCadencePanel organization=\{organization\} refreshKey=\{cadenceRefresh\} \/>/)
+})
+
+test('cadência só age em envios vinculados e para com envio pausado/cancelado', () => {
+  assert.match(sql, /cardinality\(coalesce\(wc\.batch_ids/)
+  assert.match(sql, /ob\.status not in \('paused','cancelled'\)/)
+})
+test('reenvio não vincula cadência', () => {
+  const app = fs.readFileSync('src/App.jsx', 'utf8')
+  assert.match(app, /if \(job\.ids !== resendIds\) cadenceBatchIds\.push/)
 })

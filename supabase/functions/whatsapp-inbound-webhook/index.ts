@@ -181,6 +181,15 @@ function isAutomaticReply(text: string) {
     /ticket (n[ºo.]*)?\s*#?\d+/,
     /ticket.*foi finalizado/,
     /nao identificamos seu contato em nossa base/,
+    // Boas-vindas e menus de bots (ex.: catálogo com opções, pedido de nome).
+    /escolha a opcao/,
+    /envie o numero da opcao/,
+    /(informe|digite) (o )?seu nome/,
+    /responda (so|somente) com o nome/,
+    /responda de forma curta/,
+    /bem[- ]?vind[oa]( \(o\)| \(a\))? a empresa/,
+    /em breve retornaremos o contato/,
+    /seja (muito )?bem[- ]?vind[oa].*(contato|atendimento|opcao|opcoes|catalogo)/,
   ];
 
   if (explicitAutomationPatterns.some(pattern => pattern.test(t))) return true;
@@ -223,6 +232,10 @@ function isAutomaticReply(text: string) {
   ];
 
   if (exactShortReplies.includes(t)) return true;
+
+  // Opções numeradas com emoji (1️⃣ 2️⃣ 3️⃣): menu de bot.
+  const keycapOptions = (text.match(/[0-9]\ufe0f?\u20e3/g) || []).length;
+  if (keycapOptions >= 3) return true;
 
   const numberedOptions = (t.match(/(?:^|\s)[1-9]\s*[-.)]/g) || []).length;
   if (numberedOptions >= 3 && /(departamento|setor|atendimento|opcao|digite)/.test(t)) return true;

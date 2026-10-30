@@ -60,6 +60,7 @@ function extractText(data: any) {
     message?.buttonsResponseMessage?.selectedDisplayText,
     message?.listResponseMessage?.title,
     message?.templateButtonReplyMessage?.selectedDisplayText,
+    message?.reactionMessage?.text, // reação (emoji) a uma mensagem
     data?.body,
     data?.text,
   ];

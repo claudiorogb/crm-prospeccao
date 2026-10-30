@@ -19,3 +19,7 @@ test('respostas humanas comuns continuam humanas', () => {
   for (const text of ['Tenho interesse, pode me ligar?', 'Bom dia! Quanto custa?', 'Meu nome é Carlos, pode falar', 'Pode enviar a proposta por e-mail', 'Não tenho interesse, obrigado'])
     assert.equal(isAuto(text), false, text)
 })
+
+test('reação (emoji) do WhatsApp é lida como texto da mensagem', () => {
+  assert.match(src, /message\?\.reactionMessage\?\.text/)
+})

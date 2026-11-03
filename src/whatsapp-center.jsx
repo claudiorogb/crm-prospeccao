@@ -179,9 +179,19 @@ function ImageViewer({ src, alt, onClose }) {
   )
 }
 
-// Como no WhatsApp: Enter envia, Shift+Enter quebra a linha.
+// Como no WhatsApp: no computador, Enter envia e Shift+Enter quebra a linha.
+// Em celulares e tablets (tela de toque), Enter quebra a linha e o envio é pelo botão.
+function isTouchDevice() {
+  try {
+    return typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true
+  } catch {
+    return false
+  }
+}
+
 function sendOnEnter(event) {
   if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent?.isComposing) return
+  if (isTouchDevice()) return
   event.preventDefault()
   event.currentTarget.form?.requestSubmit()
 }

@@ -57,7 +57,7 @@ function mediaTypeFromMime(mime) {
 
 function deliveryLabel(value) {
   const labels = {
-    pending: 'Pendente',
+    pending: 'Enviando',
     sent: 'Enviada',
     delivered: 'Entregue',
     read: 'Lida',
@@ -258,7 +258,7 @@ function MessageBubble({ message, media, onOpenMedia, onOpenContact, onDelete })
         {message.source === 'phone' && <span className="wa-phone-source">Enviado pelo celular</span>}
       </div>
       <small>
-        {onDelete && (confirming ? (
+        {onDelete && !message.pending && (confirming ? (
           <span className="wa-delete-confirm">
             Apagar do CRM?
             <button type="button" onClick={() => { setConfirming(false); onDelete(message) }}>Sim</button>
@@ -272,6 +272,32 @@ function MessageBubble({ message, media, onOpenMedia, onOpenContact, onDelete })
       </small>
     </div>
   )
+}
+
+// Mensagens de texto aparecem na hora (como no WhatsApp) enquanto o envio termina em segundo plano.
+function withPendingMessages(messages, pending, conversationId) {
+  const mine = pending.filter(item => item.conversation_id === conversationId)
+  if (!mine.length) return messages
+  const visible = mine.filter(item => !messages.some(real =>
+    real.direction === 'outbound' &&
+    real.text_body === item.text_body &&
+    new Date(real.occurred_at).getTime() >= new Date(item.occurred_at).getTime() - 15000
+  ))
+  return [...messages, ...visible]
+}
+
+function makePendingMessage(conversationId, text) {
+  return {
+    id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    conversation_id: conversationId,
+    direction: 'outbound',
+    message_type: 'text',
+    text_body: text,
+    delivery_status: 'pending',
+    source: 'crm',
+    occurred_at: new Date().toISOString(),
+    pending: true,
+  }
 }
 
 function ConversationMessages({ messages, mediaCache, onOpenMedia, onOpenContact, onDelete, endRef }) {
@@ -298,6 +324,7 @@ export default function WhatsAppCenter({ organization }) {
   const [statusFilter, setStatusFilter] = useState('open')
   const [conversations, setConversations] = useState([])
   const [messages, setMessages] = useState([])
+  const [pendingMessages, setPendingMessages] = useState([])
   const [numbers, setNumbers] = useState([])
   const [members, setMembers] = useState([])
   const [leads, setLeads] = useState([])
@@ -625,9 +652,32 @@ export default function WhatsAppCenter({ organization }) {
     }
   }
 
+  async function sendTextNow() {
+    const text = draft.trim()
+    const conversationId = selected.id
+    const temp = makePendingMessage(conversationId, text)
+    setDraft('')
+    setNotice('')
+    setPendingMessages(current => [...current, temp])
+    setTimeout(() => endRef.current?.scrollIntoView?.({ block: 'end' }), 0)
+    try {
+      await invoke('send_message', { conversation_id: conversationId, text })
+      await Promise.all([loadMessages(conversationId, { scrollToBottom: true }), loadConversations(true)])
+    } catch (error) {
+      setNotice(error.message)
+      setDraft(current => current || text)
+    } finally {
+      setPendingMessages(current => current.filter(item => item.id !== temp.id))
+    }
+  }
+
   async function sendCurrent(e) {
     e.preventDefault()
     if (!selected || loading || (!draft.trim() && !attachment)) return
+    if (!attachment) {
+      sendTextNow()
+      return
+    }
     setLoading(true)
     setNotice('')
     try {
@@ -1088,7 +1138,7 @@ export default function WhatsAppCenter({ organization }) {
                   )}
 
                   <ConversationMessages
-                    messages={messages}
+                    messages={withPendingMessages(messages, pendingMessages, selected?.id)}
                     mediaCache={mediaCache}
                     onOpenMedia={openMedia}
                     onOpenContact={openSharedContact}
@@ -1220,6 +1270,7 @@ export default function WhatsAppCenter({ organization }) {
 export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
   const [conversation, setConversation] = useState(null)
   const [messages, setMessages] = useState([])
+  const [pendingMessages, setPendingMessages] = useState([])
   const [draft, setDraft] = useState('')
   const [attachment, setAttachment] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -1385,9 +1436,33 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
     }
   }
 
+  async function sendTextNow() {
+    const text = draft.trim()
+    const conversationId = conversation.id
+    const temp = makePendingMessage(conversationId, text)
+    setDraft('')
+    setNotice('')
+    setPendingMessages(current => [...current, temp])
+    setTimeout(() => endRef.current?.scrollIntoView?.({ block: 'end' }), 0)
+    try {
+      await invoke('send_message', { text })
+      await loadMessages(conversationId, { scrollToBottom: true })
+      onUpdated?.()
+    } catch (error) {
+      setNotice(error.message)
+      setDraft(current => current || text)
+    } finally {
+      setPendingMessages(current => current.filter(item => item.id !== temp.id))
+    }
+  }
+
   async function sendCurrent(e) {
     e.preventDefault()
     if (!conversation || loading || (!draft.trim() && !attachment)) return
+    if (!attachment) {
+      sendTextNow()
+      return
+    }
     setLoading(true)
     setNotice('')
     try {
@@ -1436,7 +1511,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
         ) : (
           <>
             <ConversationMessages
-              messages={messages}
+              messages={withPendingMessages(messages, pendingMessages, conversation?.id)}
               mediaCache={mediaCache}
               onOpenMedia={openMedia}
               onOpenContact={openSharedContactFromPanel}

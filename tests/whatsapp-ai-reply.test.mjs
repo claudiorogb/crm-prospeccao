@@ -35,3 +35,20 @@ test('campo de perfil da empresa fica disponível na tela do WhatsApp', () => {
   assert.match(app, /IA do WhatsApp/)
   assert.match(app, /<AiBusinessProfile/)
 })
+
+test('botão Configurar IA abre formulário com os seis campos e cabe no limite do banco', async () => {
+  const src = readFileSync('src/ai-business-profile.jsx', 'utf8')
+  assert.match(src, /Configurar IA/)
+  for (const label of ['O que oferecemos', 'Como funciona', 'Diferenciais', 'Tom de voz', 'Não prometer', 'Próximo passo']) {
+    assert.ok(src.includes(label), label)
+  }
+  const max = [...src.matchAll(/max: (\d+)/g)].map(m => Number(m[1])).reduce((a, b) => a + b, 0)
+  assert.ok(max + 100 <= 2000, `soma dos limites ${max}`)
+})
+
+test('somente admin ou dono vê o botão Configurar IA', () => {
+  const src = readFileSync('src/ai-business-profile.jsx', 'utf8')
+  assert.match(src, /\['admin', 'owner'\]\.includes/)
+  assert.match(src, /canEdit \?/)
+  assert.match(src, /Somente administradores da empresa/)
+})

@@ -581,7 +581,8 @@ Deno.serve(async (req) => {
       .neq("status", "discarded");
     const matches = (leadRows || []).filter((lead: any) => leadMatchesPhone(lead, senderPhone));
     const leadId = matches.length === 1 ? matches[0].id : null;
-    const contactName = extractContactName(data);
+    // Em mensagem enviada por nós (fromMe), o pushName é o nome de QUEM ENVIA (a conta conectada), não do cliente.
+    const contactName = "";
     const preview = (text || (messageType === "audio" ? "Áudio enviado pelo celular" : messageType === "image" ? "Imagem enviada pelo celular" : messageType === "video" ? "Vídeo enviado pelo celular" : messageType === "document" ? "Documento enviado pelo celular" : "Mensagem enviada pelo celular")).slice(0, 240);
 
     const { data: existingConversation } = await admin.from("whatsapp_conversations")

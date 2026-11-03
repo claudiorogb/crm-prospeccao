@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/svg+xml" href="/axiva-crm-sidebar-mark.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0B192C" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AXIVA CRM" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png" />
   <title>AXIVA CRM</title>
 </head>
 <body>
@@ -12,5 +19,6 @@
   <script type="module" src="/src/axiva-branding.js"></script>
   <script type="module" src="/src/lead-capture-limits.js"></script>
   <script type="module" src="/src/google-places-admin-settings.js"></script>
+  <script src="/pwa/pwa-install.js" data-app-name="AXIVA CRM" data-sw="/sw.js" data-scope="/" defer></script>
 </body>
 </html>

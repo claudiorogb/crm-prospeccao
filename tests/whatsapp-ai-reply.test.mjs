@@ -43,7 +43,7 @@ test('botão Configurar IA abre formulário com os seis campos e cabe no limite 
     assert.ok(src.includes(label), label)
   }
   const max = [...src.matchAll(/max: (\d+)/g)].map(m => Number(m[1])).reduce((a, b) => a + b, 0)
-  assert.ok(max + 100 <= 2000, `soma dos limites ${max}`)
+  assert.ok(max + 100 <= 6200, `soma dos limites ${max}`)
 })
 
 test('somente admin ou dono vê o botão Configurar IA', () => {

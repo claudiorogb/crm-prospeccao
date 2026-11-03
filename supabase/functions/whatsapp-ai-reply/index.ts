@@ -277,11 +277,13 @@ Deno.serve(async (req) => {
     .map((m: any) => `${m.direction === "inbound" ? "CLIENTE" : "VENDEDOR"}: ${cleanText(m.text_body, MAX_MESSAGE_CHARS)}`)
     .join("\n");
 
+  // Parte fixa da empresa primeiro (igual em todos os cliques) e parte variável depois:
+  // assim o provedor reaproveita o prefixo repetido com desconto (cache automático de prompt).
   const input = [
     `Empresa do vendedor: ${companyName}`,
+    `<perfil_empresa>\n${businessProfile || "Não informado. Seja cuidadoso e não prometa nada específico."}\n</perfil_empresa>`,
     `Cliente/lead: ${leadName}`,
     `Etapa do lead no funil: ${stage}`,
-    `<perfil_empresa>\n${businessProfile || "Não informado. Seja cuidadoso e não prometa nada específico."}\n</perfil_empresa>`,
     `<conversa>\n${transcript}\n</conversa>`,
     `Última mensagem do cliente, que deve ser respondida:\n${cleanText(lastInbound.text_body, MAX_MESSAGE_CHARS)}`,
   ].join("\n\n");

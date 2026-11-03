@@ -2,16 +2,16 @@ import React, { useEffect, useState } from 'react'
 import { Save, Settings, Sparkles, X } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
-export const AI_PROFILE_MAX = 2000
+export const AI_PROFILE_MAX = 6200
 
 // Cada campo vira uma linha "Rótulo: texto" no mesmo campo de texto do banco.
 export const AI_PROFILE_FIELDS = [
-  { key: 'offer', label: 'O que oferecemos', max: 480, rows: 4, help: 'Liste os serviços e itens que vende.', placeholder: 'Ex.: locação de freezer, fritadeira, forno e balcões para cozinha industrial.' },
-  { key: 'how', label: 'Como funciona', max: 450, rows: 4, help: 'Ex.: contrato mínimo, entrega e instalação, manutenção, troca em caso de defeito, regiões atendidas.', placeholder: 'Ex.: contrato mínimo de 6 meses, entrega e instalação inclusas, manutenção e troca em caso de defeito, atendemos Campinas e região.' },
-  { key: 'edge', label: 'Diferenciais', max: 300, rows: 3, help: 'Por que escolher a sua empresa.', placeholder: 'Ex.: sem investimento inicial, equipamento sempre revisado, atendimento rápido.' },
-  { key: 'tone', label: 'Tom de voz', max: 150, rows: 2, help: 'Ex.: cordial, direto ou sem formalidade exagerada.', placeholder: 'Ex.: cordial e direto, sem formalidade exagerada.' },
-  { key: 'avoid', label: 'Não prometer', max: 300, rows: 3, help: 'Ex.: preço fechado, prazo de entrega ou desconto sem aprovação.', placeholder: 'Ex.: preço fechado, prazo de entrega e desconto sem aprovação.' },
-  { key: 'next', label: 'Próximo passo', max: 200, rows: 2, help: 'Ex.: enviar proposta ou orçamento (diga quem faz).', placeholder: 'Ex.: o comercial envia a proposta por WhatsApp.' },
+  { key: 'offer', label: 'O que oferecemos', max: 1000, rows: 4, help: 'Liste os serviços e itens que vende.', placeholder: 'Ex.: locação de freezer, fritadeira, forno e balcões para cozinha industrial.' },
+  { key: 'how', label: 'Como funciona', max: 1000, rows: 4, help: 'Ex.: contrato mínimo, entrega e instalação, manutenção, troca em caso de defeito, regiões atendidas.', placeholder: 'Ex.: contrato mínimo de 6 meses, entrega e instalação inclusas, manutenção e troca em caso de defeito, atendemos Campinas e região.' },
+  { key: 'edge', label: 'Diferenciais', max: 1000, rows: 3, help: 'Por que escolher a sua empresa.', placeholder: 'Ex.: sem investimento inicial, equipamento sempre revisado, atendimento rápido.' },
+  { key: 'tone', label: 'Tom de voz', max: 1000, rows: 2, help: 'Ex.: cordial, direto ou sem formalidade exagerada.', placeholder: 'Ex.: cordial e direto, sem formalidade exagerada.' },
+  { key: 'avoid', label: 'Não prometer', max: 1000, rows: 3, help: 'Ex.: preço fechado, prazo de entrega ou desconto sem aprovação.', placeholder: 'Ex.: preço fechado, prazo de entrega e desconto sem aprovação.' },
+  { key: 'next', label: 'Próximo passo', max: 1000, rows: 2, help: 'Ex.: enviar proposta ou orçamento (diga quem faz).', placeholder: 'Ex.: o comercial envia a proposta por WhatsApp.' },
 ]
 
 const clean = value => String(value || '').replace(/\s*\n\s*/g, ' ').trim()

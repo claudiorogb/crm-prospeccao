@@ -9,7 +9,7 @@ const corsHeaders = {
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const CONTEXT_MESSAGES = 6;
 const MAX_MESSAGE_CHARS = 600;
-const MAX_PROFILE_CHARS = 2000;
+const MAX_PROFILE_CHARS = 6200;
 const DEFAULT_DAILY_LIMIT = 100;
 const SCOPE = "whatsapp_reply";
 

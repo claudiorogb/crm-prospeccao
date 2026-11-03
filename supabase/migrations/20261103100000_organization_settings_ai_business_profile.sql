@@ -8,4 +8,4 @@ alter table public.organization_settings
   check (ai_business_profile is null or char_length(ai_business_profile) <= 2000);
 
 comment on column public.organization_settings.ai_business_profile is
-  'Texto configurável pela empresa para a IA de resposta do WhatsApp: o que vende, tom de voz e o que não prometer. Máx. 2000 caracteres.';
+  'Texto configurável pela empresa para a IA de resposta do WhatsApp: o que vende, tom de voz e o que não prometer. Máx. 6200 caracteres.';

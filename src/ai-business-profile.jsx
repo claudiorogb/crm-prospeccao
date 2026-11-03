@@ -7,12 +7,12 @@ export const AI_PROFILE_MAX = 6200
 // Cada campo vira uma linha "Rótulo: texto" no mesmo campo de texto do banco.
 export const AI_PROFILE_FIELDS = [
   { key: 'name', label: 'Nome da empresa nas mensagens', max: 100, rows: 1, help: 'Como a empresa deve se apresentar aos clientes.', placeholder: '' },
-  { key: 'offer', label: 'O que oferecemos', max: 1000, rows: 4, help: 'Liste os serviços e itens que vende.', placeholder: 'Ex.: locação de freezer, fritadeira, forno e balcões para cozinha industrial.' },
-  { key: 'how', label: 'Como funciona', max: 1000, rows: 4, help: 'Ex.: contrato mínimo, entrega e instalação, manutenção, troca em caso de defeito, regiões atendidas.', placeholder: 'Ex.: contrato mínimo de 6 meses, entrega e instalação inclusas, manutenção e troca em caso de defeito, atendemos Campinas e região.' },
-  { key: 'edge', label: 'Diferenciais', max: 1000, rows: 3, help: 'Por que escolher a sua empresa.', placeholder: 'Ex.: sem investimento inicial, equipamento sempre revisado, atendimento rápido.' },
-  { key: 'tone', label: 'Tom de voz', max: 1000, rows: 2, help: 'Ex.: cordial, direto ou sem formalidade exagerada.', placeholder: 'Ex.: cordial e direto, sem formalidade exagerada.' },
-  { key: 'avoid', label: 'Não prometer', max: 1000, rows: 3, help: 'Ex.: preço fechado, prazo de entrega ou desconto sem aprovação.', placeholder: 'Ex.: preço fechado, prazo de entrega e desconto sem aprovação.' },
-  { key: 'next', label: 'Próximo passo', max: 1000, rows: 2, help: 'Ex.: enviar proposta ou orçamento (diga quem faz).', placeholder: 'Ex.: o comercial envia a proposta por WhatsApp.' },
+  { key: 'offer', label: 'O que oferecemos', max: 1000, rows: 4, help: "Liste os produtos e serviços que a empresa vende.", placeholder: "Ex.: produto ou serviço 1, produto ou serviço 2, produto ou serviço 3." },
+  { key: 'how', label: 'Como funciona', max: 1000, rows: 4, help: "Explique como funciona a contratação ou a compra: condições, prazos, entrega, suporte e regiões atendidas.", placeholder: "Ex.: como o cliente contrata ou compra, o que está incluso e onde a empresa atende." },
+  { key: 'edge', label: 'Diferenciais', max: 1000, rows: 3, help: "O que diferencia a empresa e faz o cliente escolher você.", placeholder: "Ex.: principais vantagens em relação a outras empresas." },
+  { key: 'tone', label: 'Tom de voz', max: 1000, rows: 2, help: "Como a IA deve falar com o cliente: cordial, direto, formal ou descontraído.", placeholder: "Ex.: cordial e direto, sem formalidade exagerada." },
+  { key: 'avoid', label: 'Não prometer', max: 1000, rows: 3, help: "O que a IA nunca deve prometer ou afirmar sem aprovação.", placeholder: "Ex.: preço, prazo, desconto ou condição especial." },
+  { key: 'next', label: 'Próximo passo', max: 1000, rows: 2, help: "O que acontece depois da conversa e quem faz (proposta, visita, ligação, agendamento).", placeholder: "Ex.: o vendedor envia uma proposta pelo WhatsApp." },
 ]
 
 const clean = value => String(value || '').replace(/\s*\n\s*/g, ' ').trim()

@@ -7,6 +7,8 @@ const code = src.slice(src.indexOf('function normalizeText'), src.indexOf('// De
 const isAuto = new Function(`${code};return isAutomaticReply`)()
 
 const bots = [
+  '👋 Olá! *Por favor, digite o número relacionado a linha de produtos desejado para continuar.* ⚠️ _Importante: o atendimento só será iniciado após a escolha da linha de produto._ *1-* BUMERANGUE - Esteiras Modulares *2-* INOVADOOR - Portas Industriais *3-* ARTAMA - Niveladoras de Docas & Elevadores *4-* EXTRUFLEX - Cortinas PVC *5-* ONFLEX - Barreiras Flexíveis',
+  'Prezado(a), a Max Representaçōes agradece seu contato, responderemos o mais breve possível, tenha um excelente dia! Edvaldo.',
   'Olá! Seja muito bem-vindo(a) à La Panela Brigaderia! 😊 Seu contato é muito importante para nós ♥️\nPara que possamos te atender da melhor forma, confira nossos catálogos aqui no WhatsApp e escolha a opção que deseja:\n1️⃣ *Fazer encomendas*\n2️⃣ *Contratar o Bar de Brigadeiros*\n3️⃣ *Clube de Vantagens LP*\n4️⃣ *Informações sobre delivery*\n5️⃣ *Outros assuntos*\nEnvie o número da opção desejada. 😉\nEm breve retornaremos o contato.',
   'Bem Vinda (o) a empresa *Unisabor*\nPor favor, informe seu nome.',
   'Qual é o seu nome?\n_(responda só com o nome, ex: Maria)_',
@@ -16,7 +18,7 @@ test('mensagens de bots reais são classificadas como automáticas', () => {
   bots.forEach(text => assert.equal(isAuto(text), true, text.slice(0, 40)))
 })
 test('respostas humanas comuns continuam humanas', () => {
-  for (const text of ['Tenho interesse, pode me ligar?', 'Bom dia! Quanto custa?', 'Meu nome é Carlos, pode falar', 'Pode enviar a proposta por e-mail', 'Não tenho interesse, obrigado'])
+  for (const text of ['Tenho interesse, pode me ligar?', 'Bom dia! Quanto custa?', 'Meu nome é Carlos, pode falar', 'Pode enviar a proposta por e-mail', 'Não tenho interesse, obrigado', 'Pode me responder o mais breve possível? Preciso do orçamento', 'Quero 2 unidades do produto 1 e 3 do produto 2'])
     assert.equal(isAuto(text), false, text)
 })
 

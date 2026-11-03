@@ -210,6 +210,11 @@ function isAutomaticReply(text: string) {
     /bem[- ]?vind[oa]( \(o\)| \(a\))? a empresa/,
     /em breve retornaremos o contato/,
     /seja (muito )?bem[- ]?vind[oa].*(contato|atendimento|opcao|opcoes|catalogo)/,
+    // Menu por número e agradecimento padrão com promessa de retorno.
+    /digite o numero/,
+    /atendimento so sera iniciado apos/,
+    /responderemos o mais breve/,
+    /agradece(mos)? (o |seu )?contato.*(responder|retornar|breve)/,
   ];
 
   if (explicitAutomationPatterns.some(pattern => pattern.test(t))) return true;
@@ -257,8 +262,8 @@ function isAutomaticReply(text: string) {
   const keycapOptions = (text.match(/[0-9]\ufe0f?\u20e3/g) || []).length;
   if (keycapOptions >= 3) return true;
 
-  const numberedOptions = (t.match(/(?:^|\s)[1-9]\s*[-.)]/g) || []).length;
-  if (numberedOptions >= 3 && /(departamento|setor|atendimento|opcao|digite)/.test(t)) return true;
+  const numberedOptions = (t.match(/(?:^|[\s*_])[1-9]\s*[-.)]/g) || []).length;
+  if (numberedOptions >= 3 && /(departamento|setor|atendimento|opcao|digite|produto)/.test(t)) return true;
 
   return false;
 }

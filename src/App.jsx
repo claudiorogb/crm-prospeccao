@@ -9812,6 +9812,30 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
 
 
 
+// Tela de carregamento: se demorar demais, oferece recarregar em vez de ficar parada para sempre.
+function SlowLoadingScreen() {
+  const [slow, setSlow] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 10000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  return (
+    <div className="loading-screen">
+      <div>
+        <div>Carregando...</div>
+        {slow && (
+          <>
+            <p className="muted">Está demorando mais que o normal. Verifique a conexão e tente de novo.</p>
+            <button type="button" className="primary inline-btn" onClick={() => window.location.reload()}>Recarregar</button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -9856,6 +9880,11 @@ export default function App() {
         return
       }
       setSession(data.session)
+      setLoading(false)
+    }).catch(() => {
+      // Se a leitura da sessão falhar (ex.: app aberto enquanto outra janela renova o login),
+      // não fica preso em "Carregando...": mostra o login. Nada é apagado do aparelho.
+      setSession(null)
       setLoading(false)
     })
 
@@ -10073,7 +10102,7 @@ export default function App() {
   }
 
   if (loading || (session && accessLoading && !passwordRecovery)) {
-    return <div className="loading-screen">Carregando...</div>
+    return <SlowLoadingScreen />
   }
 
   if (passwordRecovery && session) {

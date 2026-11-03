@@ -37,6 +37,7 @@ import DashboardVisual from './dashboard-visual'
 import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
 import AiAssistant, { AiFloatingAssistant } from './ai-assistant'
 import AiBusinessProfile from './ai-business-profile'
+import InstallAppMenuItem from './install-app-menu-item'
 import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import TrialExpiredScreen from './trial-expired-screen'
@@ -10253,6 +10254,7 @@ export default function App() {
                 </button>
               </>
             )}
+            <InstallAppMenuItem onDone={() => setMobileMenuOpen(false)} />
           </nav>
 
           <div className="sidebar-user">
@@ -10494,6 +10496,7 @@ export default function App() {
               </button>
             </>
           )}
+          <InstallAppMenuItem onDone={() => setMobileMenuOpen(false)} />
         </nav>
 
         <div className="sidebar-user">

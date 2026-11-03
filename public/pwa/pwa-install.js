@@ -1,7 +1,8 @@
 /*
-  AXIVA — registro do PWA e aviso discreto de instalação.
+  AXIVA — registro do PWA e opção "Instalar no celular" (usada pelo item do menu).
   Configuração pelos atributos do <script>: data-app-name, data-sw, data-scope.
-  Não lê nem grava dados da conta: só registra o service worker e mostra o aviso.
+  Não lê nem grava dados da conta: só registra o service worker e dispara a instalação.
+  A opção só existe em celular/tablet e só se o app ainda não estiver instalado.
 */
 (function () {
   'use strict'
@@ -13,9 +14,6 @@
   var SW_SCOPE = script.getAttribute('data-scope')
   if (!SW_URL || !SW_SCOPE) return
 
-  var STORAGE_KEY = 'axiva_pwa_aviso_' + SW_SCOPE
-  var SNOOZE_MS = 14 * 24 * 60 * 60 * 1000
-
   // 1) Service worker (só em conexão segura)
   if ('serviceWorker' in navigator && window.isSecureContext) {
     window.addEventListener('load', function () {
@@ -23,108 +21,119 @@
     })
   }
 
-  // 2) Aviso de instalação — só em celular/tablet e só se ainda não instalado
+  // 2) Quem pode ver a opção: celular e tablet (nunca computador), app ainda não instalado
   var ua = navigator.userAgent || ''
   var isIos = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   var isAndroid = /Android/.test(ua)
-  var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true
-  if (standalone || !(isIos || isAndroid)) return
-
-  function snoozed() {
-    try {
-      var until = Number(localStorage.getItem(STORAGE_KEY) || 0)
-      return until > Date.now()
-    } catch (e) { return false }
-  }
-  function snooze() {
-    try { localStorage.setItem(STORAGE_KEY, String(Date.now() + SNOOZE_MS)) } catch (e) {}
-  }
-  if (snoozed()) return
-
-  var banner = null
+  var installed = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true
   var deferredPrompt = null
 
-  function removeBanner() {
-    if (banner && banner.parentNode) banner.parentNode.removeChild(banner)
-    banner = null
-  }
+  function canShow() { return (isIos || isAndroid) && !installed }
 
-  function buildBanner(message, actionLabel, onAction) {
+  window.addEventListener('beforeinstallprompt', function (event) {
+    event.preventDefault()
+    deferredPrompt = event
+  })
+  window.addEventListener('appinstalled', function () {
+    installed = true
+    deferredPrompt = null
+    window.dispatchEvent(new Event('axiva-pwa-change'))
+    syncMenuItems()
+  })
+
+  // 3) Quadro com o passo a passo (iPhone/iPad, ou Android sem o instalador automático)
+  function showHelp() {
+    if (document.getElementById('axiva-pwa-help')) return
     if (!document.getElementById('axiva-pwa-style')) {
       var style = document.createElement('style')
       style.id = 'axiva-pwa-style'
       style.textContent =
-        '.axiva-pwa{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:9999;max-width:440px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:#0B192C;color:#F8FAFC;font:500 13px/1.4 Inter,Arial,Helvetica,sans-serif;border:1px solid rgba(248,250,252,.18);box-shadow:0 8px 24px rgba(11,25,44,.25)}' +
-        '.axiva-pwa span{flex:1}' +
-        '.axiva-pwa b{font-weight:700}' +
-        '.axiva-pwa button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:9px 12px;cursor:pointer}' +
-        '.axiva-pwa .axiva-pwa-go{background:#00A88F;color:#0B192C}' +
-        '.axiva-pwa .axiva-pwa-x{background:transparent;color:#F8FAFC;padding:9px 8px;font-weight:500}'
+        '.axiva-pwa-back{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(11,25,44,.6);font-family:Inter,Arial,Helvetica,sans-serif}' +
+        '.axiva-pwa-card{width:min(380px,100%);background:#F8FAFC;color:#0B192C;border-radius:16px;padding:22px;box-shadow:0 16px 40px rgba(11,25,44,.35)}' +
+        '.axiva-pwa-card h2{margin:0 0 12px;font-size:18px;font-weight:700}' +
+        '.axiva-pwa-card ol{margin:0 0 18px;padding-left:20px;color:#475569;font-size:15px;line-height:1.55}' +
+        '.axiva-pwa-card li{margin-bottom:6px}' +
+        '.axiva-pwa-card b{color:#0B192C}' +
+        '.axiva-pwa-card button{width:100%;border:0;border-radius:12px;background:#00A88F;color:#0B192C;font:inherit;font-weight:700;padding:12px;cursor:pointer}'
       document.head.appendChild(style)
     }
-    var box = document.createElement('div')
-    box.className = 'axiva-pwa'
-    box.setAttribute('role', 'region')
-    box.setAttribute('aria-label', 'Instalar aplicativo')
-    var text = document.createElement('span')
-    var strong = document.createElement('b')
-    strong.textContent = 'Instale o ' + APP_NAME + '. '
-    text.appendChild(strong)
-    text.appendChild(document.createTextNode(message))
-    box.appendChild(text)
-    if (actionLabel) {
-      var go = document.createElement('button')
-      go.type = 'button'
-      go.className = 'axiva-pwa-go'
-      go.textContent = actionLabel
-      go.addEventListener('click', onAction)
-      box.appendChild(go)
+    var back = document.createElement('div')
+    back.id = 'axiva-pwa-help'
+    back.className = 'axiva-pwa-back'
+    var card = document.createElement('div')
+    card.className = 'axiva-pwa-card'
+    card.setAttribute('role', 'dialog')
+    card.setAttribute('aria-modal', 'true')
+    card.setAttribute('aria-labelledby', 'axiva-pwa-title')
+    var title = document.createElement('h2')
+    title.id = 'axiva-pwa-title'
+    title.textContent = 'Instalar ' + APP_NAME + ' no celular'
+    card.appendChild(title)
+
+    var steps = document.createElement('ol')
+    function step(parts) {
+      var li = document.createElement('li')
+      parts.forEach(function (p) {
+        if (p.b) { var b = document.createElement('b'); b.textContent = p.b; li.appendChild(b) }
+        else li.appendChild(document.createTextNode(p.t))
+      })
+      steps.appendChild(li)
     }
+    if (isIos) {
+      step([{ t: 'Abra este endereço no ' }, { b: 'Safari' }, { t: '.' }])
+      step([{ t: 'Toque em ' }, { b: 'Compartilhar' }, { t: ' (o quadrado com a seta para cima).' }])
+      step([{ t: 'Escolha ' }, { b: 'Adicionar à Tela de Início' }, { t: ' e confirme.' }])
+    } else {
+      step([{ t: 'Toque no menu do navegador (' }, { b: '⋮' }, { t: ').' }])
+      step([{ t: 'Escolha ' }, { b: 'Instalar aplicativo' }, { t: ' ou ' }, { b: 'Adicionar à tela inicial' }, { t: '.' }])
+      step([{ t: 'Confirme a instalação.' }])
+    }
+    card.appendChild(steps)
+
     var close = document.createElement('button')
     close.type = 'button'
-    close.className = 'axiva-pwa-x'
-    close.setAttribute('aria-label', 'Dispensar aviso')
-    close.textContent = actionLabel ? 'Agora não' : 'Entendi'
-    close.addEventListener('click', function () { snooze(); removeBanner() })
-    box.appendChild(close)
-    document.body.appendChild(box)
-    banner = box
-
-    // Não atrapalha a digitação: ao focar em um campo, o aviso some só nesta visita
-    document.addEventListener('focusin', function hide(ev) {
-      var t = ev.target
-      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) {
-        removeBanner()
-        document.removeEventListener('focusin', hide)
-      }
-    })
+    close.textContent = 'Entendi'
+    function done() { document.removeEventListener('keydown', onKey); if (back.parentNode) back.parentNode.removeChild(back) }
+    function onKey(ev) { if (ev.key === 'Escape') done() }
+    close.addEventListener('click', done)
+    back.addEventListener('click', function (ev) { if (ev.target === back) done() })
+    document.addEventListener('keydown', onKey)
+    card.appendChild(close)
+    back.appendChild(card)
+    document.body.appendChild(back)
+    close.focus()
   }
 
-  window.addEventListener('appinstalled', function () { snooze(); removeBanner() })
+  function install() {
+    if (!canShow()) return
+    if (deferredPrompt) {
+      var prompt = deferredPrompt
+      deferredPrompt = null
+      prompt.prompt()
+      return
+    }
+    showHelp()
+  }
 
-  if (isAndroid) {
-    window.addEventListener('beforeinstallprompt', function (event) {
-      event.preventDefault()
-      deferredPrompt = event
-      setTimeout(function () {
-        if (!deferredPrompt || banner) return
-        buildBanner('Acesse direto da tela inicial, como um aplicativo.', 'Instalar', function () {
-          var prompt = deferredPrompt
-          deferredPrompt = null
-          removeBanner()
-          if (prompt) {
-            prompt.prompt()
-            if (prompt.userChoice) prompt.userChoice.then(function (choice) { if (!choice || choice.outcome !== 'accepted') snooze() }).catch(function () {})
-          }
-        })
-      }, 2500)
-    })
-  } else if (isIos) {
-    window.addEventListener('load', function () {
-      setTimeout(function () {
-        if (banner) return
-        buildBanner('Toque em Compartilhar e depois em “Adicionar à Tela de Início”.', null, null)
-      }, 2500)
+  window.axivaPwa = { canShow: canShow, install: install }
+  window.dispatchEvent(new Event('axiva-pwa-change'))
+
+  // 4) Itens de menu estáticos (ex.: Invest): <button data-axiva-install class="... hidden">
+  function syncMenuItems() {
+    var show = canShow()
+    document.querySelectorAll('[data-axiva-install]').forEach(function (el) {
+      if (show) el.classList.remove('hidden')
+      else el.classList.add('hidden')
     })
   }
+  function wireMenuItems() {
+    document.querySelectorAll('[data-axiva-install]').forEach(function (el) {
+      if (el.getAttribute('data-axiva-wired')) return
+      el.setAttribute('data-axiva-wired', '1')
+      el.addEventListener('click', install)
+    })
+    syncMenuItems()
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireMenuItems)
+  else wireMenuItems()
 })()

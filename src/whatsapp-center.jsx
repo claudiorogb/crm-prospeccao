@@ -1129,9 +1129,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
         contact_name: contact.name || ''
       })
       if (!started?.conversation?.id) throw new Error('Não foi possível abrir a conversa com o contato.')
-      setNotice(started.existing
-        ? `A conversa com ${contact.name || 'o contato'} já existia no WhatsApp do CRM.`
-        : `Nova conversa criada com ${contact.name || 'o contato'}. Ela está no WhatsApp do CRM.`)
+      setNotice('Para conversar com o novo contato, acesse a tela do whatsapp do CRM')
     } catch (error) {
       setNotice(error.message)
     } finally {

@@ -244,18 +244,99 @@ function AiChatBody({ compact = false, userKey = '', persistConversation = true 
   )
 }
 
+const AI_POSITION_KEY = 'axiva_ai_floating_position'
+
+function readSavedPosition() {
+  try {
+    const value = JSON.parse(localStorage.getItem(AI_POSITION_KEY) || 'null')
+    return value && Number.isFinite(value.right) && Number.isFinite(value.top) ? { right: value.right, top: value.top } : null
+  } catch {
+    return null
+  }
+}
+
 export function AiFloatingAssistant({ userEmail, pageKey = '' }) {
   const [open, setOpen] = useState(false)
+  // Posição escolhida pelo usuário (arrastando); null = posição padrão do CSS. Fica só neste navegador.
+  const [position, setPosition] = useState(readSavedPosition)
+  const rootRef = useRef(null)
+  const dragRef = useRef(null)
+  const suppressClickRef = useRef(false)
+
+  const clampPosition = value => {
+    const root = rootRef.current
+    const width = root?.offsetWidth || 72
+    const height = root?.offsetHeight || 46
+    return {
+      right: Math.min(Math.max(0, value.right), Math.max(0, window.innerWidth - width)),
+      top: Math.min(Math.max(0, value.top), Math.max(0, window.innerHeight - height)),
+    }
+  }
+
+  // Mantém o balão dentro da tela ao abrir/fechar a conversa e ao redimensionar a janela.
+  useEffect(() => {
+    if (!position) return undefined
+    const keepInside = () => setPosition(current => (current ? clampPosition(current) : current))
+    keepInside()
+    window.addEventListener('resize', keepInside)
+    return () => window.removeEventListener('resize', keepInside)
+  }, [open, Boolean(position)])
+
+  function startDrag(event) {
+    if (event.button !== undefined && event.button !== 0) return
+    if (event.target.closest?.('.ai-floating-close')) return
+    const rect = rootRef.current?.getBoundingClientRect()
+    if (!rect) return
+    dragRef.current = {
+      startX: event.clientX, startY: event.clientY,
+      right: window.innerWidth - rect.right, top: rect.top, moved: false,
+    }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  function moveDrag(event) {
+    const drag = dragRef.current
+    if (!drag) return
+    const dx = event.clientX - drag.startX
+    const dy = event.clientY - drag.startY
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return
+    drag.moved = true
+    setPosition(clampPosition({ right: drag.right - dx, top: drag.top + dy }))
+  }
+
+  function endDrag() {
+    const drag = dragRef.current
+    dragRef.current = null
+    if (!drag?.moved) return
+    // Depois de arrastar, o "clique" que o navegador dispara não deve abrir/fechar a conversa.
+    suppressClickRef.current = true
+    setTimeout(() => { suppressClickRef.current = false }, 0)
+    setPosition(current => {
+      if (current) { try { localStorage.setItem(AI_POSITION_KEY, JSON.stringify(current)) } catch {} }
+      return current
+    })
+  }
+
+  function resetPosition() {
+    setPosition(null)
+    try { localStorage.removeItem(AI_POSITION_KEY) } catch {}
+  }
+
+  const dragHandlers = { onPointerDown: startDrag, onPointerMove: moveDrag, onPointerUp: endDrag, onPointerCancel: endDrag }
 
   return (
-    <div className={`ai-floating-root ${open ? 'open' : ''}`}>
+    <div
+      ref={rootRef}
+      className={`ai-floating-root ${open ? 'open' : ''}${position ? ' moved' : ''}`}
+      style={position ? { right: position.right, top: position.top } : undefined}
+    >
       <section
         className="ai-floating-window"
         role="dialog"
         aria-label="AXIVA IA"
         style={{ display: open ? undefined : 'none' }}
       >
-          <header className="ai-floating-header">
+          <header className="ai-floating-header ai-floating-drag" {...dragHandlers} onDoubleClick={resetPosition} title="Arraste para mover. Duplo clique volta ao lugar original.">
             <div>
               <strong>AXIVA IA</strong>
               <span>Assistente do AXIVA CRM</span>
@@ -277,7 +358,9 @@ export function AiFloatingAssistant({ userEmail, pageKey = '' }) {
       <button
         type="button"
         className="ai-floating-trigger"
-        onClick={() => setOpen(value => !value)}
+        {...dragHandlers}
+        onClick={() => { if (!suppressClickRef.current) setOpen(value => !value) }}
+        title="Clique para abrir. Arraste para mover."
         aria-label={open ? 'Fechar AXIVA IA' : 'Abrir AXIVA IA'}
         aria-expanded={open}
       >

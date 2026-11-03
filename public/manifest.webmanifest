@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "AXIVA CRM",
+  "short_name": "AXIVA CRM",
+  "description": "Organização comercial, prospecção, relacionamento e execução de vendas.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0B192C",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

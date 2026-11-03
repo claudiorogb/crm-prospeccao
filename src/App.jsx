@@ -36,6 +36,7 @@ import { EmailMarketing, EmailProspecting, AdminEmailMarketing } from './email-m
 import DashboardVisual from './dashboard-visual'
 import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
 import AiAssistant, { AiFloatingAssistant } from './ai-assistant'
+import AiBusinessProfile from './ai-business-profile'
 import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import TrialExpiredScreen from './trial-expired-screen'
@@ -6134,7 +6135,8 @@ function WhatsAppWorkspace({ organization, settings, userEmail }) {
   const [section, setSection] = useState('center')
   const items = [
     ['center','Whatsapp'],
-    ['numbers','Cadastrar WhatsApp']
+    ['numbers','Cadastrar WhatsApp'],
+    ['ai','IA do WhatsApp']
   ]
 
   return (
@@ -6148,6 +6150,7 @@ function WhatsAppWorkspace({ organization, settings, userEmail }) {
       </div>
       {section === 'center' && <WhatsAppCenter organization={organization} />}
       {section === 'numbers' && <AdminWhatsApp organizations={[organization]} userEmail={userEmail} userMode={true} />}
+      {section === 'ai' && <AiBusinessProfile organization={organization} />}
     </>
   )
 }

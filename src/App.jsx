@@ -3435,7 +3435,12 @@ function Leads({ organization, settings, userEmail }) {
                                 {overdue ? (
                                   <strong>ATRASADO</strong>
                                 ) : l.next_contact_date ? (
-                                  <span><Clock size={14}/>{formatKanbanDate(l.next_contact_date)}</span>
+                                  <span>
+                                    <Clock size={14}/>{formatKanbanDate(l.next_contact_date)}
+                                    {l.next_contact_date === currentBrazilDate() && !['won','not_interested','discarded'].includes(l.status) && (
+                                      <span className="return-today-bubble-v112" role="status">Retornar hoje</span>
+                                    )}
+                                  </span>
                                 ) : (
                                   <span className="kanban-no-return-site-row-v71">
                                     <span>Sem retorno previsto</span>

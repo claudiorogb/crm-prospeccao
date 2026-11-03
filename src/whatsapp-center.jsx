@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Archive, CheckCheck, Edit3, FileText, Image as ImageIcon, Link2,
+  Archive, CheckCheck, Edit3, Search, FileText, Image as ImageIcon, Link2,
   MessageSquareText, Mic, Paperclip, RefreshCw, Save, Send,
   Smartphone, Trash2, UserCheck, UserPlus, Users, Video, X, ZoomIn, ZoomOut
 } from 'lucide-react'
@@ -185,8 +185,9 @@ function formatContactPhone(phone) {
   return d ? `+${d}` : ''
 }
 
-function MessageBubble({ message, media, onOpenMedia, onOpenContact }) {
+function MessageBubble({ message, media, onOpenMedia, onOpenContact, onDelete }) {
   const [viewing, setViewing] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const isMedia = ['image','video','audio','document','sticker'].includes(message.message_type)
   const meta = message.media_metadata || {}
   return (
@@ -240,6 +241,15 @@ function MessageBubble({ message, media, onOpenMedia, onOpenContact }) {
         {message.source === 'phone' && <span className="wa-phone-source">Enviado pelo celular</span>}
       </div>
       <small>
+        {onDelete && (confirming ? (
+          <span className="wa-delete-confirm">
+            Apagar do CRM?
+            <button type="button" onClick={() => { setConfirming(false); onDelete(message) }}>Sim</button>
+            <button type="button" onClick={() => setConfirming(false)}>Não</button>
+          </span>
+        ) : (
+          <button type="button" className="wa-delete-btn" title="Apagar mensagem (somente no CRM)" aria-label="Apagar mensagem" onClick={() => setConfirming(true)}><Trash2 size={12}/></button>
+        ))}
         {formatTime(message.occurred_at)}
         {message.direction === 'outbound' && <><CheckCheck size={13}/> {deliveryLabel(message.delivery_status)}</>}
       </small>
@@ -247,7 +257,7 @@ function MessageBubble({ message, media, onOpenMedia, onOpenContact }) {
   )
 }
 
-function ConversationMessages({ messages, mediaCache, onOpenMedia, onOpenContact, endRef }) {
+function ConversationMessages({ messages, mediaCache, onOpenMedia, onOpenContact, onDelete, endRef }) {
   return (
     <div className="wa-messages">
       {messages.length === 0 && <div className="wa-empty wa-empty-thread"><MessageSquareText size={28}/><span>Nenhuma mensagem nesta conversa.</span></div>}
@@ -258,6 +268,7 @@ function ConversationMessages({ messages, mediaCache, onOpenMedia, onOpenContact
           media={mediaCache[message.id]}
           onOpenMedia={onOpenMedia}
           onOpenContact={onOpenContact}
+          onDelete={onDelete}
         />
       ))}
       <div ref={endRef}/>
@@ -302,11 +313,22 @@ export default function WhatsAppCenter({ organization }) {
     [conversations, selectedId]
   )
 
+  const [conversationSearch, setConversationSearch] = useState('')
+
   const visibleConversations = useMemo(() => {
-    if (view === 'unread') return conversations.filter(item => Number(item.unread_count || 0) > 0)
-    if (view === 'unknown') return conversations.filter(item => !item.lead_id)
-    return conversations
-  }, [conversations, view])
+    let list = conversations
+    if (view === 'unread') list = list.filter(item => Number(item.unread_count || 0) > 0)
+    else if (view === 'unknown') list = list.filter(item => !item.lead_id)
+    const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    const query = normalize(conversationSearch).trim()
+    if (!query) return list
+    const queryDigits = query.replace(/\D/g, '')
+    return list.filter(item => {
+      const text = normalize(`${item.leads?.business_name || ''} ${item.leads?.contact_name || ''} ${item.contact_name || ''} ${item.last_message_preview || ''}`)
+      if (text.includes(query)) return true
+      return queryDigits.length >= 3 && String(item.contact_phone || '').replace(/\D/g, '').includes(queryDigits)
+    })
+  }, [conversations, view, conversationSearch])
 
   const unreadTotal = useMemo(
     () => conversations.reduce((sum, item) => sum + Number(item.unread_count || 0), 0),
@@ -373,6 +395,7 @@ export default function WhatsAppCenter({ organization }) {
       .select('id,conversation_id,provider,provider_message_id,direction,message_type,text_body,media_metadata,delivery_status,is_automatic,source,sent_by_user_id,occurred_at')
       .eq('organization_id', organization.id)
       .eq('conversation_id', conversationId)
+      .is('deleted_at', null)
       .order('occurred_at', { ascending: true })
 
     if (error) {
@@ -610,6 +633,23 @@ export default function WhatsAppCenter({ organization }) {
       setNotice(error.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function deleteMessage(message) {
+    setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-message-delete', { body: { message_id: message.id } })
+      let reason = data?.error || ''
+      if (error) {
+        try { reason = (await error.context?.json?.())?.error || '' } catch { reason = '' }
+        throw new Error(reason || 'Não foi possível apagar a mensagem.')
+      }
+      if (reason) throw new Error(reason)
+      setMessages(current => current.filter(item => item.id !== message.id))
+      await loadConversations(true)
+    } catch (err) {
+      setNotice(err.message)
     }
   }
 
@@ -937,8 +977,18 @@ export default function WhatsAppCenter({ organization }) {
 
           <div className="wa-inbox">
             <aside className="wa-conversation-list">
+              <div className="wa-search">
+                <Search size={14}/>
+                <input
+                  type="search"
+                  value={conversationSearch}
+                  onChange={e => setConversationSearch(e.target.value)}
+                  placeholder="Buscar conversa"
+                  aria-label="Buscar conversa"
+                />
+              </div>
               {visibleConversations.length === 0 ? (
-                <div className="wa-empty"><MessageSquareText size={28}/><strong>Nenhuma conversa</strong><span>As mensagens recebidas aparecerão aqui.</span></div>
+                <div className="wa-empty"><MessageSquareText size={28}/><strong>Nenhuma conversa</strong><span>{conversationSearch.trim() ? 'Nada encontrado para essa busca.' : 'As mensagens recebidas aparecerão aqui.'}</span></div>
               ) : visibleConversations.map(item => (
                 <button
                   key={item.id}
@@ -1025,6 +1075,7 @@ export default function WhatsAppCenter({ organization }) {
                     mediaCache={mediaCache}
                     onOpenMedia={openMedia}
                     onOpenContact={openSharedContact}
+                    onDelete={deleteMessage}
                     endRef={endRef}
                   />
 
@@ -1223,6 +1274,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
       .select('id,conversation_id,provider,provider_message_id,direction,message_type,text_body,media_metadata,delivery_status,is_automatic,source,sent_by_user_id,occurred_at')
       .eq('organization_id', organization.id)
       .eq('conversation_id', conversationId)
+      .is('deleted_at', null)
       .order('occurred_at', { ascending: true })
     if (error) {
       setNotice(error.message)
@@ -1298,6 +1350,23 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
     }
   }
 
+  async function deleteMessage(message) {
+    setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-message-delete', { body: { message_id: message.id } })
+      let reason = data?.error || ''
+      if (error) {
+        try { reason = (await error.context?.json?.())?.error || '' } catch { reason = '' }
+        throw new Error(reason || 'Não foi possível apagar a mensagem.')
+      }
+      if (reason) throw new Error(reason)
+      setMessages(current => current.filter(item => item.id !== message.id))
+      onUpdated?.()
+    } catch (err) {
+      setNotice(err.message)
+    }
+  }
+
   async function sendCurrent(e) {
     e.preventDefault()
     if (!conversation || loading || (!draft.trim() && !attachment)) return
@@ -1353,6 +1422,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
               mediaCache={mediaCache}
               onOpenMedia={openMedia}
               onOpenContact={openSharedContactFromPanel}
+              onDelete={deleteMessage}
               endRef={endRef}
             />
 

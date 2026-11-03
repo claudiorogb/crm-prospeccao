@@ -138,3 +138,12 @@
 .wa-viewer-stage{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:8px 16px 24px}
 .wa-viewer-stage img{display:block;margin:auto;height:auto;border-radius:6px;background:#fff}
 .wa-ai-reply-btn{display:inline-flex;align-items:center;gap:6px}
+
+.wa-search{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:6px;padding:7px 10px;background:#fff;border-bottom:1px solid #e8ecee;color:#7a858b}
+.wa-search input{flex:1;min-width:0;border:0;outline:0;background:#f3f5f6;border-radius:8px;padding:6px 9px;font-size:13px}
+.wa-delete-btn{border:0;background:transparent;color:#9aa4a9;padding:2px;border-radius:5px;cursor:pointer;display:inline-grid;place-items:center;opacity:0;transition:opacity .15s}
+.wa-message:hover .wa-delete-btn,.wa-delete-btn:focus-visible{opacity:1}
+.wa-delete-btn:hover{color:#b3261e;background:#f6eceb}
+@media(hover:none){.wa-delete-btn{opacity:.6}}
+.wa-delete-confirm{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#b3261e}
+.wa-delete-confirm button{border:0;background:transparent;color:inherit;font-size:11px;font-weight:600;cursor:pointer;padding:1px 3px;text-decoration:underline}

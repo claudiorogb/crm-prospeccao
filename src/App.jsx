@@ -4739,6 +4739,7 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
           .eq('organization_id', organization.id)
           .in('lead_id', contactedIds)
           .eq('direction', 'outbound')
+          .is('deleted_at', null)
           .order('occurred_at', { ascending: false })
           .limit(2000)
       ])

@@ -245,6 +245,7 @@ Deno.serve(async (req) => {
       .select("direction,message_type,text_body,occurred_at")
       .eq("conversation_id", conversationId)
       .eq("organization_id", organizationId)
+      .is("deleted_at", null)
       .order("occurred_at", { ascending: false })
       .limit(CONTEXT_MESSAGES * 2),
     userClient.from("organizations").select("name").eq("id", organizationId).maybeSingle(),
@@ -268,8 +269,15 @@ Deno.serve(async (req) => {
   }
 
   const lead: any = leadResult?.data || null;
-  const companyName = cleanText(orgResult.data?.name, 120) || "a empresa";
-  const businessProfile = cleanText(settingsResult.data?.ai_business_profile, MAX_PROFILE_CHARS);
+  // Nome comercial definido pela empresa na configuração; se vazio, usa o nome cadastrado.
+  const rawProfile = String(settingsResult.data?.ai_business_profile || "");
+  const nameMatch = rawProfile.match(/^Nome da empresa nas mensagens:[ \t]*(.+)$/m);
+  const displayName = cleanText(nameMatch?.[1], 100);
+  const companyName = displayName || cleanText(orgResult.data?.name, 120) || "a empresa";
+  const businessProfile = cleanText(
+    rawProfile.replace(/^Nome da empresa nas mensagens:.*$/m, ""),
+    MAX_PROFILE_CHARS,
+  );
   const leadName = cleanText(lead?.business_name || lead?.contact_name || conversation.contact_name, 120) || "Cliente";
   const stage = lead?.status ? (STAGE_LABELS[String(lead.status)] || String(lead.status)) : "Não informado";
 
@@ -280,7 +288,7 @@ Deno.serve(async (req) => {
   // Parte fixa da empresa primeiro (igual em todos os cliques) e parte variável depois:
   // assim o provedor reaproveita o prefixo repetido com desconto (cache automático de prompt).
   const input = [
-    `Empresa do vendedor: ${companyName}`,
+    `Empresa do vendedor (apresente-se exatamente com este nome): ${companyName}`,
     `<perfil_empresa>\n${businessProfile || "Não informado. Seja cuidadoso e não prometa nada específico."}\n</perfil_empresa>`,
     `Cliente/lead: ${leadName}`,
     `Etapa do lead no funil: ${stage}`,

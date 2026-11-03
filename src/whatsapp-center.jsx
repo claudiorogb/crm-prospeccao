@@ -40,6 +40,12 @@ function messageFallback(message) {
   return 'Mensagem'
 }
 
+// Texto fixo do botão de mídia: "Abrir áudio", "Abrir vídeo", "Abrir arquivo", "Abrir imagem" (o nome do arquivo fica só na dica).
+function openMediaLabel(type) {
+  const names = { audio: 'áudio', video: 'vídeo', image: 'imagem', document: 'arquivo', sticker: 'figurinha' }
+  return `Abrir ${names[type] || 'arquivo'}`
+}
+
 function mediaTypeFromMime(mime) {
   const value = String(mime || '').toLowerCase()
   if (value.startsWith('image/')) return 'image'
@@ -215,15 +221,15 @@ function MessageBubble({ message, media, onOpenMedia, onOpenContact }) {
                 {message.message_type === 'video' && <video src={media.url} controls />}
                 {message.message_type === 'audio' && <audio src={media.url} controls />}
                 {['document','sticker'].includes(message.message_type) && (
-                  <a href={media.url} target="_blank" rel="noreferrer" download={media.file_name || meta.file_name || undefined}>
-                    {mediaIcon(message.message_type)} Abrir {media.file_name || meta.file_name || messageFallback(message)}
+                  <a href={media.url} target="_blank" rel="noreferrer" title={media.file_name || meta.file_name || undefined} download={media.file_name || meta.file_name || undefined}>
+                    {mediaIcon(message.message_type)} {openMediaLabel(message.message_type)}
                   </a>
                 )}
               </>
             ) : (
-              <button type="button" className="wa-media-open" onClick={() => onOpenMedia(message)}>
+              <button type="button" className="wa-media-open" title={meta.file_name || undefined} onClick={() => onOpenMedia(message)}>
                 {mediaIcon(message.message_type)}
-                <span>{meta.file_name || `Abrir ${messageFallback(message).toLowerCase()}`}</span>
+                <span>{openMediaLabel(message.message_type)}</span>
               </button>
             )}
           </div>

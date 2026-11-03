@@ -33,3 +33,9 @@ test('nome da empresa nas mensagens é configurável e tem prioridade', () => {
   assert.match(ai, /Nome da empresa nas mensagens/)
   assert.match(ai, /displayName \|\| cleanText\(orgResult/)
 })
+
+test('Enter envia e Shift+Enter quebra a linha nas duas caixas de mensagem', () => {
+  assert.match(center, /event\.key !== 'Enter' \|\| event\.shiftKey/)
+  assert.match(center, /requestSubmit\(\)/)
+  assert.equal((center.match(/onKeyDown=\{sendOnEnter\}/g) || []).length, 2)
+})

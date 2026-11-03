@@ -179,6 +179,13 @@ function ImageViewer({ src, alt, onClose }) {
   )
 }
 
+// Como no WhatsApp: Enter envia, Shift+Enter quebra a linha.
+function sendOnEnter(event) {
+  if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent?.isComposing) return
+  event.preventDefault()
+  event.currentTarget.form?.requestSubmit()
+}
+
 function formatContactPhone(phone) {
   const d = String(phone || '').replace(/\D/g, '')
   if (d.startsWith('55') && d.length >= 12) return `+55 ${d.slice(2, 4)} ${d.slice(4, -4)}-${d.slice(-4)}`
@@ -1116,6 +1123,8 @@ export default function WhatsAppCenter({ organization }) {
                       <textarea
                         value={draft}
                         onChange={e => setDraft(e.target.value)}
+                  onKeyDown={sendOnEnter}
+                        onKeyDown={sendOnEnter}
                         placeholder={attachment ? 'Legenda opcional...' : 'Escreva uma mensagem...'}
                         maxLength={4096}
                       />

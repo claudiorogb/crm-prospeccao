@@ -137,3 +137,4 @@
 .wa-viewer-bar .wa-viewer-level{min-width:64px}
 .wa-viewer-stage{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:8px 16px 24px}
 .wa-viewer-stage img{display:block;margin:auto;height:auto;border-radius:6px;background:#fff}
+.wa-ai-reply-btn{display:inline-flex;align-items:center;gap:6px}

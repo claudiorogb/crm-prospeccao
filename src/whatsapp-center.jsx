@@ -6,6 +6,7 @@ import {
   Smartphone, Trash2, UserCheck, UserPlus, Users, Video, X, ZoomIn, ZoomOut
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import AiReplyButton from './ai-reply-button'
 import './whatsapp-center.css'
 
 // Tipo de arquivo usado no link de mídia recebida: só tipos de mídia comuns; o resto é baixado como arquivo genérico.
@@ -1036,6 +1037,13 @@ export default function WhatsAppCenter({ organization }) {
                       <button type="button" className="secondary mini" onClick={() => fileRef.current?.click()} title="Anexar arquivo">
                         <Paperclip size={16}/> Anexar
                       </button>
+                      <AiReplyButton
+                        conversationId={selected?.id}
+                        disabled={loading}
+                        onStart={() => setNotice('')}
+                        onSuggestion={text => setDraft(text)}
+                        onError={setNotice}
+                      />
                       <input
                         ref={fileRef}
                         className="wa-file-input"
@@ -1359,6 +1367,13 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
                   {quickReplies.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
                 <button type="button" className="secondary mini" onClick={() => fileRef.current?.click()}><Paperclip size={15}/> Anexar</button>
+                <AiReplyButton
+                  conversationId={conversation?.id}
+                  disabled={loading}
+                  onStart={() => setNotice('')}
+                  onSuggestion={text => setDraft(text)}
+                  onError={setNotice}
+                />
                 <input
                   ref={fileRef}
                   className="wa-file-input"

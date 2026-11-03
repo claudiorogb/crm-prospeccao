@@ -139,14 +139,34 @@ async function prepareWhatsappAttachment(file) {
   }
 }
 
-function MessageBubble({ message, media, onOpenMedia }) {
+function formatContactPhone(phone) {
+  const d = String(phone || '').replace(/\D/g, '')
+  if (d.startsWith('55') && d.length >= 12) return `+55 ${d.slice(2, 4)} ${d.slice(4, -4)}-${d.slice(-4)}`
+  return d ? `+${d}` : ''
+}
+
+function MessageBubble({ message, media, onOpenMedia, onOpenContact }) {
   const isMedia = ['image','video','audio','document','sticker'].includes(message.message_type)
   const meta = message.media_metadata || {}
   return (
     <div className={message.direction === 'outbound' ? 'wa-message outbound' : 'wa-message inbound'}>
       <div>
         {message.text_body && <div className="wa-message-text">{message.text_body}</div>}
-        {!message.text_body && !isMedia && <em>{messageFallback(message)}</em>}
+        {message.message_type === 'contact' && Array.isArray(meta.contacts) && meta.contacts.length > 0 ? (
+          <div className="wa-contact-cards">
+            {meta.contacts.map((contact, index) => (
+              <div className="wa-contact-card" key={`${contact.phone || ''}-${index}`}>
+                <div className="wa-contact-info">
+                  <strong>{contact.name || 'Contato'}</strong>
+                  {contact.phone && <span>{formatContactPhone(contact.phone)}</span>}
+                </div>
+                {contact.phone && onOpenContact && (
+                  <button type="button" className="wa-contact-open" onClick={() => onOpenContact(contact)}>Conversar</button>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (!message.text_body && !isMedia && <em>{messageFallback(message)}</em>)}
 
         {isMedia && (
           <div className="wa-media-block">
@@ -181,7 +201,7 @@ function MessageBubble({ message, media, onOpenMedia }) {
   )
 }
 
-function ConversationMessages({ messages, mediaCache, onOpenMedia, endRef }) {
+function ConversationMessages({ messages, mediaCache, onOpenMedia, onOpenContact, endRef }) {
   return (
     <div className="wa-messages">
       {messages.length === 0 && <div className="wa-empty wa-empty-thread"><MessageSquareText size={28}/><span>Nenhuma mensagem nesta conversa.</span></div>}
@@ -191,6 +211,7 @@ function ConversationMessages({ messages, mediaCache, onOpenMedia, endRef }) {
           message={message}
           media={mediaCache[message.id]}
           onOpenMedia={onOpenMedia}
+          onOpenContact={onOpenContact}
         />
       ))}
       <div ref={endRef}/>
@@ -636,6 +657,31 @@ export default function WhatsAppCenter({ organization }) {
     }))
   }
 
+  // Contato compartilhado na conversa: abre (ou cria) a conversa com esse número.
+  async function openSharedContact(contact) {
+    if (loading || !selected?.whatsapp_number_id) return
+    setLoading(true)
+    setNotice('')
+    try {
+      const started = await invoke('start_conversation', {
+        whatsapp_number_id: selected.whatsapp_number_id,
+        phone: contact.phone,
+        contact_name: contact.name || ''
+      })
+      const conversationId = started?.conversation?.id
+      if (!conversationId) throw new Error('Não foi possível abrir a conversa com o contato.')
+      setStatusFilter('open')
+      setView('inbox')
+      await loadConversations(false)
+      setSelectedId(conversationId)
+      setToast(started.existing ? 'Conversa com o contato aberta.' : 'Nova conversa criada com o contato.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function startNewConversation(e) {
     e.preventDefault()
     if (loading) return
@@ -932,6 +978,7 @@ export default function WhatsAppCenter({ organization }) {
                     messages={messages}
                     mediaCache={mediaCache}
                     onOpenMedia={openMedia}
+                    onOpenContact={openSharedContact}
                     endRef={endRef}
                   />
 
@@ -1070,10 +1117,32 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
     return data || {}
   }
 
+  // Contato compartilhado: cria (ou abre) a conversa com esse número no WhatsApp do CRM.
+  async function openSharedContactFromPanel(contact) {
+    if (loading || !conversation?.whatsapp_number_id) return
+    setLoading(true)
+    setNotice('')
+    try {
+      const started = await invoke('start_conversation', {
+        whatsapp_number_id: conversation.whatsapp_number_id,
+        phone: contact.phone,
+        contact_name: contact.name || ''
+      })
+      if (!started?.conversation?.id) throw new Error('Não foi possível abrir a conversa com o contato.')
+      setNotice(started.existing
+        ? `A conversa com ${contact.name || 'o contato'} já existia no WhatsApp do CRM.`
+        : `Nova conversa criada com ${contact.name || 'o contato'}. Ela está no WhatsApp do CRM.`)
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function loadConversation() {
     const { data, error } = await supabase
       .from('whatsapp_conversations')
-      .select('id,lead_id,provider,contact_phone,contact_name,status,unread_count,last_message_at')
+      .select('id,whatsapp_number_id,lead_id,provider,contact_phone,contact_name,status,unread_count,last_message_at')
       .eq('organization_id', organization.id)
       .eq('provider', 'evolution')
       .eq('lead_id', lead.id)
@@ -1232,6 +1301,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
               messages={messages}
               mediaCache={mediaCache}
               onOpenMedia={openMedia}
+              onOpenContact={openSharedContactFromPanel}
               endRef={endRef}
             />
 

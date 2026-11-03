@@ -83,8 +83,27 @@ function extractMessageType(data: any) {
   return extractText(data) ? "text" : "unknown";
 }
 
+// Contato compartilhado (cartão de contato): guarda só nome e telefone, para a conversa mostrar o contato real.
+function vcardPhone(vcard: unknown) {
+  const text = String(vcard || "");
+  const waid = text.match(/waid=(\d+)/i)?.[1];
+  const tel = waid || text.match(/TEL[^:\n]*:([+\d\s().-]+)/i)?.[1] || "";
+  return digits(tel);
+}
+
+function extractSharedContacts(data: any) {
+  const message = data?.message || data?.data?.message || {};
+  const cards = [message?.contactMessage, ...(Array.isArray(message?.contactsArrayMessage?.contacts) ? message.contactsArrayMessage.contacts : [])].filter(Boolean);
+  return cards.slice(0, 10).map((card: any) => {
+    const vcard = String(card?.vcard || "");
+    const fn = vcard.match(/^FN:(.+)$/im)?.[1]?.trim();
+    return { name: String(card?.displayName || fn || "").trim(), phone: vcardPhone(vcard) };
+  }).filter((item: any) => item.name || item.phone);
+}
+
 function extractMediaMetadata(data: any) {
   const type = extractMessageType(data);
+  if (type === "contact") return { contacts: extractSharedContacts(data) };
   if (!["image","video","audio","document","sticker"].includes(type)) return {};
   const message = data?.message || data?.data?.message || {};
   const content =

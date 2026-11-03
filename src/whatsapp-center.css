@@ -119,3 +119,12 @@
   .wa-new-overlay-v72{padding:8px}
   .wa-new-modal-v72{width:100%;max-height:96vh}
 }
+
+/* Cartão de contato compartilhado */
+.wa-contact-cards{display:flex;flex-direction:column;gap:6px;min-width:220px}
+.wa-contact-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 2px}
+.wa-contact-info{display:flex;flex-direction:column;min-width:0}
+.wa-contact-info strong{font-size:.95rem}
+.wa-contact-info span{font-size:.82rem;color:#64748b}
+.wa-contact-open{border:1px solid #cfe3da;background:#fff;color:#0f766e;font-weight:700;border-radius:8px;padding:5px 12px;cursor:pointer}
+.wa-contact-open:hover{background:#ecfdf5}

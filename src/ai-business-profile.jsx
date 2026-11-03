@@ -6,6 +6,7 @@ export const AI_PROFILE_MAX = 6200
 
 // Cada campo vira uma linha "Rótulo: texto" no mesmo campo de texto do banco.
 export const AI_PROFILE_FIELDS = [
+  { key: 'name', label: 'Nome da empresa nas mensagens', max: 100, rows: 1, help: 'Como a empresa deve se apresentar aos clientes (ex.: Deloc).', placeholder: 'Ex.: Deloc' },
   { key: 'offer', label: 'O que oferecemos', max: 1000, rows: 4, help: 'Liste os serviços e itens que vende.', placeholder: 'Ex.: locação de freezer, fritadeira, forno e balcões para cozinha industrial.' },
   { key: 'how', label: 'Como funciona', max: 1000, rows: 4, help: 'Ex.: contrato mínimo, entrega e instalação, manutenção, troca em caso de defeito, regiões atendidas.', placeholder: 'Ex.: contrato mínimo de 6 meses, entrega e instalação inclusas, manutenção e troca em caso de defeito, atendemos Campinas e região.' },
   { key: 'edge', label: 'Diferenciais', max: 1000, rows: 3, help: 'Por que escolher a sua empresa.', placeholder: 'Ex.: sem investimento inicial, equipamento sempre revisado, atendimento rápido.' },

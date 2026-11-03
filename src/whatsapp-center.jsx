@@ -1123,7 +1123,6 @@ export default function WhatsAppCenter({ organization }) {
                       <textarea
                         value={draft}
                         onChange={e => setDraft(e.target.value)}
-                  onKeyDown={sendOnEnter}
                         onKeyDown={sendOnEnter}
                         placeholder={attachment ? 'Legenda opcional...' : 'Escreva uma mensagem...'}
                         maxLength={4096}
@@ -1472,6 +1471,7 @@ export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
                 <textarea
                   value={draft}
                   onChange={e => setDraft(e.target.value)}
+                  onKeyDown={sendOnEnter}
                   placeholder={attachment ? 'Legenda opcional...' : 'Responder pelo AXIVA...'}
                   maxLength={4096}
                 />

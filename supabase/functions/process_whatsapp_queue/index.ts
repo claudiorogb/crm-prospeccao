@@ -5,6 +5,67 @@ const EVOLUTION_URL = "https://evolution-api-production-f25e4.up.railway.app";
 const MAX_PER_RUN = 20;
 const STALE_READY_MINUTES = 15;
 
+// Espelha no WhatsApp do CRM a mensagem que o CRM acabou de enviar (campanha ou cadência), para a conversa
+// mostrar também o que saiu antes de o cliente responder. Nunca derruba o envio: qualquer erro só vai para o log.
+async function mirrorSentMessage(admin: any, message: any, providerMessageId: string | null, text: string, sentAt: string) {
+  try {
+    const orgId = String(message.organization_id);
+    const numberId = String(message.whatsapp_number_id);
+    const phone = String(message.recipient || "").replace(/\D/g, "");
+    if (!orgId || !numberId || !phone) return;
+
+    let conversationId: string | null = null;
+    const { data: byPhone } = await admin.from("whatsapp_conversations").select("id")
+      .eq("organization_id", orgId).eq("whatsapp_number_id", numberId).eq("contact_phone", phone).maybeSingle();
+    conversationId = byPhone?.id || null;
+    if (!conversationId && message.lead_id) {
+      const { data: byLead } = await admin.from("whatsapp_conversations").select("id")
+        .eq("organization_id", orgId).eq("whatsapp_number_id", numberId).eq("lead_id", message.lead_id)
+        .order("created_at", { ascending: true }).limit(1);
+      conversationId = byLead?.[0]?.id || null;
+    }
+    if (!conversationId) {
+      let contactName: string | null = null;
+      if (message.lead_id) {
+        const { data: lead } = await admin.from("leads").select("contact_name,business_name")
+          .eq("id", message.lead_id).eq("organization_id", orgId).maybeSingle();
+        contactName = String(lead?.contact_name || lead?.business_name || "").trim() || null;
+      }
+      const { data: created, error: createError } = await admin.from("whatsapp_conversations").insert({
+        organization_id: orgId, whatsapp_number_id: numberId, lead_id: message.lead_id || null,
+        provider: "evolution", contact_phone: phone, contact_name: contactName, status: "open",
+        unread_count: 0, last_message_at: sentAt, last_outbound_at: sentAt, created_at: sentAt, updated_at: sentAt,
+      }).select("id").single();
+      if (createError) {
+        const { data: again } = await admin.from("whatsapp_conversations").select("id")
+          .eq("organization_id", orgId).eq("whatsapp_number_id", numberId).eq("contact_phone", phone).maybeSingle();
+        conversationId = again?.id || null;
+      } else {
+        conversationId = created?.id || null;
+      }
+    }
+    if (!conversationId) return;
+
+    const { error: insertError } = await admin.from("whatsapp_messages").insert({
+      organization_id: orgId, conversation_id: conversationId, whatsapp_number_id: numberId,
+      lead_id: message.lead_id || null, provider: "evolution",
+      provider_message_id: providerMessageId || `crm-${message.id}`,
+      direction: "outbound", message_type: "text", text_body: text, media_metadata: {},
+      delivery_status: "sent", is_automatic: false, source: "crm", occurred_at: sentAt,
+    });
+    // Duplicado = o eco do próprio WhatsApp chegou primeiro; a mensagem já está na conversa.
+    if (insertError && !String(insertError.message || "").toLowerCase().includes("duplicate")) {
+      console.error("Espelho da mensagem enviada falhou:", insertError.message);
+      return;
+    }
+    await admin.from("whatsapp_conversations").update({
+      last_message_at: sentAt, last_message_preview: text.slice(0, 240), last_outbound_at: sentAt, updated_at: sentAt,
+    }).eq("id", conversationId).eq("organization_id", orgId);
+  } catch (error) {
+    console.error("Espelho da mensagem enviada falhou:", error instanceof Error ? error.message : String(error));
+  }
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -280,9 +341,10 @@ Deno.serve(async (req) => {
           evolution_last_sync_at: new Date().toISOString(),
         }).eq("id", message.whatsapp_number_id).eq("organization_id", message.organization_id);
 
+        const finalText = applySpintax(applySmartGreeting(message.rendered_message));
         const result = await evolution(`/message/sendText/${encodeURIComponent(message.evolution_instance_name)}`, {
           method: "POST",
-          body: JSON.stringify({ number: message.recipient, text: applySpintax(applySmartGreeting(message.rendered_message)) }),
+          body: JSON.stringify({ number: message.recipient, text: finalText }),
         });
         const sentAt = new Date().toISOString();
         const providerMessageId = result?.key?.id || result?.messageId || result?.id || null;
@@ -290,6 +352,7 @@ Deno.serve(async (req) => {
           status: "sent", provider_message_id: providerMessageId, sent_at: sentAt, error_message: null, updated_at: sentAt,
         }).eq("id", message.id).eq("status", "ready");
         if (updateError) throw updateError;
+        await mirrorSentMessage(admin, message, providerMessageId, finalText, sentAt);
         const brazilDate = new Intl.DateTimeFormat("en-CA", {
           timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
         }).format(new Date());

@@ -17,3 +17,9 @@ test('tela mostra o contato e abre nova conversa', () => {
   assert.match(ui, /wa-contact-card/)
   assert.match(ui, /invoke\('start_conversation'/)
 })
+
+test('mensagem enviada por nós não usa o pushName (nome de quem envia) como nome do contato', () => {
+  const fromMe = hook.slice(hook.indexOf('if (key?.fromMe === true)'), hook.indexOf('whatsapp_inbound_events'))
+  assert.match(fromMe, /const contactName = "";/)
+  assert.doesNotMatch(fromMe, /extractContactName\(data\)/)
+})

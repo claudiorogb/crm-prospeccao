@@ -41,3 +41,8 @@ test('Enter envia e Shift+Enter quebra a linha nas duas caixas de mensagem', () 
   assert.match(center, /onChange=\{e => setDraft\(e\.target\.value\)\}\n\s+onKeyDown=\{sendOnEnter\}\n\s+placeholder=\{attachment \? 'Legenda opcional\.\.\.' : 'Responder pelo AXIVA/)
   assert.match(center, /onChange=\{e => setDraft\(e\.target\.value\)\}\n\s+onKeyDown=\{sendOnEnter\}\n\s+placeholder=\{attachment \? 'Legenda opcional\.\.\.' : 'Escreva uma mensagem/)
 })
+
+test('em celular e tablet o Enter quebra a linha (como no WhatsApp)', () => {
+  assert.match(center, /\(pointer: coarse\)/)
+  assert.match(center, /if \(isTouchDevice\(\)\) return/)
+})

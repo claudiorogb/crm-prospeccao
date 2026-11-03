@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import { isLeadsBrasilRow, normalizeLeadsBrasilRow } from './leads-brasil-import'
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const MAX_ROWS = 5000
@@ -98,6 +99,8 @@ function customerKey(taxId, businessName) {
 }
 
 function normalizeCustomer(row) {
+  // Arquivo baixado do Leads Brasil: leva só o essencial para prospecção (ver leads-brasil-import.js)
+  if (isLeadsBrasilRow(row)) return normalizeLeadsBrasilRow(row)
   const out = {}
   Object.entries(CUSTOMER_ALIASES).forEach(([field, aliases]) => { out[field] = getByAliases(row, aliases) })
   out.business_name = String(out.business_name || '').trim()
@@ -278,7 +281,7 @@ async function parseWorkbook(file) {
   if (!rows.some(row => row.row_type === 'customer') && errors.length === 0) errors.push(importIssue(customerSheet.name, 2, 'Empresa / Cliente', 'A aba Clientes não possui registros para importar.'))
   if (rows.length > MAX_ROWS) throw new Error(`O arquivo possui ${rows.length} registros. O limite por importação é ${MAX_ROWS}.`)
   if (!errors.length) checkImportRows(rows, errors)
-  return { rows, errors }
+  return { rows, errors, leadsBrasil: rows.some(row => row.row_type === 'customer' && row.normalized_data?.customer_origin === 'Leads Brasil' && isLeadsBrasilRow(row.raw_data)) }
 }
 
 export default function CustomerImportPanel({ organization, userId, onImported }) {
@@ -344,11 +347,11 @@ export default function CustomerImportPanel({ organization, userId, onImported }
     }
     try {
       setBusy(true)
-      const { rows, errors } = await parseWorkbook(selected)
+      const { rows, errors, leadsBrasil } = await parseWorkbook(selected)
       setFile(selected)
       setParsedRows(rows)
       setValidationErrors(errors)
-      setMessage(errors.length ? `Encontrados ${errors.length} problema(s). Corrija as linhas indicadas e selecione o arquivo novamente.` : `Arquivo lido: ${rows.length} registro(s) preparado(s) para validação.`)
+      setMessage(errors.length ? `Encontrados ${errors.length} problema(s). Corrija as linhas indicadas e selecione o arquivo novamente.` : `Arquivo lido: ${rows.length} registro(s) preparado(s) para validação.${leadsBrasil ? ' Arquivo do Leads Brasil reconhecido: serão importados empresa, responsável, e-mail, telefone, endereço e CNPJ.' : ''}`)
       setShow(true)
     } catch (error) {
       setMessage(error.message || 'Não foi possível ler a planilha.')

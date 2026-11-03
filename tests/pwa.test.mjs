@@ -9,6 +9,8 @@ const install = readFileSync('public/pwa/pwa-install.js', 'utf8')
 const html = readFileSync('index.html', 'utf8')
 const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'))
 const offline = readFileSync('public/offline.html', 'utf8')
+const menuItem = readFileSync('src/install-app-menu-item.jsx', 'utf8')
+const app = readFileSync('src/App.jsx', 'utf8')
 
 test('manifesto usa nome, cores e ícones da marca AXIVA', () => {
   assert.equal(manifest.name, 'AXIVA CRM')
@@ -39,11 +41,23 @@ test('service worker não guarda nem intercepta dados da conta', () => {
   assert.match(sw, /fetch\(request\)\.catch/)
 })
 
-test('aviso de instalação não usa HTML dinâmico nem lê dados da conta', () => {
+test('instalação só por item de menu, restrita a celular/tablet, sem HTML dinâmico', () => {
   assert.doesNotMatch(install, /innerHTML|outerHTML|insertAdjacentHTML|eval\(|new Function|document\.write/)
-  assert.doesNotMatch(install, /supabase|sb-|token|password|senha/i)
+  assert.doesNotMatch(install, /supabase|sb-|token|password|senha|localStorage/i)
   assert.match(install, /isSecureContext/)
   assert.match(install, /display-mode: standalone/)
+  // só Android e iPhone/iPad (nunca computador)
+  assert.match(install, /function canShow\(\) \{ return \(isIos \|\| isAndroid\) && !installed \}/)
+  // sem aviso flutuante
+  assert.doesNotMatch(install, /axiva-pwa-x|snooze|position:fixed;left:12px/)
+})
+
+test('menu do CRM tem a linha "Instalar CRM no celular" nos dois menus, antes do rodapé', () => {
+  assert.match(menuItem, /Instalar CRM no celular/)
+  assert.match(menuItem, /window\.axivaPwa\?\.canShow\(\)/)
+  assert.match(menuItem, /if \(!visible\) return null/)
+  assert.equal((app.match(/<InstallAppMenuItem onDone=\{\(\) => setMobileMenuOpen\(false\)\} \/>/g) || []).length, 2)
+  assert.match(app, /import InstallAppMenuItem from '\.\/install-app-menu-item'/)
 })
 
 test('index.html liga manifesto, ícone iOS e script, sem remover nada existente', () => {

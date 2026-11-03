@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import AiReplyButton from './ai-reply-button'
+import { useBackLayer } from './back-layer'
 import './whatsapp-center.css'
 
 // Tipo de arquivo usado no link de mídia recebida: só tipos de mídia comuns; o resto é baixado como arquivo genérico.
@@ -1267,42 +1268,8 @@ export default function WhatsAppCenter({ organization }) {
   )
 }
 
-// No celular, o botão Voltar do sistema fecha o painel em vez de sair do app:
-// ao abrir, registra uma entrada no histórico; o Voltar remove essa entrada e fecha o painel.
-// Fechar pelo X desfaz a entrada, para o histórico não acumular.
-function useBackClosesPanel(onClose) {
-  const closeRef = useRef(onClose)
-  closeRef.current = onClose
-
-  useEffect(() => {
-    const token = `axiva-panel-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    let pushed = false
-    let handledByBack = false
-
-    const onPop = () => {
-      if (window.history.state?.axivaPanel === token) return
-      handledByBack = true
-      window.removeEventListener('popstate', onPop)
-      closeRef.current?.()
-    }
-
-    // adiado para não duplicar a entrada quando o React reexecuta o efeito em desenvolvimento
-    const timer = setTimeout(() => {
-      window.history.pushState({ ...(window.history.state || {}), axivaPanel: token }, '')
-      pushed = true
-      window.addEventListener('popstate', onPop)
-    }, 0)
-
-    return () => {
-      clearTimeout(timer)
-      window.removeEventListener('popstate', onPop)
-      if (pushed && !handledByBack && window.history.state?.axivaPanel === token) window.history.back()
-    }
-  }, [])
-}
-
 export function WhatsAppLeadPanel({ organization, lead, onClose, onUpdated }) {
-  useBackClosesPanel(onClose)
+  useBackLayer(true, onClose)
   const [conversation, setConversation] = useState(null)
   const [messages, setMessages] = useState([])
   const [pendingMessages, setPendingMessages] = useState([])

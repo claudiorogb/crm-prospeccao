@@ -6,14 +6,8 @@ const center = readFileSync('src/whatsapp-center.jsx', 'utf8')
 const css = readFileSync('src/whatsapp-center.css', 'utf8')
 
 test('painel de conversa do lead: Voltar do celular fecha o painel em vez de sair do app', () => {
-  assert.match(center, /function useBackClosesPanel\(onClose\)/)
-  assert.match(center, /export function WhatsAppLeadPanel\(\{ organization, lead, onClose, onUpdated \}\) \{\n  useBackClosesPanel\(onClose\)/)
-  assert.match(center, /window\.history\.pushState\(/)
-  assert.match(center, /addEventListener\('popstate', onPop\)/)
-  // fechar pelo X desfaz a entrada do histórico
-  assert.match(center, /window\.history\.back\(\)/)
-  // registro adiado (não empilha duas entradas quando o React reexecuta o efeito)
-  assert.match(center, /setTimeout\(\(\) => \{\n\s+window\.history\.pushState/)
+  assert.match(center, /import \{ useBackLayer \} from '\.\/back-layer'/)
+  assert.match(center, /export function WhatsAppLeadPanel\(\{ organization, lead, onClose, onUpdated \}\) \{\n  useBackLayer\(true, onClose\)/)
 })
 
 test('botão Fechar do painel é visível e fácil de tocar no celular', () => {

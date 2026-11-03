@@ -21,7 +21,7 @@ test('função usa só mensagens recentes, perfil da empresa e etapa do lead', (
   assert.match(fn, /ai_business_profile/)
   assert.match(fn, /STAGE_LABELS/)
   assert.match(fn, /OPENAI_REPLY_MODEL/)
-  assert.match(fn, /no máximo 3 frases/)
+  assert.match(fn, /2 a 4 frases/)
 })
 
 test('botão apenas coloca a sugestão na caixa e nunca envia', () => {

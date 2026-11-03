@@ -46,3 +46,10 @@ test('em celular e tablet o Enter quebra a linha (como no WhatsApp)', () => {
   assert.match(center, /\(pointer: coarse\)/)
   assert.match(center, /if \(isTouchDevice\(\)\) return/)
 })
+
+test('mensagem de texto aparece na hora e o envio termina em segundo plano', () => {
+  assert.match(center, /function makePendingMessage/)
+  assert.equal((center.match(/async function sendTextNow/g) || []).length, 2)
+  assert.equal((center.match(/withPendingMessages\(messages, pendingMessages/g) || []).length, 2)
+  assert.match(center, /setDraft\(current => current \|\| text\)/)
+})

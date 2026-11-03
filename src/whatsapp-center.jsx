@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Archive, CheckCheck, Edit3, FileText, Image as ImageIcon, Link2,
   MessageSquareText, Mic, Paperclip, RefreshCw, Save, Send,
-  Smartphone, Trash2, UserCheck, UserPlus, Users, Video, X
+  Smartphone, Trash2, UserCheck, UserPlus, Users, Video, X, ZoomIn, ZoomOut
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import './whatsapp-center.css'
@@ -139,6 +140,38 @@ async function prepareWhatsappAttachment(file) {
   }
 }
 
+// Visualizador de imagem em popup (tudo no navegador: não grava nada no banco).
+function ImageViewer({ src, alt, onClose }) {
+  const [zoom, setZoom] = useState(1)
+  const change = delta => setZoom(current => Math.min(8, Math.max(0.25, Math.round((current + delta) * 100) / 100)))
+
+  useEffect(() => {
+    function onKey(event) {
+      if (event.key === 'Escape') onClose()
+      else if (event.key === '+' || event.key === '=') change(0.25)
+      else if (event.key === '-') change(-0.25)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return createPortal(
+    <div className="wa-viewer" role="dialog" aria-modal="true" aria-label="Visualizar imagem" onClick={onClose}>
+      <div className="wa-viewer-bar" onClick={event => event.stopPropagation()}>
+        <button type="button" onClick={() => change(-0.25)} aria-label="Diminuir" title="Diminuir"><ZoomOut size={18}/></button>
+        <button type="button" className="wa-viewer-level" onClick={() => setZoom(1)} title="Ajustar à tela">{Math.round(zoom * 100)}%</button>
+        <button type="button" onClick={() => change(0.25)} aria-label="Aumentar" title="Aumentar"><ZoomIn size={18}/></button>
+        <button type="button" onClick={onClose} aria-label="Fechar" title="Fechar"><X size={18}/></button>
+      </div>
+      <div className="wa-viewer-stage" onClick={event => { if (event.target === event.currentTarget) onClose() }}
+        onWheel={event => change(event.deltaY < 0 ? 0.2 : -0.2)}>
+        <img src={src} alt={alt} style={{ width: `${zoom * 100}%`, maxWidth: 'none' }} onClick={event => event.stopPropagation()} draggable={false} />
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 function formatContactPhone(phone) {
   const d = String(phone || '').replace(/\D/g, '')
   if (d.startsWith('55') && d.length >= 12) return `+55 ${d.slice(2, 4)} ${d.slice(4, -4)}-${d.slice(-4)}`
@@ -146,6 +179,7 @@ function formatContactPhone(phone) {
 }
 
 function MessageBubble({ message, media, onOpenMedia, onOpenContact }) {
+  const [viewing, setViewing] = useState(false)
   const isMedia = ['image','video','audio','document','sticker'].includes(message.message_type)
   const meta = message.media_metadata || {}
   return (
@@ -172,7 +206,12 @@ function MessageBubble({ message, media, onOpenMedia, onOpenContact }) {
           <div className="wa-media-block">
             {media?.url ? (
               <>
-                {message.message_type === 'image' && <img src={media.url} alt={meta.file_name || 'Imagem recebida'} />}
+                {message.message_type === 'image' && (
+                  <>
+                    <img className="wa-zoomable" src={media.url} alt={meta.file_name || 'Imagem recebida'} title="Clique para ampliar" onClick={() => setViewing(true)} />
+                    {viewing && <ImageViewer src={media.url} alt={meta.file_name || 'Imagem'} onClose={() => setViewing(false)} />}
+                  </>
+                )}
                 {message.message_type === 'video' && <video src={media.url} controls />}
                 {message.message_type === 'audio' && <audio src={media.url} controls />}
                 {['document','sticker'].includes(message.message_type) && (

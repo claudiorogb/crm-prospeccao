@@ -38,6 +38,8 @@ import WhatsAppCenter, { WhatsAppLeadPanel } from './whatsapp-center'
 import AiAssistant, { AiFloatingAssistant } from './ai-assistant'
 import AiBusinessProfile from './ai-business-profile'
 import InstallAppMenuItem from './install-app-menu-item'
+import { useBackLayer } from './back-layer'
+import { commitScreen, installScreenPopHandler } from './back-navigation'
 import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import TrialExpiredScreen from './trial-expired-screen'
@@ -3847,6 +3849,7 @@ function Clients({ organization, userEmail, userId }) {
   }, [organization.id])
 
   const selectedClient = clients.find(item => item.id === selectedId) || null
+  useBackLayer(Boolean(selectedClient), () => setSelectedId(null))
 
   useEffect(() => {
     if (!selectedClient) {
@@ -10030,6 +10033,25 @@ export default function App() {
       cancelled = true
     }
   }, [session?.user?.id])
+
+  // Botão Voltar do celular: volta à tela anterior (e fecha o menu aberto) em vez de sair do app.
+  const sessionUserRef = useRef(null)
+  sessionUserRef.current = session?.user?.id || null
+
+  useEffect(() => {
+    if (!session?.user || accessLoading) return
+    commitScreen({ page, sys: systemAdminView, adm: adminCommercialPage })
+  }, [session?.user?.id, accessLoading, page, systemAdminView, adminCommercialPage])
+
+  useEffect(() => installScreenPopHandler(snap => {
+    if (!sessionUserRef.current) return
+    setPage(snap.page)
+    setSystemAdminView(snap.sys)
+    setAdminCommercialPage(snap.adm)
+    setMobileMenuOpen(false)
+  }), [])
+
+  useBackLayer(mobileMenuOpen, () => setMobileMenuOpen(false))
 
   async function loadAdminOrganizations() {
     if (!isSystemAdmin || accountStatus !== 'active') {

@@ -2,7 +2,6 @@ import HelpTip from './help-tip.jsx'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
 import MarketingListImport from './marketing-list-import'
-import NewsletterMailingPanel from './newsletter-mailing-panel'
 import EmailCampaignHistory from './email-campaign-history'
 import { PaginationControls } from './paginated-selection'
 import './email-marketing.css'
@@ -1365,8 +1364,6 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
       </section>}
 
       {mode !== 'connection' && <>
-      <NewsletterMailingPanel organization={organization} onChanged={loadData} />
-
       <form className="panel email-compose-panel" onSubmit={createCampaign}>
         <div className="email-section-title">
           <div><span className="eyebrow">NOVA CAMPANHA</span><h2>Criar e-mail</h2></div>

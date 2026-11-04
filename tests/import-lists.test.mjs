@@ -75,3 +75,9 @@ test('selection from Lista de clientes stays on the send page until the send fin
   for (const key of ['crm_email_preselect', 'crm_marketing_preselect']) assert.match(mkt, new RegExp(`removeItem\\('${key}'\\)`))
   assert.equal((mkt.match(/getItem\('crm_email_preselect'\)[^\n]*\n\s*sessionStorage\.removeItem/g) || []).length, 0)
 })
+
+test('e-mail marketing page no longer shows the registered e-mails panel', async () => {
+  const { readFileSync } = await import('node:fs')
+  const mkt = readFileSync(new URL('../src/email-marketing.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(mkt, /NewsletterMailingPanel/)
+})

@@ -66,3 +66,12 @@ test('listas: mais recentes primeiro, 20 por página e e-mail mkt pela lista com
   assert.doesNotMatch(lists, /status === 'won' && validEmail/)
   assert.match(read('src/email-marketing.jsx'), /setSelectedMarketing\(new Set\(listIds\)\)/)
 })
+
+test('selection from Lista de clientes stays on the send page until the send finishes', async () => {
+  const { readFileSync } = await import('node:fs')
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const mkt = readFileSync(new URL('../src/email-marketing.jsx', import.meta.url), 'utf8')
+  for (const key of ['crm_whatsapp_preselect']) assert.match(app, new RegExp(`removeItem\\('${key}'\\)`))
+  for (const key of ['crm_email_preselect', 'crm_marketing_preselect']) assert.match(mkt, new RegExp(`removeItem\\('${key}'\\)`))
+  assert.equal((mkt.match(/getItem\('crm_email_preselect'\)[^\n]*\n\s*sessionStorage\.removeItem/g) || []).length, 0)
+})

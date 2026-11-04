@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
-import MarketingListImport from './marketing-list-import'
 import './newsletter-mailing-panel.css'
 
 const PAGE_SIZE = 100
@@ -57,28 +56,18 @@ export default function NewsletterMailingPanel({ organization, onChanged }) {
     setPage(0)
   }, [organization?.id])
 
-  async function handleImported() {
-    await Promise.all([refresh(0), onChanged?.()])
-  }
-
   return (
     <section className="panel mailing-management-panel">
       <div className="email-section-title mailing-management-header">
         <div>
           <span className="eyebrow">LISTA DE E-MAIL MARKETING</span>
           <h2>E-mails cadastrados</h2>
-          <p className="muted">Consulte os cadastros da newsletter e inclua contatos da base própria da empresa.</p>
+          <p className="muted">Consulte os e-mails cadastrados. A importação de listas é feita na página Lista de clientes.</p>
         </div>
         <button type="button" className="secondary" aria-expanded={open} onClick={() => {
           if (open) setOpen(false)
           else { setOpen(true); refresh(0) }
         }}>{open ? 'Fechar lista de e-mails' : 'Ver lista de e-mails cadastrados'}</button>
-      </div>
-
-      <div className="mailing-management-import">
-        <h3>Importar lista de e-mail marketing</h3>
-        <p className="muted">Importe uma lista própria autorizada. Baixe o modelo com as regras de preenchimento da planilha.</p>
-        <MarketingListImport organization={organization} mode="import" onImported={handleImported} />
       </div>
 
       {open && (

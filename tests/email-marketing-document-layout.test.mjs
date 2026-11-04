@@ -12,8 +12,9 @@ function after(source, needle) {
   return position
 }
 
-test('marketing-list manager displays the template, import rules and confirmation without opening its table', () => {
-  assert.ok(after(mailing, '<MarketingListImport organization={organization} mode="import"') < after(mailing, '{open && ('))
+test('marketing-list import lives only in Lista de clientes; the e-mail marketing page has no import fields', () => {
+  assert.doesNotMatch(mailing, /MarketingListImport/)
+  assert.doesNotMatch(mailing, /Importar lista de e-mail marketing/)
   assert.match(importer, /mode !== 'manual'/)
   assert.match(importer, /mode !== 'import'/)
   assert.match(importer, /Baixar modelo/)

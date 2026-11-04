@@ -4689,7 +4689,6 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
     let pre = null
     try {
       pre = JSON.parse(sessionStorage.getItem('crm_whatsapp_preselect') || 'null')
-      sessionStorage.removeItem('crm_whatsapp_preselect')
     } catch {}
     if (!Array.isArray(pre?.ids) || !pre.ids.length) return undefined
     let active = true
@@ -5556,6 +5555,7 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
           : `${data?.queued || 0} mensagem(ns) agendada(s). Primeiro envio: ${first}. Último envio: ${last}.${ignoredText}`
       )
       setSelected(new Map())
+      try { sessionStorage.removeItem('crm_whatsapp_preselect') } catch {}
       setResendTargetSegmentId('')
       setResendTemplateId('')
       await loadData()

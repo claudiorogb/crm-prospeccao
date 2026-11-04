@@ -274,7 +274,6 @@ function EmailProspectingSequence({ organization, connection }) {
     let preselected = []
     try {
       preselected = JSON.parse(sessionStorage.getItem('crm_email_preselect') || '[]')
-      sessionStorage.removeItem('crm_email_preselect')
     } catch {}
     setSelected(new Set(Array.isArray(preselected) ? preselected : []))
     setMessage(preselected.length ? `${preselected.length} lead(s) selecionado(s) para a prospecção. Escreva a sequência e clique em "Iniciar sequência".` : '')
@@ -387,6 +386,7 @@ function EmailProspectingSequence({ organization, connection }) {
       await supabase.from('leads').update({ email_contacts_at: new Date().toISOString() })
         .eq('organization_id', organization.id).in('id', [...selected]).is('email_contacts_at', null)
       setSelected(new Set())
+      try { sessionStorage.removeItem('crm_email_preselect') } catch {}
       setForm({ name: '', subject: '', first: '', followup1: '', followup2: '' })
       setBasisConfirmed(false)
       await loadProspects()
@@ -682,7 +682,6 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
       let pre = null
       try {
         pre = JSON.parse(sessionStorage.getItem('crm_marketing_preselect') || 'null')
-        sessionStorage.removeItem('crm_marketing_preselect')
       } catch {}
       const clientIds = Array.isArray(pre?.ids) ? pre.ids : []
       const listIds = Array.isArray(pre?.marketing_ids) ? pre.marketing_ids : []
@@ -1017,6 +1016,7 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
         setForm({ name: '', subject: '', body: '' })
         setSelected(new Set())
         setSelectedMarketing(new Set())
+        try { sessionStorage.removeItem('crm_marketing_preselect') } catch {}
         setCommercialConsentConfirmed(false)
       } else {
         setCommercialConsentConfirmed(false)

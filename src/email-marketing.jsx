@@ -628,7 +628,7 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
     const [connectionResult, limitResult, clientsResult, marketingResult, campaignResult] = await Promise.all([
       supabase.from('email_connections').select('organization_id,provider,email_address,sender_email,sender_name,status,last_error,connected_at,reply_mode,custom_reply_domain,custom_reply_email,custom_reply_domain_id,custom_reply_status,custom_reply_dns,resend_full_access').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('organization_email_limits').select('*').eq('organization_id', organization.id).maybeSingle(),
-      supabase.from('leads').select('id,business_name,contact_name,email,city,state,status,email_marketing_opt_out').eq('organization_id', organization.id).is('deleted_at', null).order('business_name'),
+      supabase.from('leads').select('id,business_name,contact_name,email,city,state,status,email_marketing_opt_out').eq('organization_id', organization.id).is('deleted_at', null).not('status', 'in', '(lost,not_interested,discarded)').order('business_name'),
       supabase.from('email_marketing_contacts').select('id,email,contact_name,company_name,source,status,consent_confirmed,unsubscribed_at').eq('organization_id', organization.id).order('email'),
       supabase.from('email_campaigns').select('id,name,subject,body_text,status,total_recipients,sent_count,failed_count,provider,from_email,created_at,completed_at,cancelled_at,metrics_enabled', { count: 'exact' }).eq('organization_id', organization.id).order('created_at', { ascending: false }).order('id', { ascending: false }).range(nextCampaignPage * CAMPAIGN_PAGE_SIZE, (nextCampaignPage + 1) * CAMPAIGN_PAGE_SIZE - 1)
     ])
@@ -689,7 +689,7 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
       if (clientIds.length || listIds.length) {
         setSelected(new Set(clientIds))
         setSelectedMarketing(new Set(listIds))
-        setMessage(`${clientIds.length + listIds.length} contato(s) selecionado(s) para a campanha (${clientIds.length} cliente(s) e ${listIds.length} da lista de e-mail marketing).${pre.skipped ? ` ${pre.skipped} não entraram por não serem clientes nem estarem na lista com consentimento.` : ''} Escreva a mensagem, salve o rascunho e inicie o envio.`)
+        setMessage(`${clientIds.length + listIds.length} contato(s) selecionado(s) para a campanha.${pre.skipped ? ` ${pre.skipped} não entraram por não terem e-mail válido ou por terem pedido para sair da lista.` : ''} Escreva a mensagem, salve o rascunho e inicie o envio.`)
       }
     }
     loadData(0)

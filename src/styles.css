@@ -4609,3 +4609,23 @@ button:not(:disabled):active,
 .ai-floating-drag{cursor:grab}
 .ai-floating-drag:active{cursor:grabbing}
 .ai-floating-root.moved{left:auto}
+
+/* Lista de clientes / prospecção (Campanhas) */
+.customer-import-destination { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0 0; padding: 0; border: 0; }
+.customer-import-destination legend { font-weight: 700; margin-bottom: 8px; padding: 0; }
+.customer-import-destination label { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 6px; padding: 12px; cursor: pointer; }
+.customer-import-destination label.on { border-color: #111827; box-shadow: inset 0 0 0 1px #111827; }
+.customer-import-destination label span { display: flex; flex-direction: column; gap: 2px; }
+.customer-import-destination label small { color: var(--muted); }
+.import-list-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 12px; }
+.import-list-panel { padding: 18px; }
+.import-list-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin: 10px 0 12px; }
+.import-list-toolbar .search-box { flex: 1 1 280px; }
+.import-list-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.import-list-table-wrap { overflow-x: auto; }
+.import-list-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.import-list-table th, .import-list-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.import-list-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+@media (max-width: 700px) { .customer-import-destination { grid-template-columns: 1fr; } }
+.workspace-tabs a.workspace-tab-link { margin-left: auto; padding: 10px 14px; border-radius: 6px; font-weight: 600; text-decoration: none; color: inherit; border: 1px solid var(--border, #e5e7eb); }
+.workspace-tabs a.workspace-tab-link:hover { background: rgba(17, 24, 39, .06); }

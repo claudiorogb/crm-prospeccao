@@ -5,7 +5,7 @@ import CustomerImportPanel from './customer-import'
 
 const PAGE_SIZE = 1000
 const MAX_PAGES = 10
-const VISIBLE_STEP = 100
+const LIST_PAGE_SIZE = 20
 const MOVE_CHUNK = 1000
 const WHATSAPP_STATUSES = ['new', 'queued', 'captured_pending']
 
@@ -34,7 +34,7 @@ const LISTS = {
   }
 }
 
-const COLUMNS = 'id,business_name,contact_name,phone,email,city,state,status,source,email_marketing_opt_out'
+const COLUMNS = 'id,business_name,contact_name,phone,email,city,state,status,source,email_marketing_opt_out,created_at'
 
 function baseQuery(organizationId, kind, columns, options) {
   const query = supabase.from('leads').select(columns, options)
@@ -74,7 +74,7 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
   const [counts, setCounts] = useState({ leads: null, customers: null })
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
-  const [visible, setVisible] = useState(VISIBLE_STEP)
+  const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(() => new Set())
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -104,7 +104,7 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
     const all = []
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const { data, error } = await baseQuery(organization.id, kind, COLUMNS)
-        .order('business_name', { ascending: true }).order('id')
+        .order('created_at', { ascending: false }).order('id', { ascending: false })
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
       if (error) { setMessage(`Não foi possível carregar a lista: ${error.message}`); break }
       all.push(...(data || []))
@@ -113,7 +113,7 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
     setRows(all)
     setSelected(new Set())
     setConfirming(false)
-    setVisible(VISIBLE_STEP)
+    setPage(1)
     setLastMessages({})
     setLoading(false)
   }, [organization.id, kind])
@@ -130,7 +130,9 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
       (digits.length >= 3 && String(row.phone || '').replace(/\D/g, '').includes(digits)))
   }, [rows, search])
 
-  const shown = filtered.slice(0, visible)
+  const pageCount = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE))
+  const safePage = Math.min(page, pageCount)
+  const shown = filtered.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE)
 
   // Última mensagem por canal, só dos contatos que aparecem na tela.
   useEffect(() => {
@@ -148,7 +150,7 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
       if (active) setLastMessages(old => ({ ...old, ...found }))
     })()
     return () => { active = false }
-  }, [shown.length, kind, rows]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown.map(row => row.id).join(','), kind]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(row => selected.has(row.id))
   const selectedRows = useMemo(() => rows.filter(row => selected.has(row.id)), [rows, selected])
@@ -173,7 +175,7 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
   }
 
   // Seleciona e abre a tela de envio do canal, com os contatos já marcados.
-  function sendTo(channel) {
+  async function sendTo(channel) {
     if (!selectedRows.length) return
     const rules = {
       email: {
@@ -197,15 +199,36 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
     }
     const rule = rules[channel]
     const eligible = selectedRows.filter(rule.ok)
-    const skipped = selectedRows.length - eligible.length
-    if (!eligible.length) {
-      setMessage(`Nenhum dos contatos selecionados pode ser enviado por ${rule.label}: ${rule.why}.`)
+    let marketingIds = []
+    if (channel === 'marketing') {
+      // Quem não é cliente só entra se o e-mail já estiver na lista de e-mail marketing com consentimento confirmado.
+      const others = selectedRows.filter(row => !rule.ok(row) && validEmail(row.email) && !row.email_marketing_opt_out)
+      const emails = [...new Set(others.flatMap(row => [String(row.email).trim(), String(row.email).trim().toLowerCase()]))]
+      if (emails.length) {
+        const { data } = await supabase.from('email_marketing_contacts').select('id,email')
+          .eq('organization_id', organization.id).eq('status', 'active').eq('consent_confirmed', true)
+          .is('unsubscribed_at', null).in('email', emails)
+        marketingIds = [...new Set((data || []).map(item => item.id))]
+      }
+    }
+    const accepted = eligible.length + marketingIds.length
+    const skipped = Math.max(0, selectedRows.length - accepted)
+    if (!eligible.length && !marketingIds.length) {
+      if (channel === 'marketing') {
+        const semEmail = selectedRows.filter(row => !validEmail(row.email)).length
+        const saiu = selectedRows.filter(row => row.email_marketing_opt_out).length
+        const detalhes = [semEmail ? `${semEmail} sem e-mail válido` : '', saiu ? `${saiu} pediram para sair da lista` : ''].filter(Boolean).join(', ')
+        setMessage(`Nenhum dos contatos selecionados pode receber campanha de e-mail marketing. A campanha vai para clientes ou para e-mails que estejam na lista de e-mail marketing com consentimento confirmado.${detalhes ? ` (${detalhes}.)` : ''} Para incluir estes e-mails, cadastre-os na lista em E-mail marketing ou envie o lead para a lista de clientes.`)
+      } else {
+        setMessage(`Nenhum dos contatos selecionados pode ser enviado por ${rule.label}: ${rule.why}.`)
+      }
       return
     }
     try {
       const ids = eligible.map(row => row.id)
       if (channel === 'email') sessionStorage.setItem('crm_email_preselect', JSON.stringify(ids))
-      else sessionStorage.setItem(channel === 'marketing' ? 'crm_marketing_preselect' : 'crm_whatsapp_preselect', JSON.stringify({ ids, skipped }))
+      else if (channel === 'marketing') sessionStorage.setItem('crm_marketing_preselect', JSON.stringify({ ids, marketing_ids: marketingIds, skipped }))
+      else sessionStorage.setItem('crm_whatsapp_preselect', JSON.stringify({ ids, skipped }))
     } catch {
       setMessage('Não foi possível preparar o envio neste navegador.')
       return
@@ -267,7 +290,7 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
             role="tab"
             aria-selected={kind === key}
             className={kind === key ? 'primary' : 'secondary'}
-            onClick={() => { setKind(key); setSearch(''); setMessage('') }}
+            onClick={() => { setKind(key); setSearch(''); setPage(1); setMessage('') }}
           >
             {item.label}{counts[key] !== null ? ` (${counts[key]})` : ''}
           </button>
@@ -278,7 +301,7 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
         <p className="muted">{config.help}</p>
 
         <div className="import-list-toolbar">
-          <div className="search-box"><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar empresa, responsável, e-mail, cidade ou telefone" /></div>
+          <div className="search-box"><Search size={17}/><input value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="Buscar empresa, responsável, e-mail, cidade ou telefone" /></div>
         </div>
 
         <div className="import-list-bar">
@@ -339,8 +362,12 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
               </tbody>
             </table>
             <div className="import-list-footer">
-              <span className="muted">Mostrando {Math.min(visible, filtered.length)} de {filtered.length}</span>
-              {visible < filtered.length && <button type="button" className="secondary inline-btn" onClick={() => setVisible(value => value + VISIBLE_STEP)}>Ver mais</button>}
+              <span className="muted">{filtered.length} contato(s) • do mais recente para o mais antigo</span>
+              <div className="import-list-pager">
+                <button type="button" className="secondary inline-btn" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>Anterior</button>
+                <span>Página {safePage} de {pageCount}</span>
+                <button type="button" className="secondary inline-btn" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Próxima</button>
+              </div>
             </div>
           </div>
         )}

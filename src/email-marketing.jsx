@@ -684,9 +684,12 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
         pre = JSON.parse(sessionStorage.getItem('crm_marketing_preselect') || 'null')
         sessionStorage.removeItem('crm_marketing_preselect')
       } catch {}
-      if (Array.isArray(pre?.ids) && pre.ids.length) {
-        setSelected(new Set(pre.ids))
-        setMessage(`${pre.ids.length} cliente(s) selecionado(s) para a campanha.${pre.skipped ? ` ${pre.skipped} não entraram por não serem clientes com e-mail válido.` : ''} Escreva a mensagem, salve o rascunho e inicie o envio.`)
+      const clientIds = Array.isArray(pre?.ids) ? pre.ids : []
+      const listIds = Array.isArray(pre?.marketing_ids) ? pre.marketing_ids : []
+      if (clientIds.length || listIds.length) {
+        setSelected(new Set(clientIds))
+        setSelectedMarketing(new Set(listIds))
+        setMessage(`${clientIds.length + listIds.length} contato(s) selecionado(s) para a campanha (${clientIds.length} cliente(s) e ${listIds.length} da lista de e-mail marketing).${pre.skipped ? ` ${pre.skipped} não entraram por não serem clientes nem estarem na lista com consentimento.` : ''} Escreva a mensagem, salve o rascunho e inicie o envio.`)
       }
     }
     loadData(0)

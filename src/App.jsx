@@ -11,6 +11,20 @@ import { supabase } from './lib/supabase'
 import ImportLists from './import-lists'
 
 const LEADS_BRASIL_URL = 'https://leads-sp.vercel.app'
+
+// Abre o Leads Brasil já logado: leva a sessão do CRM (depois do #, que não vai a servidor algum).
+// Se algo falhar, abre o Leads Brasil normalmente, com o login dele.
+async function openLeadsBrasil(event) {
+  event?.preventDefault?.()
+  const popup = window.open('', '_blank')
+  let url = LEADS_BRASIL_URL
+  try {
+    const { data } = await supabase.auth.getSession()
+    if (data?.session?.access_token) url = `${LEADS_BRASIL_URL}/#crm_sso=${encodeURIComponent(data.session.access_token)}`
+  } catch {}
+  if (popup) { try { popup.opener = null } catch {} ; popup.location.href = url }
+  else window.location.assign(url)
+}
 import CrmFullExport from './crm-full-export'
 import { mergeLeadsWithLocalDrafts } from './kanban-draft-merge.js'
 import { sortKanbanColumn } from './kanban-order.js'
@@ -2036,7 +2050,7 @@ function Capture({ organization, settings, userEmail }) {
           <h2>Leads Brasil</h2>
           <p className="muted">Busque empresas de todo o Brasil por atividade (CNAE) e cidade, baixe a planilha e importe em Campanhas → Lista de clientes.</p>
         </div>
-        <a className="primary inline-btn capture-leads-brasil-link" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer">Abrir Leads Brasil ↗</a>
+        <a className="primary inline-btn capture-leads-brasil-link" href={LEADS_BRASIL_URL} onClick={openLeadsBrasil}>Abrir Leads Brasil ↗</a>
       </section>
 
       <section className="panel capture-panel">
@@ -6172,7 +6186,7 @@ function CampaignWorkspace({ organization, settings, userEmail, userId, isSystem
             {label}
           </button>
         ))}
-        <a className="workspace-tab-link" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer">Leads Brasil ↗</a>
+        <a className="workspace-tab-link" href={LEADS_BRASIL_URL} onClick={openLeadsBrasil}>Leads Brasil ↗</a>
       </div>
       {section === 'lists' && <ImportLists organization={organization} userId={userId} isSystemAdmin={isSystemAdmin} onOpenSection={setSection} />}
       {section === 'targets' && <TargetSegments organization={organization} userEmail={userEmail} />}
@@ -10298,9 +10312,6 @@ export default function App() {
                 >
                   <Target size={18}/> Campanhas
                 </button>
-                <a className="nav-item" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)}>
-                  <Link2 size={18}/> Leads Brasil
-                </a>
                 <button
                   className={`nav-item ${adminCommercialPage === 'whatsapp' ? 'active' : ''}`}
                   onClick={() => { setAdminCommercialPage('whatsapp'); setMobileMenuOpen(false) }}
@@ -10562,9 +10573,6 @@ export default function App() {
           <button className={`nav-item ${page === 'campaign-workspace' ? 'active' : ''}`} onClick={() => { setPage('campaign-workspace'); setMobileMenuOpen(false) }}>
             <Target size={18}/> Campanhas
           </button>
-          <a className="nav-item" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)}>
-            <Link2 size={18}/> Leads Brasil
-          </a>
           <button className={`nav-item ${page === 'whatsapp' ? 'active' : ''}`} onClick={() => { setPage('whatsapp'); setMobileMenuOpen(false) }}>
             <MessageSquareText size={18}/> WhatsApp
           </button>

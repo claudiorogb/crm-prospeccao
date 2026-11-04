@@ -186,9 +186,9 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
       },
       marketing: {
         label: 'campanha de e-mail marketing',
-        ok: row => row.status === 'won' && validEmail(row.email) && !row.email_marketing_opt_out,
+        ok: row => validEmail(row.email) && !row.email_marketing_opt_out,
         section: 'email',
-        why: 'a campanha de e-mail marketing é só para clientes com e-mail válido que não pediram para sair da lista'
+        why: 'precisam ter e-mail válido e não ter pedido para sair da lista'
       },
       whatsapp: {
         label: 'WhatsApp',
@@ -199,35 +199,18 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
     }
     const rule = rules[channel]
     const eligible = selectedRows.filter(rule.ok)
-    let marketingIds = []
-    if (channel === 'marketing') {
-      // Quem não é cliente só entra se o e-mail já estiver na lista de e-mail marketing com consentimento confirmado.
-      const others = selectedRows.filter(row => !rule.ok(row) && validEmail(row.email) && !row.email_marketing_opt_out)
-      const emails = [...new Set(others.flatMap(row => [String(row.email).trim(), String(row.email).trim().toLowerCase()]))]
-      if (emails.length) {
-        const { data } = await supabase.from('email_marketing_contacts').select('id,email')
-          .eq('organization_id', organization.id).eq('status', 'active').eq('consent_confirmed', true)
-          .is('unsubscribed_at', null).in('email', emails)
-        marketingIds = [...new Set((data || []).map(item => item.id))]
-      }
-    }
-    const accepted = eligible.length + marketingIds.length
-    const skipped = Math.max(0, selectedRows.length - accepted)
-    if (!eligible.length && !marketingIds.length) {
-      if (channel === 'marketing') {
-        const semEmail = selectedRows.filter(row => !validEmail(row.email)).length
-        const saiu = selectedRows.filter(row => row.email_marketing_opt_out).length
-        const detalhes = [semEmail ? `${semEmail} sem e-mail válido` : '', saiu ? `${saiu} pediram para sair da lista` : ''].filter(Boolean).join(', ')
-        setMessage(`Nenhum dos contatos selecionados pode receber campanha de e-mail marketing. A campanha vai para clientes ou para e-mails que estejam na lista de e-mail marketing com consentimento confirmado.${detalhes ? ` (${detalhes}.)` : ''} Para incluir estes e-mails, cadastre-os na lista em E-mail marketing ou envie o lead para a lista de clientes.`)
-      } else {
-        setMessage(`Nenhum dos contatos selecionados pode ser enviado por ${rule.label}: ${rule.why}.`)
-      }
+    const skipped = selectedRows.length - eligible.length
+    if (!eligible.length) {
+      const semEmail = selectedRows.filter(row => !validEmail(row.email)).length
+      const saiu = selectedRows.filter(row => row.email_marketing_opt_out).length
+      const detalhes = [semEmail ? `${semEmail} sem e-mail válido` : '', saiu ? `${saiu} pediram para sair da lista` : ''].filter(Boolean).join(', ')
+      setMessage(`Nenhum dos contatos selecionados pode ser enviado por ${rule.label}: ${rule.why}.${detalhes && channel !== 'whatsapp' ? ` (${detalhes}.)` : ''}`)
       return
     }
     try {
       const ids = eligible.map(row => row.id)
       if (channel === 'email') sessionStorage.setItem('crm_email_preselect', JSON.stringify(ids))
-      else if (channel === 'marketing') sessionStorage.setItem('crm_marketing_preselect', JSON.stringify({ ids, marketing_ids: marketingIds, skipped }))
+      else if (channel === 'marketing') sessionStorage.setItem('crm_marketing_preselect', JSON.stringify({ ids, skipped }))
       else sessionStorage.setItem('crm_whatsapp_preselect', JSON.stringify({ ids, skipped }))
     } catch {
       setMessage('Não foi possível preparar o envio neste navegador.')

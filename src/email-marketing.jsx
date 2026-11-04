@@ -677,6 +677,18 @@ export function EmailMarketing({ organization, userEmail, mode = 'marketing' }) 
     setSelectedMarketing(new Set())
     setDraftCampaignId(null)
     setCommercialConsentConfirmed(false)
+    // Clientes enviados da Lista de clientes chegam já selecionados.
+    if (mode === 'marketing') {
+      let pre = null
+      try {
+        pre = JSON.parse(sessionStorage.getItem('crm_marketing_preselect') || 'null')
+        sessionStorage.removeItem('crm_marketing_preselect')
+      } catch {}
+      if (Array.isArray(pre?.ids) && pre.ids.length) {
+        setSelected(new Set(pre.ids))
+        setMessage(`${pre.ids.length} cliente(s) selecionado(s) para a campanha.${pre.skipped ? ` ${pre.skipped} não entraram por não serem clientes com e-mail válido.` : ''} Escreva a mensagem, salve o rascunho e inicie o envio.`)
+      }
+    }
     loadData(0)
     return () => { loadSequence.current += 1 }
   }, [organization?.id])

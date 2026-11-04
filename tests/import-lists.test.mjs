@@ -16,18 +16,18 @@ test('Campanhas tem a aba "Lista de clientes" no fim e o link do Leads Brasil', 
 })
 
 test('a página tem as duas listas e envia pelo RPC com destino válido', () => {
-  assert.match(lists, /Lista de prospecção/)
+  assert.match(lists, /Lista de leads/)
   assert.match(lists, /Lista de clientes/)
   assert.match(lists, /rpc\('move_import_leads'/)
   assert.match(lists, /moveTarget: 'customers'/)
   assert.match(lists, /moveTarget: 'prospects'/)
-  assert.match(lists, /eq\('source', 'import'\)/)
+  assert.doesNotMatch(lists, /eq\('source'/) // leads do Google, manuais e importados aparecem juntos
 })
 
 test('importação envia o destino e a lista de prospecção ignora duplicados', () => {
   assert.match(imp, /file_sha256: hash, destination/)
   assert.match(imp, /destination === 'prospects' \? 'skip'/)
-  assert.match(imp, /Lista de prospecção/)
+  assert.match(imp, /Lista de leads/)
   assert.match(imp, /Lista de clientes/)
 })
 
@@ -38,4 +38,21 @@ test('migração: destino padrão é clientes e "ganho" segue terminal', () => {
   assert.match(sql, /current_user in \('postgres','supabase_admin'\)/)
   assert.match(sql, /revoke all on function public\.move_import_leads\(uuid\[\], text\) from public, anon/)
   assert.match(sql, /has_org_role\(v_lead\.organization_id, array\['owner','admin'\]\)/)
+})
+
+test('as listas têm os 3 envios, mostram a última mensagem por canal e funcionam na conta de teste', () => {
+  assert.match(lists, /crm_email_preselect/)
+  assert.match(lists, /crm_marketing_preselect/)
+  assert.match(lists, /crm_whatsapp_preselect/)
+  assert.match(lists, /rpc\('lead_last_messages'/)
+  assert.match(lists, /Últimas mensagens/)
+  assert.match(lists, /not\('status', 'in', '\(won,lost,not_interested,discarded\)'\)/)
+  // as telas de envio leem a seleção
+  assert.match(app, /crm_whatsapp_preselect/)
+  assert.match(read('src/email-marketing.jsx'), /crm_marketing_preselect/)
+  // conta de teste: as duas áreas de teste recebem a aba e o administrador do sistema
+  assert.equal((app.match(/isSystemAdmin\r?\n?\s*\/>/g) || []).length >= 2, true)
+  assert.equal((app.match(/<Link2 size=\{18\}\/> Leads Brasil/g) || []).length, 2)
+  // Leads Brasil dentro da página de captação
+  assert.match(app, /capture-leads-brasil/)
 })

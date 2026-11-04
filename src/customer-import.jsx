@@ -284,7 +284,7 @@ async function parseWorkbook(file) {
   return { rows, errors, leadsBrasil: rows.some(row => row.row_type === 'customer' && row.normalized_data?.customer_origin === 'Leads Brasil' && isLeadsBrasilRow(row.raw_data)) }
 }
 
-export default function CustomerImportPanel({ organization, userId, onImported, embedded = false, defaultDestination = 'prospects' }) {
+export default function CustomerImportPanel({ organization, userId, onImported, embedded = false, defaultDestination = 'prospects', isSystemAdmin = false }) {
   const [authorized, setAuthorized] = useState(false)
   const [checkingAccess, setCheckingAccess] = useState(true)
   const [file, setFile] = useState(null)
@@ -309,13 +309,13 @@ export default function CustomerImportPanel({ organization, userId, onImported, 
         .eq('user_id', userId)
         .maybeSingle()
       if (active) {
-        setAuthorized(Boolean(data?.is_active && ['owner','admin'].includes(data.role)))
+        setAuthorized(Boolean(isSystemAdmin || (data?.is_active && ['owner','admin'].includes(data.role))))
         setCheckingAccess(false)
       }
     }
     checkAccess()
     return () => { active = false }
-  }, [organization.id, userId])
+  }, [organization.id, userId, isSystemAdmin])
 
   const localSummary = useMemo(() => summarizeRows(parsedRows), [parsedRows])
 
@@ -370,7 +370,7 @@ export default function CustomerImportPanel({ organization, userId, onImported, 
       const { data: identity, error: identityError } = await supabase.auth.getUser()
       if (identityError || identity?.user?.id !== userId) throw new Error('Sessão inválida. Entre novamente no CRM.')
       const { data: membership, error: membershipError } = await supabase.from('organization_members').select('role,is_active').eq('organization_id', organization.id).eq('user_id', userId).maybeSingle()
-      if (membershipError || !membership?.is_active || !['owner', 'admin'].includes(membership.role)) throw new Error('Somente o administrador da empresa ativa pode importar clientes.')
+      if (!isSystemAdmin && (membershipError || !membership?.is_active || !['owner', 'admin'].includes(membership.role))) throw new Error('Somente o administrador da empresa ativa pode importar clientes.')
       const hash = await sha256(file)
       const { data: batch, error: batchError } = await supabase
         .from('customer_import_batches')
@@ -426,7 +426,7 @@ export default function CustomerImportPanel({ organization, userId, onImported, 
       if (ownershipError || !ownedBatch) throw new Error('Esta importação não pertence à empresa ativa ou à sua sessão. Reenvie a planilha.')
       const { data, error } = await supabase.rpc('commit_customer_import', { p_batch_id: batchId, p_duplicate_action: destination === 'prospects' ? 'skip' : duplicateAction })
       if (error) throw error
-      setMessage(`Importação concluída para a ${destination === 'prospects' ? 'lista de prospecção' : 'lista de clientes'}: ${Number(data?.imported || 0)} registro(s) importado(s), ${Number(data?.updated || 0)} atualizado(s) e ${Number(data?.skipped || 0)} ignorado(s).`)
+      setMessage(`Importação concluída para a ${destination === 'prospects' ? 'lista de leads' : 'lista de clientes'}: ${Number(data?.imported || 0)} registro(s) importado(s), ${Number(data?.updated || 0)} atualizado(s) e ${Number(data?.skipped || 0)} ignorado(s).`)
       setFile(null)
       setParsedRows([])
       setAnalysis(null)
@@ -469,17 +469,17 @@ export default function CustomerImportPanel({ organization, userId, onImported, 
             </div>
           </div>
 
-          <fieldset className="customer-import-destination" disabled={busy || Boolean(batchId)}>
-            <legend>Enviar esta lista para</legend>
-            <label className={destination === 'prospects' ? 'on' : ''}>
-              <input type="radio" name="import-destination" checked={destination === 'prospects'} onChange={() => setDestination('prospects')} />
-              <span><strong>Lista de prospecção</strong><small>Contatos para abordar. Entram no funil como “Novo”.</small></span>
+          <div className="customer-import-destination" role="radiogroup" aria-label="Enviar esta lista para">
+            <strong className="customer-import-destination-title">Enviar esta lista para</strong>
+            <label className={`${destination === 'prospects' ? 'on' : ''} ${(busy || batchId) ? 'disabled' : ''}`}>
+              <input type="radio" name="import-destination" checked={destination === 'prospects'} disabled={busy || Boolean(batchId)} onChange={() => setDestination('prospects')} />
+              <span><strong>Lista de leads</strong><small>Contatos para abordar. Entram no funil como “Novo”.</small></span>
             </label>
-            <label className={destination === 'customers' ? 'on' : ''}>
-              <input type="radio" name="import-destination" checked={destination === 'customers'} onChange={() => setDestination('customers')} />
+            <label className={`${destination === 'customers' ? 'on' : ''} ${(busy || batchId) ? 'disabled' : ''}`}>
+              <input type="radio" name="import-destination" checked={destination === 'customers'} disabled={busy || Boolean(batchId)} onChange={() => setDestination('customers')} />
               <span><strong>Lista de clientes</strong><small>Quem já é cliente. Entram na carteira de clientes.</small></span>
             </label>
-          </fieldset>
+          </div>
 
           {file && (
             <div className="customer-import-file-summary">

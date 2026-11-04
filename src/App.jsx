@@ -2030,6 +2030,15 @@ function Capture({ organization, settings, userEmail }) {
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
 
+      <section className="panel capture-leads-brasil">
+        <div>
+          <span className="eyebrow">BASE NACIONAL DE EMPRESAS</span>
+          <h2>Leads Brasil</h2>
+          <p className="muted">Busque empresas de todo o Brasil por atividade (CNAE) e cidade, baixe a planilha e importe em Campanhas → Lista de clientes.</p>
+        </div>
+        <a className="primary inline-btn capture-leads-brasil-link" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer">Abrir Leads Brasil ↗</a>
+      </section>
+
       <section className="panel capture-panel">
         <span className="eyebrow">BUSCA POR CAMPANHA</span>
         <h2>Escolha a operação</h2>
@@ -4661,6 +4670,37 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
     )]
   }
 
+  // Leads enviados da Lista de clientes (WhatsApp) chegam já selecionados.
+  useEffect(() => {
+    let pre = null
+    try {
+      pre = JSON.parse(sessionStorage.getItem('crm_whatsapp_preselect') || 'null')
+      sessionStorage.removeItem('crm_whatsapp_preselect')
+    } catch {}
+    if (!Array.isArray(pre?.ids) || !pre.ids.length) return undefined
+    let active = true
+    ;(async () => {
+      const found = []
+      for (let start = 0; start < pre.ids.length; start += 200) {
+        const { data } = await supabase
+          .from('leads')
+          .select(SENDING_LEAD_FIELDS)
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null)
+          .in('status', SENDING_LIST_STATUSES)
+          .in('id', pre.ids.slice(start, start + 200))
+        found.push(...(data || []).filter(item => String(item.phone || '').replace(/\D/g, '')))
+      }
+      if (!active) return
+      if (found.length) setSelected(previous => withSelection(previous, found, true))
+      const ignored = pre.ids.length - found.length
+      setMessage(found.length
+        ? `${found.length} lead(s) selecionado(s) para envio por WhatsApp.${ignored ? ` ${ignored} não entraram por estarem fora das etapas de envio ou sem telefone.` : ''}`
+        : 'Nenhum dos leads escolhidos pode ser enviado por WhatsApp nesta tela (precisam ter telefone e estar em Novo, Na fila ou Captado).')
+    })()
+    return () => { active = false }
+  }, [organization.id])
+
   async function loadData() {
     const seq = ++loadSeqRef.current
     const [intakeResult, templateResult, queueResult, batchResult, settingsResult, whatsappResult] = await Promise.all([
@@ -6106,7 +6146,7 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
   )
 }
 
-function CampaignWorkspace({ organization, settings, userEmail, userId }) {
+function CampaignWorkspace({ organization, settings, userEmail, userId, isSystemAdmin = false }) {
   const [section, setSection] = useState(() => {
     const saved = sessionStorage.getItem('crm_campaign_workspace_section')
     if (saved) sessionStorage.removeItem('crm_campaign_workspace_section')
@@ -6134,7 +6174,7 @@ function CampaignWorkspace({ organization, settings, userEmail, userId }) {
         ))}
         <a className="workspace-tab-link" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer">Leads Brasil ↗</a>
       </div>
-      {section === 'lists' && <ImportLists organization={organization} userId={userId} />}
+      {section === 'lists' && <ImportLists organization={organization} userId={userId} isSystemAdmin={isSystemAdmin} onOpenSection={setSection} />}
       {section === 'targets' && <TargetSegments organization={organization} userEmail={userEmail} />}
       {section === 'campaigns' && settings?.feature_flags?.campaigns !== false && <Campaigns organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
@@ -9457,6 +9497,8 @@ function AdminCommercialArea({ organizations, userEmail, userId }) {
           organization={sandboxOrganization}
           settings={settings}
           userEmail={userEmail}
+          userId={userId}
+          isSystemAdmin
         />
       )}
 
@@ -9466,6 +9508,7 @@ function AdminCommercialArea({ organizations, userEmail, userId }) {
           settings={settings}
           userEmail={userEmail}
           userId={userId}
+          onOpenImport={() => { sessionStorage.setItem('crm_campaign_workspace_section', 'lists'); setWorkspacePage('campaign-workspace') }}
         />
       )}
     </>
@@ -10255,6 +10298,9 @@ export default function App() {
                 >
                   <Target size={18}/> Campanhas
                 </button>
+                <a className="nav-item" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)}>
+                  <Link2 size={18}/> Leads Brasil
+                </a>
                 <button
                   className={`nav-item ${adminCommercialPage === 'whatsapp' ? 'active' : ''}`}
                   onClick={() => { setAdminCommercialPage('whatsapp'); setMobileMenuOpen(false) }}
@@ -10376,6 +10422,8 @@ export default function App() {
               organization={sandboxOrganization}
               settings={adminSandboxSettings}
               userEmail={userEmail}
+              userId={session.user.id}
+              isSystemAdmin
             />
           )}
           {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'whatsapp' && (
@@ -10392,6 +10440,7 @@ export default function App() {
               settings={adminSandboxSettings}
               userEmail={userEmail}
               userId={session.user.id}
+              onOpenImport={() => { sessionStorage.setItem('crm_campaign_workspace_section', 'lists'); setAdminCommercialPage('campaign-workspace') }}
             />
           )}
           {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'sales' && (
@@ -10587,7 +10636,7 @@ export default function App() {
           <BillingManagementScreen onBackToCrm={() => setPage('dashboard')} isFreeTrial={userPlan?.plan_id === 'free_30_days'} />
         )}
         {page === 'campaign-workspace' && (
-          <CampaignWorkspace organization={organization} settings={settings} userEmail={userLabel} userId={session.user.id} />
+          <CampaignWorkspace organization={organization} settings={settings} userEmail={userLabel} userId={session.user.id} isSystemAdmin={isSystemAdmin} />
         )}
         {page === 'whatsapp' && (
           <WhatsAppWorkspace organization={organization} settings={settings} userEmail={userLabel} />

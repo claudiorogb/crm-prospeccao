@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRightLeft, Search } from 'lucide-react'
+import { ArrowRightLeft, Mail, Megaphone, MessageCircle, Search } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import CustomerImportPanel from './customer-import'
 
@@ -7,45 +7,71 @@ const PAGE_SIZE = 1000
 const MAX_PAGES = 10
 const VISIBLE_STEP = 100
 const MOVE_CHUNK = 1000
+const WHATSAPP_STATUSES = ['new', 'queued', 'captured_pending']
 
 const STATUS_LABEL = {
   new: 'Novo', queued: 'Na fila', contacted: 'Contatado', replied: 'Respondeu', interested: 'Interessado',
-  proposal: 'Proposta', negotiation: 'Negociação', not_interested: 'Sem interesse', lost: 'Perdido',
-  discarded: 'Descartado', captured_pending: 'Captação pendente', contacted_pending: 'Contato pendente'
+  proposal: 'Proposta', negotiation: 'Negociação', captured_pending: 'Captado', contacted_pending: 'Contato pendente'
 }
+const SOURCE_LABEL = { google_places: 'Google', import: 'Importado', manual: 'Manual', other: 'Outro' }
 
 const LISTS = {
-  prospects: {
-    label: 'Lista de prospecção',
-    help: 'Contatos importados para abordar. Selecione e envie para a lista de clientes quando virarem clientes.',
+  leads: {
+    label: 'Lista de leads',
+    help: 'Leads captados pelo Google, importados ou cadastrados. Selecione e envie mensagens, ou envie para a lista de clientes quando virarem clientes.',
     moveLabel: 'Enviar para clientes',
     moveTarget: 'customers',
     moveTargetName: 'lista de clientes',
-    skipHint: 'Contatos nas etapas Interessado, Proposta ou Perdido seguem o funil de vendas e não podem ser enviados direto para clientes.'
+    skipHint: 'Leads nas etapas Interessado ou Proposta seguem o funil de vendas e não podem ser enviados direto para clientes.'
   },
   customers: {
     label: 'Lista de clientes',
-    help: 'Clientes importados. Selecione e envie para a lista de prospecção se foram colocados aqui por engano.',
-    moveLabel: 'Enviar para prospecção',
+    help: 'Clientes da empresa. Selecione e envie mensagens, ou devolva para a lista de leads os clientes importados por engano.',
+    moveLabel: 'Enviar para leads',
     moveTarget: 'prospects',
-    moveTargetName: 'lista de prospecção',
-    skipHint: 'Só voltam para a prospecção clientes importados que ainda não têm vendas, contrato nem histórico de contatos.'
+    moveTargetName: 'lista de leads',
+    skipHint: 'Só voltam para leads clientes importados que ainda não têm vendas, contrato nem histórico de contatos.'
   }
 }
 
+const COLUMNS = 'id,business_name,contact_name,phone,email,city,state,status,source,email_marketing_opt_out'
+
 function baseQuery(organizationId, kind, columns, options) {
-  let query = supabase.from('leads').select(columns, options)
+  const query = supabase.from('leads').select(columns, options)
     .eq('organization_id', organizationId)
-    .eq('source', 'import')
     .is('deleted_at', null)
-  query = kind === 'customers' ? query.eq('status', 'won') : query.neq('status', 'won')
-  return query
+  return kind === 'customers' ? query.eq('status', 'won') : query.not('status', 'in', '(won,lost,not_interested,discarded)')
 }
 
-export default function ImportLists({ organization, userId }) {
-  const [kind, setKind] = useState('prospects')
+function validEmail(value) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(value || '').trim())
+}
+
+function shortDate(value) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString('pt-BR')
+}
+
+function LastMessages({ info }) {
+  if (!info) return <small className="import-list-last">Últimas mensagens: carregando...</small>
+  const items = [
+    ['WhatsApp', shortDate(info.whatsapp_at)],
+    ['Campanha e-mail', shortDate(info.email_at)],
+    ['E-mail mkt', shortDate(info.marketing_at)]
+  ].filter(([, date]) => date)
+  if (!items.length) return <small className="import-list-last">Últimas mensagens: nenhuma enviada</small>
+  return (
+    <small className="import-list-last">
+      Últimas mensagens: {items.map(([label, date], index) => <span key={label}>{index ? ' · ' : ''}{label} {date}</span>)}
+    </small>
+  )
+}
+
+export default function ImportLists({ organization, userId, isSystemAdmin = false, onOpenSection }) {
+  const [kind, setKind] = useState('leads')
   const [rows, setRows] = useState([])
-  const [counts, setCounts] = useState({ prospects: null, customers: null })
+  const [counts, setCounts] = useState({ leads: null, customers: null })
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [visible, setVisible] = useState(VISIBLE_STEP)
@@ -53,32 +79,33 @@ export default function ImportLists({ organization, userId }) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(isSystemAdmin)
+  const [lastMessages, setLastMessages] = useState({})
 
   const config = LISTS[kind]
 
   useEffect(() => {
     let active = true
+    if (isSystemAdmin) { setIsAdmin(true); return undefined }
     supabase.from('organization_members').select('role,is_active')
       .eq('organization_id', organization.id).eq('user_id', userId).maybeSingle()
       .then(({ data }) => { if (active) setIsAdmin(Boolean(data?.is_active && ['owner', 'admin'].includes(data.role))) })
     return () => { active = false }
-  }, [organization.id, userId])
+  }, [organization.id, userId, isSystemAdmin])
 
   const loadCounts = useCallback(async () => {
-    const [p, c] = await Promise.all(['prospects', 'customers'].map(k =>
+    const [l, c] = await Promise.all(['leads', 'customers'].map(k =>
       baseQuery(organization.id, k, 'id', { count: 'exact', head: true })))
-    setCounts({ prospects: p.count ?? 0, customers: c.count ?? 0 })
+    setCounts({ leads: l.count ?? 0, customers: c.count ?? 0 })
   }, [organization.id])
 
   const loadRows = useCallback(async () => {
     setLoading(true)
     const all = []
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      const { data, error } = await baseQuery(
-        organization.id, kind,
-        'id,business_name,contact_name,phone,email,city,state,status,customer_origin,created_at'
-      ).order('business_name', { ascending: true }).order('id').range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+      const { data, error } = await baseQuery(organization.id, kind, COLUMNS)
+        .order('business_name', { ascending: true }).order('id')
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
       if (error) { setMessage(`Não foi possível carregar a lista: ${error.message}`); break }
       all.push(...(data || []))
       if (!data || data.length < PAGE_SIZE) break
@@ -87,6 +114,7 @@ export default function ImportLists({ organization, userId }) {
     setSelected(new Set())
     setConfirming(false)
     setVisible(VISIBLE_STEP)
+    setLastMessages({})
     setLoading(false)
   }, [organization.id, kind])
 
@@ -102,7 +130,28 @@ export default function ImportLists({ organization, userId }) {
       (digits.length >= 3 && String(row.phone || '').replace(/\D/g, '').includes(digits)))
   }, [rows, search])
 
+  const shown = filtered.slice(0, visible)
+
+  // Última mensagem por canal, só dos contatos que aparecem na tela.
+  useEffect(() => {
+    const missing = shown.map(row => row.id).filter(id => !(id in lastMessages))
+    if (!missing.length) return undefined
+    let active = true
+    ;(async () => {
+      const found = {}
+      for (let start = 0; start < missing.length; start += 500) {
+        const chunk = missing.slice(start, start + 500)
+        const { data } = await supabase.rpc('lead_last_messages', { p_lead_ids: chunk })
+        chunk.forEach(id => { found[id] = {} })
+        for (const item of data || []) found[item.lead_id] = item
+      }
+      if (active) setLastMessages(old => ({ ...old, ...found }))
+    })()
+    return () => { active = false }
+  }, [shown.length, kind, rows]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const allFilteredSelected = filtered.length > 0 && filtered.every(row => selected.has(row.id))
+  const selectedRows = useMemo(() => rows.filter(row => selected.has(row.id)), [rows, selected])
 
   function toggleOne(id) {
     setConfirming(false)
@@ -121,6 +170,47 @@ export default function ImportLists({ organization, userId }) {
       else filtered.forEach(row => next.add(row.id))
       return next
     })
+  }
+
+  // Seleciona e abre a tela de envio do canal, com os contatos já marcados.
+  function sendTo(channel) {
+    if (!selectedRows.length) return
+    const rules = {
+      email: {
+        label: 'e-mail',
+        ok: row => validEmail(row.email) && !row.email_marketing_opt_out,
+        section: 'email-prospecting',
+        why: 'precisam ter e-mail válido e não ter pedido para sair da lista'
+      },
+      marketing: {
+        label: 'campanha de e-mail marketing',
+        ok: row => row.status === 'won' && validEmail(row.email) && !row.email_marketing_opt_out,
+        section: 'email',
+        why: 'a campanha de e-mail marketing é só para clientes com e-mail válido que não pediram para sair da lista'
+      },
+      whatsapp: {
+        label: 'WhatsApp',
+        ok: row => Boolean(String(row.phone || '').replace(/\D/g, '')) && WHATSAPP_STATUSES.includes(row.status),
+        section: 'sending',
+        why: 'o envio em lote por WhatsApp é para leads com telefone nas etapas Novo, Na fila ou Captado'
+      }
+    }
+    const rule = rules[channel]
+    const eligible = selectedRows.filter(rule.ok)
+    const skipped = selectedRows.length - eligible.length
+    if (!eligible.length) {
+      setMessage(`Nenhum dos contatos selecionados pode ser enviado por ${rule.label}: ${rule.why}.`)
+      return
+    }
+    try {
+      const ids = eligible.map(row => row.id)
+      if (channel === 'email') sessionStorage.setItem('crm_email_preselect', JSON.stringify(ids))
+      else sessionStorage.setItem(channel === 'marketing' ? 'crm_marketing_preselect' : 'crm_whatsapp_preselect', JSON.stringify({ ids, skipped }))
+    } catch {
+      setMessage('Não foi possível preparar o envio neste navegador.')
+      return
+    }
+    onOpenSection?.(rule.section)
   }
 
   async function moveSelected() {
@@ -158,14 +248,14 @@ export default function ImportLists({ organization, userId }) {
         <div>
           <span className="eyebrow">CAMPANHAS</span>
           <h1>Lista de clientes</h1>
-          <p className="muted">Importe uma planilha, escolha para qual lista ela vai e depois mova os contatos entre as duas listas.</p>
+          <p className="muted">Leads e clientes em um só lugar: importe planilhas, envie mensagens e mova contatos entre as listas.</p>
         </div>
       </header>
 
       <CustomerImportPanel
         organization={organization}
         userId={userId}
-        embedded
+        isSystemAdmin={isSystemAdmin}
         onImported={async () => { await Promise.all([loadRows(), loadCounts()]) }}
       />
 
@@ -189,8 +279,18 @@ export default function ImportLists({ organization, userId }) {
 
         <div className="import-list-toolbar">
           <div className="search-box"><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar empresa, responsável, e-mail, cidade ou telefone" /></div>
+        </div>
+
+        <div className="import-list-bar">
+          <span className="import-list-bar-count">{selected.size} selecionado(s)</span>
+          <div className="import-list-bar-group">
+            <span className="import-list-bar-label">Enviar mensagem por</span>
+            <button type="button" className="secondary inline-btn" disabled={!selected.size} onClick={() => sendTo('email')}><Mail size={15}/> E-mail</button>
+            <button type="button" className="secondary inline-btn" disabled={!selected.size} onClick={() => sendTo('marketing')}><Megaphone size={15}/> Campanha de e-mail mkt</button>
+            <button type="button" className="secondary inline-btn" disabled={!selected.size} onClick={() => sendTo('whatsapp')}><MessageCircle size={15}/> WhatsApp</button>
+          </div>
           {isAdmin && (
-            <div className="import-list-actions">
+            <div className="import-list-bar-group">
               {confirming ? (
                 <>
                   <span>Enviar {selected.size} contato(s) para a {config.moveTargetName}?</span>
@@ -199,7 +299,7 @@ export default function ImportLists({ organization, userId }) {
                 </>
               ) : (
                 <button type="button" className="primary inline-btn" disabled={!selected.size || busy} onClick={() => setConfirming(true)}>
-                  <ArrowRightLeft size={16}/> {config.moveLabel}{selected.size ? ` (${selected.size})` : ''}
+                  <ArrowRightLeft size={15}/> {config.moveLabel}
                 </button>
               )}
             </div>
@@ -209,33 +309,37 @@ export default function ImportLists({ organization, userId }) {
         {message && <div className="notice">{message}</div>}
 
         {loading ? <p className="muted">Carregando...</p> : !filtered.length ? (
-          <p className="muted">{rows.length ? 'Nenhum contato encontrado para a busca.' : 'Nenhum contato nesta lista ainda. Importe uma planilha acima.'}</p>
+          <p className="muted">{rows.length ? 'Nenhum contato encontrado para a busca.' : 'Nenhum contato nesta lista ainda. Importe uma planilha ou capte leads.'}</p>
         ) : (
           <div className="import-list-table-wrap">
             <table className="import-list-table">
               <thead>
                 <tr>
-                  {isAdmin && <th><input type="checkbox" aria-label="Selecionar todos os resultados" checked={allFilteredSelected} onChange={toggleAllFiltered} /></th>}
-                  <th>Empresa</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th>Cidade/UF</th>
-                  {kind === 'prospects' && <th>Etapa</th>}
+                  <th className="import-list-check"><input type="checkbox" aria-label="Selecionar todos os resultados" checked={allFilteredSelected} onChange={toggleAllFiltered} /></th>
+                  <th>Empresa</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th>Cidade/UF</th><th>Origem</th>
+                  {kind === 'leads' && <th>Etapa</th>}
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, visible).map(row => (
+                {shown.map(row => (
                   <tr key={row.id}>
-                    {isAdmin && <td><input type="checkbox" aria-label={`Selecionar ${row.business_name}`} checked={selected.has(row.id)} onChange={() => toggleOne(row.id)} /></td>}
-                    <td>{row.business_name}</td>
+                    <td className="import-list-check"><input type="checkbox" aria-label={`Selecionar ${row.business_name}`} checked={selected.has(row.id)} onChange={() => toggleOne(row.id)} /></td>
+                    <td>
+                      <strong>{row.business_name}</strong>
+                      <LastMessages info={lastMessages[row.id]} />
+                    </td>
                     <td>{row.contact_name || '—'}</td>
                     <td>{row.phone || '—'}</td>
                     <td>{row.email || '—'}</td>
                     <td>{row.city || '—'}{row.state ? `/${row.state}` : ''}</td>
-                    {kind === 'prospects' && <td>{STATUS_LABEL[row.status] || row.status}</td>}
+                    <td>{SOURCE_LABEL[row.source] || '—'}</td>
+                    {kind === 'leads' && <td>{STATUS_LABEL[row.status] || row.status}</td>}
                   </tr>
                 ))}
               </tbody>
             </table>
             <div className="import-list-footer">
-              <span className="muted">Mostrando {Math.min(visible, filtered.length)} de {filtered.length}{isAdmin ? ` • ${selected.size} selecionado(s)` : ''}</span>
+              <span className="muted">Mostrando {Math.min(visible, filtered.length)} de {filtered.length}</span>
               {visible < filtered.length && <button type="button" className="secondary inline-btn" onClick={() => setVisible(value => value + VISIBLE_STEP)}>Ver mais</button>}
             </div>
           </div>

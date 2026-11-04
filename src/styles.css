@@ -4644,3 +4644,5 @@ button:not(:disabled):active,
 .capture-leads-brasil h2 { margin: 4px 0 6px; }
 .capture-leads-brasil p { margin: 0; max-width: 720px; }
 .capture-leads-brasil-link { text-decoration: none; display: inline-flex; align-items: center; }
+.import-list-pager { display: flex; align-items: center; gap: 10px; }
+.import-list-pager span { font-size: 13px; }

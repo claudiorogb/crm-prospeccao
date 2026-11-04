@@ -12,7 +12,8 @@ test('Campanhas tem a aba "Lista de clientes" no fim e o link do Leads Brasil', 
   assert.match(app, /\['lists','Lista de clientes'\]\s*\n\s*\]/)
   assert.match(app, /section === 'lists' && <ImportLists/)
   assert.match(app, /LEADS_BRASIL_URL = 'https:\/\/leads-sp\.vercel\.app'/)
-  assert.match(app, /rel="noopener noreferrer"/)
+  assert.match(app, /crm_sso=\$\{encodeURIComponent\(data\.session\.access_token\)\}/)
+  assert.match(app, /onClick=\{openLeadsBrasil\}/)
 })
 
 test('a página tem as duas listas e envia pelo RPC com destino válido', () => {
@@ -52,7 +53,16 @@ test('as listas têm os 3 envios, mostram a última mensagem por canal e funcion
   assert.match(read('src/email-marketing.jsx'), /crm_marketing_preselect/)
   // conta de teste: as duas áreas de teste recebem a aba e o administrador do sistema
   assert.equal((app.match(/isSystemAdmin\r?\n?\s*\/>/g) || []).length >= 2, true)
-  assert.equal((app.match(/<Link2 size=\{18\}\/> Leads Brasil/g) || []).length, 2)
+  assert.equal((app.match(/<Link2 size=\{18\}\/> Leads Brasil/g) || []).length, 0) // fora do menu lateral
   // Leads Brasil dentro da página de captação
   assert.match(app, /capture-leads-brasil/)
+})
+
+test('listas: mais recentes primeiro, 20 por página e e-mail mkt pela lista com consentimento', () => {
+  assert.match(lists, /LIST_PAGE_SIZE = 20/)
+  assert.match(lists, /order\('created_at', \{ ascending: false \}\)/)
+  assert.match(lists, /Página \{safePage\} de \{pageCount\}/)
+  assert.match(lists, /from\('email_marketing_contacts'\)/)
+  assert.match(lists, /eq\('consent_confirmed', true\)/)
+  assert.match(read('src/email-marketing.jsx'), /setSelectedMarketing\(new Set\(listIds\)\)/)
 })

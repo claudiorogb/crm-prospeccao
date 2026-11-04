@@ -284,7 +284,7 @@ async function parseWorkbook(file) {
   return { rows, errors, leadsBrasil: rows.some(row => row.row_type === 'customer' && row.normalized_data?.customer_origin === 'Leads Brasil' && isLeadsBrasilRow(row.raw_data)) }
 }
 
-export default function CustomerImportPanel({ organization, userId, onImported }) {
+export default function CustomerImportPanel({ organization, userId, onImported, embedded = false, defaultDestination = 'prospects' }) {
   const [authorized, setAuthorized] = useState(false)
   const [checkingAccess, setCheckingAccess] = useState(true)
   const [file, setFile] = useState(null)
@@ -295,7 +295,8 @@ export default function CustomerImportPanel({ organization, userId, onImported }
   const [duplicateAction, setDuplicateAction] = useState('skip')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [show, setShow] = useState(false)
+  const [show, setShow] = useState(embedded)
+  const [destination, setDestination] = useState(defaultDestination === 'customers' ? 'customers' : 'prospects')
 
   useEffect(() => {
     let active = true
@@ -373,7 +374,7 @@ export default function CustomerImportPanel({ organization, userId, onImported }
       const hash = await sha256(file)
       const { data: batch, error: batchError } = await supabase
         .from('customer_import_batches')
-        .insert({ organization_id: organization.id, requested_by: userId, file_name: file.name.slice(0,255), file_size_bytes: file.size, file_sha256: hash })
+        .insert({ organization_id: organization.id, requested_by: userId, file_name: file.name.slice(0,255), file_size_bytes: file.size, file_sha256: hash, destination })
         .select('id')
         .single()
       if (batchError) throw batchError
@@ -423,9 +424,9 @@ export default function CustomerImportPanel({ organization, userId, onImported }
       const { data: ownedBatch, error: ownershipError } = await supabase.from('customer_import_batches')
         .select('id').eq('id', batchId).eq('organization_id', organization.id).eq('requested_by', userId).eq('status', 'analyzed').maybeSingle()
       if (ownershipError || !ownedBatch) throw new Error('Esta importação não pertence à empresa ativa ou à sua sessão. Reenvie a planilha.')
-      const { data, error } = await supabase.rpc('commit_customer_import', { p_batch_id: batchId, p_duplicate_action: duplicateAction })
+      const { data, error } = await supabase.rpc('commit_customer_import', { p_batch_id: batchId, p_duplicate_action: destination === 'prospects' ? 'skip' : duplicateAction })
       if (error) throw error
-      setMessage(`Importação concluída: ${Number(data?.imported || 0)} registro(s) importado(s), ${Number(data?.updated || 0)} atualizado(s) e ${Number(data?.skipped || 0)} ignorado(s).`)
+      setMessage(`Importação concluída para a ${destination === 'prospects' ? 'lista de prospecção' : 'lista de clientes'}: ${Number(data?.imported || 0)} registro(s) importado(s), ${Number(data?.updated || 0)} atualizado(s) e ${Number(data?.skipped || 0)} ignorado(s).`)
       setFile(null)
       setParsedRows([])
       setAnalysis(null)
@@ -444,9 +445,11 @@ export default function CustomerImportPanel({ organization, userId, onImported }
   return (
     <section className="customer-import-wrap">
       <div className="customer-import-actions">
-        <button type="button" className="secondary inline-btn" onClick={() => setShow(value => !value)}>
-          <FileSpreadsheet size={17}/> Importar clientes
-        </button>
+        {!embedded && (
+          <button type="button" className="secondary inline-btn" onClick={() => setShow(value => !value)}>
+            <FileSpreadsheet size={17}/> Importar lista
+          </button>
+        )}
       </div>
 
       {show && (
@@ -454,8 +457,8 @@ export default function CustomerImportPanel({ organization, userId, onImported }
           <div className="customer-import-head">
             <div>
               <span className="eyebrow">IMPORTAÇÃO SEGURA</span>
-              <h2>Importar clientes de Excel ou CSV</h2>
-              <p className="muted">O arquivo é validado antes de qualquer inclusão na carteira. Somente administradores da empresa podem confirmar a importação.</p>
+              <h2>Importar lista de Excel ou CSV</h2>
+              <p className="muted">O arquivo é validado antes de qualquer inclusão. Escolha abaixo para qual lista os contatos vão. Somente administradores da empresa podem confirmar a importação.</p>
             </div>
             <div className="customer-import-head-buttons">
             <button type="button" className="secondary inline-btn" onClick={downloadTemplate} disabled={busy}><Download size={17}/> Baixar modelo de importação</button>
@@ -465,6 +468,18 @@ export default function CustomerImportPanel({ organization, userId, onImported }
             </label>
             </div>
           </div>
+
+          <fieldset className="customer-import-destination" disabled={busy || Boolean(batchId)}>
+            <legend>Enviar esta lista para</legend>
+            <label className={destination === 'prospects' ? 'on' : ''}>
+              <input type="radio" name="import-destination" checked={destination === 'prospects'} onChange={() => setDestination('prospects')} />
+              <span><strong>Lista de prospecção</strong><small>Contatos para abordar. Entram no funil como “Novo”.</small></span>
+            </label>
+            <label className={destination === 'customers' ? 'on' : ''}>
+              <input type="radio" name="import-destination" checked={destination === 'customers'} onChange={() => setDestination('customers')} />
+              <span><strong>Lista de clientes</strong><small>Quem já é cliente. Entram na carteira de clientes.</small></span>
+            </label>
+          </fieldset>
 
           {file && (
             <div className="customer-import-file-summary">
@@ -494,7 +509,10 @@ export default function CustomerImportPanel({ organization, userId, onImported }
                 <div className="notice error"><AlertTriangle size={16}/> Existem registros com erro. Corrija a planilha e envie novamente; nenhuma alteração foi feita na carteira.</div>
               ) : (
                 <>
-                  {Number(analysis.duplicates || 0) > 0 && (
+                  {Number(analysis.duplicates || 0) > 0 && destination === 'prospects' && (
+                    <p className="muted">Contatos que já existem no CRM (mesmo CNPJ, e-mail ou telefone) serão ignorados, sem alterar o cadastro atual.</p>
+                  )}
+                  {Number(analysis.duplicates || 0) > 0 && destination === 'customers' && (
                     <label className="customer-import-duplicate-choice">Clientes que já existem no CRM
                       <select value={duplicateAction} onChange={event => setDuplicateAction(event.target.value)}>
                         <option value="skip">Manter cadastro atual e ignorar o duplicado</option>

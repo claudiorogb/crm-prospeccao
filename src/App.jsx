@@ -8,7 +8,9 @@ import {
 } from 'lucide-react'
 import { Link2, Mail } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import CustomerImportPanel from './customer-import'
+import ImportLists from './import-lists'
+
+const LEADS_BRASIL_URL = 'https://leads-sp.vercel.app'
 import CrmFullExport from './crm-full-export'
 import { mergeLeadsWithLocalDrafts } from './kanban-draft-merge.js'
 import { sortKanbanColumn } from './kanban-order.js'
@@ -3741,7 +3743,7 @@ function Leads({ organization, settings, userEmail }) {
   )
 }
 
-function Clients({ organization, userEmail, userId }) {
+function Clients({ organization, userEmail, userId, onOpenImport }) {
   const [clients, setClients] = useState([])
   const [sales, setSales] = useState([])
   const [activities, setActivities] = useState([])
@@ -4291,7 +4293,13 @@ function Clients({ organization, userEmail, userId }) {
         <div className="topbar-actions"><div className="user-badge">{userEmail}</div></div>
       </header>
 
-      <CustomerImportPanel organization={organization} userId={userId} onImported={() => loadData(null)} />
+      {onOpenImport && (
+        <section className="customer-import-wrap">
+          <div className="customer-import-actions">
+            <button type="button" className="secondary inline-btn" onClick={onOpenImport}>Importar lista (em Campanhas → Lista de clientes)</button>
+          </div>
+        </section>
+      )}
       <CrmFullExport organization={organization} userId={userId} />
 
       {message && <div className="notice">{message}</div>}
@@ -6098,7 +6106,7 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
   )
 }
 
-function CampaignWorkspace({ organization, settings, userEmail }) {
+function CampaignWorkspace({ organization, settings, userEmail, userId }) {
   const [section, setSection] = useState(() => {
     const saved = sessionStorage.getItem('crm_campaign_workspace_section')
     if (saved) sessionStorage.removeItem('crm_campaign_workspace_section')
@@ -6112,7 +6120,8 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
     ['sending','Enviar mensagens'],
     ['email-prospecting','Prospecção por e-mail'],
     ['email','E-mail marketing'],
-    ['email-connection','Cadastrar e-mail']
+    ['email-connection','Cadastrar e-mail'],
+    ['lists','Lista de clientes']
   ]
 
   return (
@@ -6123,7 +6132,9 @@ function CampaignWorkspace({ organization, settings, userEmail }) {
             {label}
           </button>
         ))}
+        <a className="workspace-tab-link" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer">Leads Brasil ↗</a>
       </div>
+      {section === 'lists' && <ImportLists organization={organization} userId={userId} />}
       {section === 'targets' && <TargetSegments organization={organization} userEmail={userEmail} />}
       {section === 'campaigns' && settings?.feature_flags?.campaigns !== false && <Campaigns organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
@@ -6710,7 +6721,7 @@ function ReadOnlyArea({ children }) {
   )
 }
 
-function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {
+function SalesFunnelWorkspace({ organization, settings, userEmail, userId, onOpenImport }) {
   const [section, setSection] = useState('leads')
   const [leadSection, setLeadSection] = useState('funnel')
 
@@ -6735,7 +6746,7 @@ function SalesFunnelWorkspace({ organization, settings, userEmail, userId }) {
         </>
       )}
 
-      {section === 'clients' && <Clients organization={organization} userEmail={userEmail} userId={userId} />}
+      {section === 'clients' && <Clients organization={organization} userEmail={userEmail} userId={userId} onOpenImport={onOpenImport} />}
       {section === 'closed' && <ClosedLeads organization={organization} userEmail={userEmail} />}
     </>
   )
@@ -10502,6 +10513,9 @@ export default function App() {
           <button className={`nav-item ${page === 'campaign-workspace' ? 'active' : ''}`} onClick={() => { setPage('campaign-workspace'); setMobileMenuOpen(false) }}>
             <Target size={18}/> Campanhas
           </button>
+          <a className="nav-item" href={LEADS_BRASIL_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)}>
+            <Link2 size={18}/> Leads Brasil
+          </a>
           <button className={`nav-item ${page === 'whatsapp' ? 'active' : ''}`} onClick={() => { setPage('whatsapp'); setMobileMenuOpen(false) }}>
             <MessageSquareText size={18}/> WhatsApp
           </button>
@@ -10573,7 +10587,7 @@ export default function App() {
           <BillingManagementScreen onBackToCrm={() => setPage('dashboard')} isFreeTrial={userPlan?.plan_id === 'free_30_days'} />
         )}
         {page === 'campaign-workspace' && (
-          <CampaignWorkspace organization={organization} settings={settings} userEmail={userLabel} />
+          <CampaignWorkspace organization={organization} settings={settings} userEmail={userLabel} userId={session.user.id} />
         )}
         {page === 'whatsapp' && (
           <WhatsAppWorkspace organization={organization} settings={settings} userEmail={userLabel} />
@@ -10587,6 +10601,7 @@ export default function App() {
             settings={settings}
             userEmail={userLabel}
             userId={session.user.id}
+            onOpenImport={() => { sessionStorage.setItem('crm_campaign_workspace_section', 'lists'); setPage('campaign-workspace') }}
           />
         )}
         {page === 'team' && userPlan?.plan_id !== 'free_30_days' && (organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin') && (

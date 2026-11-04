@@ -54,7 +54,8 @@ test('client list omits segment but client detail keeps editable segment and ide
   assert.match(listing, /<strong>\{client\.business_name\}<\/strong>/)
   assert.match(clients, /<label>Segmento<input value=\{clientForm\.segment \|\| ''\}/)
   assert.match(clients, /\.eq\('organization_id', organization\.id\)/)
-  assert.match(clients, /<CustomerImportPanel organization=\{organization\} userId=\{userId\}/)
+  // A importação agora fica em Campanhas → Lista de clientes; a página de clientes só aponta para lá.
+  assert.match(clients, /onClick=\{onOpenImport\}/)
 })
 
 test('only the two requested client helper texts are gone', () => {

@@ -284,7 +284,9 @@ test('gestão dos limites da IA exige administrador do sistema no backend', () =
   assert.match(adminAiLimits, /action === "save_organization_limits"/)
   assert.match(adminAiLimits, /action === "save_user_limit"/)
   assert.match(adminAiLimits, /organization_members/)
-  assert.match(aiLimitsUi, /Limite total da empresa por dia/)
+  // O limite de IA é só por usuário (plano); o limite total da empresa saiu da tela.
+  assert.doesNotMatch(aiLimitsUi, /Limite total da empresa por dia/)
+  assert.match(aiLimitsUi, /limite do plano/)
   assert.match(aiLimitsUi, /Perguntas por dia/)
   assert.match(app, /\['ai', 'IA', Bot\]/)
   assert.match(app, /section === 'ai' && <AdminAiLimits/)

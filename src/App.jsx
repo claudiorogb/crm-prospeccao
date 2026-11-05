@@ -58,6 +58,8 @@ import { useBackLayer } from './back-layer'
 import { commitScreen, installScreenPopHandler } from './back-navigation'
 import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
+import AdminTutorials from './admin-tutorials'
+import TutorialsPage from './tutorials-page'
 import TrialExpiredScreen from './trial-expired-screen'
 import BillingReturnScreen from './billing-return-screen'
 import BillingManagementScreen from './billing-management-screen'
@@ -9857,6 +9859,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
     ['defaults', 'Padrões', SlidersHorizontal],
     ['clients', 'Organizações', Building2],
     ['plans', 'Planos', SlidersHorizontal],
+    ['tutorials', 'Tutoriais', Play],
     ['users', 'Usuários', Users],
     ['catalog', 'Catálogo CRM', Tags],
     ['audit', 'Auditoria', History]
@@ -9901,6 +9904,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
           {section === 'messages' && <AdminMessages organizations={organizations} userEmail={userEmail} />}
           {section === 'ai' && <AdminAiLimits reloadOrganizations={reloadOrganizations} />}
           {section === 'plans' && <AdminUserPlans />}
+          {section === 'tutorials' && <AdminTutorials />}
           {section === 'audit' && <AdminAudit organizations={productionOrganizations} userEmail={userEmail} />}
         </div>
       </div>
@@ -10645,6 +10649,9 @@ export default function App() {
               </button>
             </>
           )}
+          <button className={`nav-item ${page === 'tutorials' ? 'active' : ''}`} onClick={() => { setPage('tutorials'); setMobileMenuOpen(false) }}>
+            <Play size={18}/> Tutoriais
+          </button>
           <InstallAppMenuItem onDone={() => setMobileMenuOpen(false)} />
         </nav>
 
@@ -10699,6 +10706,7 @@ export default function App() {
             canEdit={isSystemAdmin || organizationMembershipRole === 'owner' || organizationMembershipRole === 'admin'}
           />
         )}
+        {page === 'tutorials' && <TutorialsPage />}
         {page === 'overdue-returns' && (
           <OverdueReturnsPage
             organization={organization}

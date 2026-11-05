@@ -1,0 +1,27 @@
+.tutorial-category { margin-bottom: 18px; }
+.tutorial-category h3 { margin: 0 0 14px; }
+.tutorial-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+.tutorial-card { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+.tutorial-player { position: relative; aspect-ratio: 16 / 9; background: #0B192C; }
+.tutorial-player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.tutorial-thumb { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #0B192C; cursor: pointer; }
+.tutorial-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tutorial-play { position: absolute; inset: 0; margin: auto; width: 56px; height: 56px; border-radius: 50%; background: rgba(0, 168, 143, 0.92); color: #fff; display: flex; align-items: center; justify-content: center; }
+.tutorial-info { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+.tutorial-info h4 { margin: 0; font-size: 15px; }
+.tutorial-info p { margin: 0; color: #475569; font-size: 13px; line-height: 1.45; white-space: pre-line; }
+.tutorial-info a { font-size: 12px; color: #00796b; }
+
+.admin-tutorials .tutorial-admin-category { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-top: 14px; }
+.admin-tutorials .tutorial-admin-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.admin-tutorials .tutorial-admin-head input { flex: 1 1 220px; font-weight: 700; }
+.admin-tutorials .tutorial-admin-video { display: grid; grid-template-columns: 120px 1fr auto; gap: 12px; align-items: start; padding: 10px 0; border-top: 1px solid #eef2f7; }
+.admin-tutorials .tutorial-admin-video img { width: 120px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: #0B192C; }
+.admin-tutorials .tutorial-admin-video .fields { display: grid; gap: 6px; }
+.admin-tutorials .tutorial-admin-video textarea { min-height: 54px; resize: vertical; }
+.admin-tutorials .tutorial-admin-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-tutorials .tutorial-add-form { display: grid; gap: 8px; margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 10px; }
+@media (max-width: 720px) {
+  .admin-tutorials .tutorial-admin-video { grid-template-columns: 1fr; }
+  .admin-tutorials .tutorial-admin-video img { width: 100%; }
+}

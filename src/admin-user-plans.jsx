@@ -6,6 +6,8 @@ export default function AdminUserPlans() {
   const [users, setUsers] = useState([])
   const [plans, setPlans] = useState([])
   const [drafts, setDrafts] = useState({})
+  const [summary, setSummary] = useState(null)
+  const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState('')
   const [notice, setNotice] = useState('')
@@ -21,6 +23,9 @@ export default function AdminUserPlans() {
       setError(fnError.message)
       return
     }
+    // Resumo é complementar: se falhar, a lista de planos continua funcionando.
+    const { data: summaryData } = await supabase.rpc('admin_plans_summary')
+    setSummary(summaryData || null)
     setUsers(data?.users || [])
     setPlans(data?.plans || [])
     setDrafts(Object.fromEntries((data?.users || []).map(user => [user.user_id, user.plan_id || ''])))
@@ -48,8 +53,60 @@ export default function AdminUserPlans() {
     await load()
   }
 
+  const categoriesByUser = Object.fromEntries((summary?.users || []).map(item => [`${item.organization_id}-${item.user_id}`, item.categories || []]))
+  const visibleUsers = users.filter(user => {
+    if (filter === 'all') return true
+    const key = `${user.organization_id}-${user.user_id}`
+    if (filter.startsWith('plan:')) return user.plan_id === filter.slice(5) && user.status === 'active'
+    return (categoriesByUser[key] || []).includes(filter)
+  })
+  const totals = summary?.totals || {}
+  const summaryCards = [
+    ['paying', 'Pagando', totals.paying],
+    ['trial', 'Em trial', totals.trial],
+    ['paid_after_trial', 'Pagaram após o trial', totals.paid_after_trial],
+    ['trial_expired', 'Trial vencido sem pagar', totals.trial_expired],
+    ['cancelled_after_trial', 'Cancelaram após o trial', totals.cancelled_after_trial],
+    ['cancelled', 'Cancelados / suspensos', totals.cancelled]
+  ]
+
   return (
     <section className="panel">
+      {summary && (
+        <div className="admin-plans-summary" style={{ marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            {summaryCards.map(([key, label, value]) => (
+              <button
+                type="button"
+                key={key}
+                className={filter === key ? 'primary' : 'secondary'}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '10px 12px', textAlign: 'left' }}
+                onClick={() => setFilter(current => current === key ? 'all' : key)}
+              >
+                <strong style={{ fontSize: 22 }}>{value ?? 0}</strong>
+                <span style={{ fontSize: 12 }}>{label}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, alignItems: 'center' }}>
+            <span className="muted" style={{ fontSize: 12 }}>Usuários por plano:</span>
+            {(summary.by_plan || []).map(plan => (
+              <button
+                type="button"
+                key={plan.plan_id}
+                className={filter === `plan:${plan.plan_id}` ? 'primary mini' : 'secondary mini'}
+                onClick={() => setFilter(current => current === `plan:${plan.plan_id}` ? 'all' : `plan:${plan.plan_id}`)}
+              >
+                {plan.plan_name}: {plan.users}
+              </button>
+            ))}
+          </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+            Clique em um número para filtrar a lista abaixo. "Pagaram/cancelaram após o trial" contam a partir de hoje (o sistema não guardava esse histórico antes).
+            {filter !== 'all' && <> <button type="button" className="secondary mini" onClick={() => setFilter('all')}>Limpar filtro</button></>}
+          </p>
+        </div>
+      )}
       <header className="admin-section-header">
         <div>
           <span className="eyebrow">PLANOS E ACESSOS</span>
@@ -66,7 +123,7 @@ export default function AdminUserPlans() {
 
       {loading ? <p className="muted">Carregando usuários...</p> : (
         <div className="admin-list">
-          {users.map(user => (
+          {visibleUsers.map(user => (
             <div className="admin-list-row" key={`${user.organization_id}-${user.user_id}`}>
               <div>
                 <strong>{user.full_name || user.email || 'Usuário'}</strong>
@@ -89,7 +146,7 @@ export default function AdminUserPlans() {
               </div>
             </div>
           ))}
-          {!users.length && <p className="muted"><Users size={16}/> Nenhum usuário encontrado.</p>}
+          {!visibleUsers.length && <p className="muted"><Users size={16}/> Nenhum usuário encontrado.</p>}
         </div>
       )}
     </section>

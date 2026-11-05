@@ -8063,6 +8063,16 @@ function AdminActiveUsers({ organizations, userEmail, onShowArchived }) {
     await loadUsers()
   }
 
+  async function resendConfirmationEmail(item) {
+    setNotice('')
+    const { data, error } = await supabase.functions.invoke('admin_manage_organizations', {
+      body: { action: 'resend_confirmation_email', user_id: item.id }
+    })
+    setNotice(error || data?.error
+      ? (data?.error || error?.message || 'Não foi possível reenviar o e-mail.')
+      : `E-mail de confirmação reenviado para ${item.email}.`)
+  }
+
   async function sendPasswordReset(item) {
     setNotice('')
     const { error } = await supabase.auth.resetPasswordForEmail(item.email, {
@@ -8244,6 +8254,9 @@ function AdminActiveUsers({ organizations, userEmail, onShowArchived }) {
                 <span>{formatDateTime(item.last_sign_in_at)}</span>
 
                 <span className="row-actions">
+                  {!item.email_confirmed_at && (
+                    <button className="secondary mini" onClick={() => resendConfirmationEmail(item)}>Reenviar e-mail</button>
+                  )}
                   <button className="secondary mini" onClick={() => sendPasswordReset(item)}>Redefinir senha</button>
                   {!isSelf && (
                     <button

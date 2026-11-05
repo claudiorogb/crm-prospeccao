@@ -136,7 +136,7 @@ export default function AdminAiLimits({ reloadOrganizations }) {
       body: {
         action: 'save_organization_limits',
         organization_id: selectedOrganizationId,
-        daily_request_limit: Number(companyForm.daily_request_limit),
+        daily_request_limit: 100000, // sem teto próprio da empresa: vale só o limite de cada usuário
         daily_message_limit: Number(companyForm.daily_message_limit),
       },
     })
@@ -187,7 +187,7 @@ export default function AdminAiLimits({ reloadOrganizations }) {
         <div>
           <span className="eyebrow">GESTÃO DA INTELIGÊNCIA ARTIFICIAL</span>
           <h2>Limites da IA</h2>
-          <p className="muted">Defina o limite diário total de cada empresa e o limite de perguntas por usuário.</p>
+          <p className="muted">O limite de perguntas é por usuário, conforme o plano contratado para ele.</p>
         </div>
         <div className="topbar-actions">
           <button type="button" className="secondary" onClick={refreshList} disabled={loadingOrganizations}>
@@ -261,19 +261,10 @@ export default function AdminAiLimits({ reloadOrganizations }) {
 
               <form onSubmit={saveCompanyLimits}>
                 <div className="ai-limits-settings-grid">
-                  <label>
-                    Limite total da empresa por dia
-                    <input
-                      type="number"
-                      min="1"
-                      max="100000"
-                      step="1"
-                      required
-                      value={companyForm.daily_request_limit}
-                      onChange={event => setCompanyForm(current => ({ ...current, daily_request_limit: event.target.value }))}
-                    />
-                    <small>Soma das perguntas de todos os usuários da empresa.</small>
-                  </label>
+                  <div>
+                    <strong>Limite de IA por usuário</strong>
+                    <p className="muted">Cada usuário tem o limite do plano contratado para ele: AXIVA e teste grátis 10, Plus 20 e Max 30 perguntas por dia. Não há limite total para a empresa.</p>
+                  </div>
                   <label>
                     Limite padrão por usuário/dia
                     <input
@@ -285,11 +276,11 @@ export default function AdminAiLimits({ reloadOrganizations }) {
                       value={companyForm.daily_message_limit}
                       onChange={event => setCompanyForm(current => ({ ...current, daily_message_limit: event.target.value }))}
                     />
-                    <small>Aplicado aos usuários sem limite individual definido.</small>
+                    <small>Só vale para usuário sem limite individual (quem tem plano já recebe o limite do plano).</small>
                   </label>
                 </div>
                 <div className="ai-limits-form-footer">
-                  <span className="muted">O limite total da empresa e o limite individual são verificados no envio de cada pergunta.</span>
+                  <span className="muted">O limite individual de cada usuário é verificado no envio de cada pergunta.</span>
                   <button type="submit" className="primary" disabled={savingCompany}>
                     <Save size={15} /> {savingCompany ? 'Salvando...' : 'Salvar limites da empresa'}
                   </button>

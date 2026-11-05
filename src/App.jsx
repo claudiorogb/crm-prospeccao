@@ -6815,7 +6815,7 @@ function isOverdueReturn(lead) {
   const today = currentBrazilDate()
   if (!lead?.next_contact_date || lead.next_contact_date >= today) return false
   if (['won','lost','not_interested','discarded'].includes(lead.status)) return false
-  if (lead.last_contact_date && lead.last_contact_date >= lead.next_contact_date) return false
+  if (lead.last_contact_date && lead.last_contact_date > lead.next_contact_date) return false
   return true
 }
 

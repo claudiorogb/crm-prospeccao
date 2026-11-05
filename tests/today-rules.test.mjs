@@ -38,8 +38,10 @@ test('etapas sem regra e leads encerrados não geram alerta', () => {
 
 test('atrasado, hoje e próximos 7 dias seguem a regra dos retornos existentes', () => {
   assert.equal(isOverdue({ ...base, status: 'replied', next_contact_date: '2026-10-28' }, TODAY), true)
+  // contato no próprio dia do retorno, sem novo retorno marcado: continua atrasado
+  assert.equal(isOverdue({ ...base, status: 'replied', next_contact_date: '2026-10-28', last_contact_date: '2026-10-28' }, TODAY), true)
   // já contatado depois da data prevista: não é atraso
-  assert.equal(isOverdue({ ...base, status: 'replied', next_contact_date: '2026-10-28', last_contact_date: '2026-10-28' }, TODAY), false)
+  assert.equal(isOverdue({ ...base, status: 'replied', next_contact_date: '2026-10-28', last_contact_date: '2026-10-29' }, TODAY), false)
   assert.equal(isOverdue({ ...base, status: 'won', next_contact_date: '2026-10-01' }, TODAY), false)
   assert.equal(isDueToday({ ...base, status: 'interested', next_contact_date: TODAY }, TODAY), true)
   assert.equal(isUpcoming({ ...base, status: 'interested', next_contact_date: '2026-11-05' }, TODAY), true)

@@ -67,7 +67,7 @@ export function isOpenLead(lead) {
 export function isOverdue(lead, today) {
   if (!isOpenLead(lead) || !lead.next_contact_date) return false
   if (lead.next_contact_date >= today) return false
-  if (lead.last_contact_date && lead.last_contact_date >= lead.next_contact_date) return false
+  if (lead.last_contact_date && lead.last_contact_date > lead.next_contact_date) return false
   return true
 }
 

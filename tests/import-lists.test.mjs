@@ -87,3 +87,12 @@ test('leads list shows the capture date under the stage', async () => {
   const src = readFileSync(new URL('../src/import-lists.jsx', import.meta.url), 'utf8')
   assert.match(src, /Captado em \{shortDate\(row\.created_at\)\}/)
 })
+
+test('e-mail sequence has editable days for 2nd and 3rd contact', async () => {
+  const { readFileSync } = await import('node:fs')
+  const src = readFileSync(new URL('../src/email-marketing.jsx', import.meta.url), 'utf8')
+  assert.match(src, /Sequência automática de envios/)
+  assert.doesNotMatch(src, /Sequência automática D1/)
+  assert.match(src, /p_followup1_day: day2/)
+  assert.match(src, /p_followup2_day: day3/)
+})

@@ -4646,3 +4646,6 @@ button:not(:disabled):active,
 .capture-leads-brasil-link { text-decoration: none; display: inline-flex; align-items: center; }
 .import-list-pager { display: flex; align-items: center; gap: 10px; }
 .import-list-pager span { font-size: 13px; }
+
+.email-day-label { display: inline-flex; align-items: center; gap: 6px; }
+.email-day-input { width: 64px; min-width: 0; padding: 4px 8px; text-align: center; }

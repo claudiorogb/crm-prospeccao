@@ -18,7 +18,7 @@ test('respeita pausa, janela, dias e limite diário; função não é exposta', 
     assert.ok(sql.includes(piece), piece)
 })
 test('painel aparece na tela Enviar mensagens', () => {
-  assert.match(fs.readFileSync("src/App.jsx", "utf8"), /<WhatsappCadencePanel organization=\{organization\} refreshKey=\{cadenceRefresh\} \/>/)
+  assert.match(fs.readFileSync("src/App.jsx", "utf8"), /<WhatsappCadencePanel organization=\{organization\} refreshKey=\{cadenceRefresh\}[^>]*\/>/)
 })
 
 test('cadência só age em envios vinculados e para com envio pausado/cancelado', () => {

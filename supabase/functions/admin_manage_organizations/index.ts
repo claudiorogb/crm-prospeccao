@@ -245,6 +245,37 @@ Deno.serve(async (req) => {
       return json({ ok: true, outcome, email, full_name: name, organization_name: result?.organization_name || null, email_sent: emailSent, warning });
     }
 
+    if (action === "resend_confirmation_email") {
+      // Somente administrador do sistema (já garantido acima). O link nunca é devolvido ao navegador: vai só por e-mail ao usuário.
+      const userId = String(body?.user_id || "");
+      if (!userId) return json({ error: "user_id is required" }, 400);
+      const { data: target, error: targetError } = await admin.auth.admin.getUserById(userId);
+      const targetUser = target?.user;
+      if (targetError || !targetUser?.email) return json({ error: "Usuário não encontrado." }, 404);
+      if (targetUser.email_confirmed_at) return json({ error: "Este usuário já confirmou o e-mail." }, 400);
+      if (String(targetUser.email).endsWith(ARCHIVED_EMAIL_DOMAIN)) return json({ error: "Este usuário está arquivado." }, 400);
+
+      const email = String(targetUser.email);
+      const name = String(targetUser.user_metadata?.full_name || email);
+      let link = await admin.auth.admin.generateLink({ type: "magiclink", email, options: { redirectTo: "https://crm.axiva.com.br/?confirmed=1" } });
+      let actionLink = link.data?.properties?.action_link;
+      if (link.error || !actionLink) {
+        link = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: "https://crm.axiva.com.br/?confirmed=1" } });
+        actionLink = link.data?.properties?.action_link;
+      }
+      if (link.error || !actionLink) return json({ error: "Não foi possível gerar o link de confirmação." }, 502);
+
+      const sent = await sendResendEmail(
+        email,
+        "Confirme seu e-mail — AXIVA CRM",
+        "<!doctype html><html lang='pt-BR'><body style='font-family:Arial,sans-serif;color:#0B192C;line-height:1.5'><div style='max-width:560px;margin:40px auto;padding:32px;border:1px solid #e2e8f0;border-radius:14px'><h2>Confirme seu e-mail</h2><p>Olá, " + escHtml(name) + ".</p><p>Para continuar seu cadastro no AXIVA CRM, confirme seu endereço de e-mail.</p><p><a href='" + actionLink + "' style='display:inline-block;padding:12px 20px;background:#00A88F;color:#fff;text-decoration:none;border-radius:8px'>Confirmar e-mail</a></p><p style='font-size:13px;color:#64748b'>Se você não criou esta conta, ignore esta mensagem.</p></div></body></html>",
+        "Para continuar seu cadastro no AXIVA CRM, confirme seu e-mail pelo link recebido nesta mensagem.",
+      );
+      if (!sent) return json({ error: "Não foi possível enviar o e-mail de confirmação. Tente novamente." }, 502);
+      await admin.from("audit_logs").insert({ actor_user_id: user.id, action: "user_confirmation_email_resent", entity_type: "user", entity_id: userId });
+      return json({ ok: true, email });
+    }
+
     if (action === "set_account_status") {
       const userId = String(body?.user_id || "");
       const status = String(body?.status || "");

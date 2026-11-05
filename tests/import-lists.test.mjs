@@ -81,3 +81,9 @@ test('e-mail marketing page no longer shows the registered e-mails panel', async
   const mkt = readFileSync(new URL('../src/email-marketing.jsx', import.meta.url), 'utf8')
   assert.doesNotMatch(mkt, /NewsletterMailingPanel/)
 })
+
+test('leads list shows the capture date under the stage', async () => {
+  const { readFileSync } = await import('node:fs')
+  const src = readFileSync(new URL('../src/import-lists.jsx', import.meta.url), 'utf8')
+  assert.match(src, /Captado em \{shortDate\(row\.created_at\)\}/)
+})

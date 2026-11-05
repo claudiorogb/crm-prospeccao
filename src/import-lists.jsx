@@ -339,7 +339,10 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
                     <td>{row.email || '—'}</td>
                     <td>{row.city || '—'}{row.state ? `/${row.state}` : ''}</td>
                     <td>{SOURCE_LABEL[row.source] || '—'}</td>
-                    {kind === 'leads' && <td>{STATUS_LABEL[row.status] || row.status}</td>}
+                    {kind === 'leads' && <td>
+                      {STATUS_LABEL[row.status] || row.status}
+                      {shortDate(row.created_at) && <small className="import-list-last">Captado em {shortDate(row.created_at)}</small>}
+                    </td>}
                   </tr>
                 ))}
               </tbody>

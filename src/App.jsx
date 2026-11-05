@@ -71,6 +71,7 @@ import { lossReasonLabel, lossReasonPromptText, parseLossReasonAnswer } from './
 import { buildToday } from './today-rules'
 import GoalsPage from './goals-page.jsx'
 import HelpTip from './help-tip.jsx'
+import { notifyLeadsChanged, onLeadsChanged } from './leads-sync.js'
 import WhatsappCadencePanel, { attachPendingCadence, pendingCadenceProblem } from './whatsapp-cadence-panel.jsx'
 
 
@@ -2634,11 +2635,13 @@ function Leads({ organization, settings, userEmail }) {
     }
 
     window.addEventListener('focus', handleFocus)
+    const stopSync = onLeadsChanged(refreshVisibleLeads)
 
     return () => {
       active = false
       clearInterval(timer)
       window.removeEventListener('focus', handleFocus)
+      stopSync()
     }
   }, [organization.id, filter.search, filter.segment, filter.status])
 
@@ -2860,6 +2863,7 @@ function Leads({ organization, settings, userEmail }) {
 
     setLeads(old => old.map(item => item.id === id ? { ...item, ...localPayload } : item))
     setMessage('')
+    notifyLeadsChanged()
   }
 
   function allowedStatusOptions(currentStatus) {
@@ -2914,6 +2918,7 @@ function Leads({ organization, settings, userEmail }) {
       if (entry?.id) setJourneyEntries(old => [entry, ...old])
       setNoteDrafts(old => ({ ...old, [lead.id]: '' }))
       setMessage('Informações salvas e registradas no histórico.')
+      notifyLeadsChanged()
     }
 
     setSavingLeadIds(old => {
@@ -2942,6 +2947,7 @@ function Leads({ organization, settings, userEmail }) {
     else {
       setLeads(old => old.map(item => item.id === lead.id ? { ...item, status: fallback, lost_from_status: null, loss_reason: null, status_changed_at: stageChange.status_changed_at } : item))
       setMessage(`${lead.business_name} voltou para ${statusLabel[fallback]} com todo o histórico preservado.`)
+      notifyLeadsChanged()
     }
   }
 
@@ -2964,6 +2970,8 @@ function Leads({ organization, settings, userEmail }) {
     if (error) {
       setMessage(`Não foi possível atualizar o lead: ${error.message}`)
       await loadData()
+    } else {
+      notifyLeadsChanged()
     }
   }
 
@@ -3187,6 +3195,7 @@ function Leads({ organization, settings, userEmail }) {
       setEditingLead(null)
       setEditLeadForm(null)
       await loadAllLeads(filter)
+      notifyLeadsChanged()
     }
     setLoading(false)
   }
@@ -6839,7 +6848,8 @@ function OverdueReturnsNavItem({ organization, active, onOpen }) {
     }
     refresh()
     const timer = setInterval(refresh, 30000)
-    return () => { mounted = false; clearInterval(timer) }
+    const stopSync = onLeadsChanged(refresh)
+    return () => { mounted = false; clearInterval(timer); stopSync() }
   }, [organization.id])
 
   return (

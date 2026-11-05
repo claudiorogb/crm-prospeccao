@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
 import HelpTip from './help-tip.jsx'
+import { planFollowups, followupsProblem, dayName } from './whatsapp-send-days.js'
 import './whatsapp-cadence-panel.css'
 
 const TOKENS = [['{saudacao}', 'Saudação'], ['{empresa}', 'Empresa'], ['{cidade}', 'Cidade'], ['{uf}', 'UF'], ['{telefone}', 'Telefone'], ['{segmento}', 'Segmento'], ['{email}', 'E-mail']]
@@ -30,9 +31,23 @@ export async function attachPendingCadence(organizationId, batchIds) {
   }
 }
 
+// Antes de iniciar o envio: a cadência pendente precisa ter follow-ups em dias de envio.
+// Nunca lança erro (se falhar a consulta, não bloqueia o envio).
+export async function pendingCadenceProblem(organizationId, { days, end, now = Date.now() }) {
+  try {
+    const { data } = await supabase.from('whatsapp_cadences').select('id,batch_ids,step1_delay_days,step2_delay_days,step2_body')
+      .eq('organization_id', organizationId).eq('enabled', true)
+    const pending = (data || []).find(row => !row.batch_ids?.length)
+    if (!pending) return null
+    return followupsProblem({ days, end, now, step1: pending.step1_delay_days, step2: pending.step2_delay_days, hasStep2: Boolean(String(pending.step2_body || '').trim()) })
+  } catch {
+    return null
+  }
+}
+
 // Cadência automática de follow-up por campanha (desligada por padrão).
 // Os envios passam pela fila normal: horário, dias, limite diário, intervalo e pausa continuam valendo.
-export default function WhatsappCadencePanel({ organization, refreshKey = 0 }) {
+export default function WhatsappCadencePanel({ organization, refreshKey = 0, sendDays = [1, 3, 5], sendEnd = '18:00', now = Date.now() }) {
   const [pending, setPending] = useState(null)
   const [running, setRunning] = useState([])
   const [batchInfo, setBatchInfo] = useState({})
@@ -83,6 +98,10 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0 }) {
 
   const change = patch => { setForm(old => ({ ...old, ...patch })); setDirty(true) }
 
+  // Trava: cada follow-up só pode cair em dia de envio (ex.: segunda, quarta ou sexta).
+  const plan = planFollowups({ days: sendDays, end: sendEnd, now, step1: form.step1_delay_days, step2: form.step2_delay_days, hasStep2: Boolean(form.step2_body.trim()) })
+  const daysLabel = (sendDays || []).map(day => dayName(Number(day))).join(', ')
+
   function insertToken(token) {
     const field = activeField
     const el = refs[field].current
@@ -96,8 +115,9 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0 }) {
   async function save() {
     if (!segmentId) return
     if (!form.step1_body.trim()) { setMessage('Escreva o texto do 1º follow-up.'); return }
-    const d1 = Math.min(30, Math.max(2, parseInt(form.step1_delay_days, 10) || 3))
-    const d2 = Math.min(30, Math.max(2, parseInt(form.step2_delay_days, 10) || 5))
+    if (!plan.ok) { setMessage('Não há dia de envio configurado para os follow-ups.'); return }
+    const d1 = plan.d1
+    const d2 = plan.d2 ?? Math.min(30, Math.max(2, parseInt(form.step2_delay_days, 10) || 5))
     const payload = {
       enabled: true, target_segment_id: segmentId, step1_body: form.step1_body.trim(), step1_delay_days: d1,
       step2_body: form.step2_body.trim() || null, step2_delay_days: d2, updated_at: new Date().toISOString()
@@ -167,12 +187,21 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0 }) {
               </select>
             </label>
             <label>1º follow-up após (dias)
-              <input type="number" min="2" max="30" value={form.step1_delay_days} onChange={e => change({ step1_delay_days: e.target.value })} />
+              <select value={plan.d1 ?? ''} onChange={e => change({ step1_delay_days: Number(e.target.value) })}>
+                {plan.options1.map(day => <option key={day} value={day}>{day} dias — cai {plan.first != null ? dayName((plan.first + day) % 7) : ''}</option>)}
+              </select>
             </label>
             <label>2º follow-up após o 1º (dias)
-              <input type="number" min="2" max="30" value={form.step2_delay_days} onChange={e => change({ step2_delay_days: e.target.value })} />
+              <select value={plan.d2 ?? ''} onChange={e => change({ step2_delay_days: Number(e.target.value) })}>
+                {plan.options2.map(day => <option key={day} value={day}>{day} dias — cai {plan.weekday1 != null ? dayName((plan.weekday1 + day) % 7) : ''}</option>)}
+              </select>
             </label>
           </div>
+
+          <p className="muted">
+            Dias de envio: {daysLabel || 'nenhum'}. Se o envio for iniciado agora, a 1ª mensagem sai {plan.first != null ? dayName(plan.first) : '—'}; só aparecem as opções de dias que fazem cada follow-up cair em dia de envio.
+            {(plan.adjusted1 || plan.adjusted2) && ' Ajustamos os dias para o dia de envio mais próximo.'}
+          </p>
 
           <div className="email-variable-buttons">
             <strong>Adicionar ao texto:</strong>
@@ -192,7 +221,7 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0 }) {
           </div>
 
           <div className="cadence-actions-v2">
-            <button type="button" className="primary" onClick={save} disabled={saving || !dirty}>{saving ? 'Salvando…' : pending ? 'Atualizar cadência' : 'Salvar cadência'}</button>
+            <button type="button" className="primary" onClick={save} disabled={saving || !plan.ok || (!dirty && !plan.adjusted1 && !plan.adjusted2)}>{saving ? 'Salvando…' : pending ? 'Atualizar cadência' : 'Salvar cadência'}</button>
             {dirty && <span className="muted">Alterações não salvas</span>}
           </div>
         </>

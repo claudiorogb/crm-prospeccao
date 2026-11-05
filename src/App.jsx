@@ -71,7 +71,7 @@ import { lossReasonLabel, lossReasonPromptText, parseLossReasonAnswer } from './
 import { buildToday } from './today-rules'
 import GoalsPage from './goals-page.jsx'
 import HelpTip from './help-tip.jsx'
-import WhatsappCadencePanel, { attachPendingCadence } from './whatsapp-cadence-panel.jsx'
+import WhatsappCadencePanel, { attachPendingCadence, pendingCadenceProblem } from './whatsapp-cadence-panel.jsx'
 
 
 const UF_OPTIONS = [
@@ -5444,6 +5444,10 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
   async function send() {
     if (!selected.size || loading) return
 
+    // Trava: os follow-ups da cadência pendente precisam cair em dias de envio.
+    const cadenceProblem = await pendingCadenceProblem(organization.id, { days: sendConfig.days, end: sendConfig.end, now: Date.now() })
+    if (cadenceProblem) { setMessage(`Nada foi enviado. ${cadenceProblem}`); return }
+
     // A seleção pode vir de várias páginas e de "Clientes contactados" (reenvio).
     const selectedLeads = [...selected.values()]
     const isResend = lead => lead.status === 'contacted_pending'
@@ -5877,7 +5881,7 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
         </div>
       </section>
 
-      <WhatsappCadencePanel organization={organization} refreshKey={cadenceRefresh} />
+      <WhatsappCadencePanel organization={organization} refreshKey={cadenceRefresh} sendDays={sendConfig.days} sendEnd={sendConfig.end} now={scheduleClock} />
 
       <section className="panel manual-recipient-panel-v73">
         <div className="panel-head">

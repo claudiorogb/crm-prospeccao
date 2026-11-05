@@ -14,7 +14,6 @@ export default function AdminAiLimits({ reloadOrganizations }) {
   const [userDrafts, setUserDrafts] = useState({})
   const [loadingOrganizations, setLoadingOrganizations] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
-  const [savingCompany, setSavingCompany] = useState(false)
   const [togglingOrganizationId, setTogglingOrganizationId] = useState('')
   const [savingUserId, setSavingUserId] = useState('')
   const [notice, setNotice] = useState('')
@@ -127,34 +126,6 @@ export default function AdminAiLimits({ reloadOrganizations }) {
     if (reloadOrganizations) await reloadOrganizations()
   }
 
-  async function saveCompanyLimits(event) {
-    event.preventDefault()
-    if (!selectedOrganizationId) return
-    setSavingCompany(true)
-    setNotice('')
-    const { data, error } = await supabase.functions.invoke('admin_ai_limits', {
-      body: {
-        action: 'save_organization_limits',
-        organization_id: selectedOrganizationId,
-        daily_request_limit: 100000, // sem teto próprio da empresa: vale só o limite de cada usuário
-        daily_message_limit: Number(companyForm.daily_message_limit),
-      },
-    })
-    setSavingCompany(false)
-
-    if (error || data?.error) {
-      setNotice(data?.error || error?.message || 'Não foi possível salvar os limites da empresa.')
-      setNoticeType('error')
-      return
-    }
-
-    setNotice('Limites da empresa salvos.')
-    setNoticeType('success')
-    await loadOrganizations()
-    await loadUsers(selectedOrganizationId)
-    if (reloadOrganizations) await reloadOrganizations()
-  }
-
   async function saveUserLimit(user) {
     if (!selectedOrganizationId) return
     const rawLimit = userDrafts[user.user_id] ?? ''
@@ -259,33 +230,7 @@ export default function AdminAiLimits({ reloadOrganizations }) {
                 </div>
               </div>
 
-              <form onSubmit={saveCompanyLimits}>
-                <div className="ai-limits-settings-grid">
-                  <div>
-                    <strong>Limite de IA por usuário</strong>
-                    <p className="muted">Cada usuário tem o limite do plano contratado para ele: AXIVA e teste grátis 10, Plus 20 e Max 30 perguntas por dia. Não há limite total para a empresa.</p>
-                  </div>
-                  <label>
-                    Limite padrão por usuário/dia
-                    <input
-                      type="number"
-                      min="1"
-                      max="1000"
-                      step="1"
-                      required
-                      value={companyForm.daily_message_limit}
-                      onChange={event => setCompanyForm(current => ({ ...current, daily_message_limit: event.target.value }))}
-                    />
-                    <small>Só vale para usuário sem limite individual (quem tem plano já recebe o limite do plano).</small>
-                  </label>
-                </div>
-                <div className="ai-limits-form-footer">
-                  <span className="muted">O limite individual de cada usuário é verificado no envio de cada pergunta.</span>
-                  <button type="submit" className="primary" disabled={savingCompany}>
-                    <Save size={15} /> {savingCompany ? 'Salvando...' : 'Salvar limites da empresa'}
-                  </button>
-                </div>
-              </form>
+              <p className="muted">O limite individual de cada usuário é verificado no envio de cada pergunta. Para um usuário, deixar o campo em branco volta ao limite do plano dele.</p>
             </section>
 
             <section className="panel ai-limits-users-panel">
@@ -315,12 +260,12 @@ export default function AdminAiLimits({ reloadOrganizations }) {
                             max="1000"
                             step="1"
                             value={userDrafts[user.user_id] ?? ''}
-                            placeholder={`Padrão: ${companyForm.daily_message_limit}`}
+                            placeholder="Plano"
                             onChange={event => setUserDrafts(current => ({ ...current, [user.user_id]: event.target.value }))}
                             aria-label={`Limite diário de ${user.full_name || user.email || 'usuário'}`}
                           />
                         </label>
-                        <small>Em branco = padrão da empresa ({companyForm.daily_message_limit}/dia).</small>
+                        <small>Em branco = limite do plano.</small>
                       </div>
                       <button
                         type="button"

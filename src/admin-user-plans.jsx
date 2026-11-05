@@ -67,7 +67,8 @@ export default function AdminUserPlans() {
     ['paid_after_trial', 'Pagaram após o trial', totals.paid_after_trial],
     ['trial_expired', 'Trial vencido sem pagar', totals.trial_expired],
     ['cancelled_after_trial', 'Cancelaram após o trial', totals.cancelled_after_trial],
-    ['cancelled', 'Cancelados / suspensos', totals.cancelled]
+    ['cancelled', 'Cancelados / suspensos', totals.cancelled],
+    ['unconfirmed', 'Cadastro não confirmado', totals.unconfirmed]
   ]
 
   return (
@@ -128,7 +129,7 @@ export default function AdminUserPlans() {
               <div>
                 <strong>{user.full_name || user.email || 'Usuário'}</strong>
                 <span>{user.email || 'E-mail não informado'}</span>
-                <small>{user.organization_name || 'Sem organização'} · {user.trial_active ? `Trial até ${new Date(user.trial_ends_at).toLocaleDateString('pt-BR')}` : user.plan_name || 'Sem plano'}</small>
+                <small>{user.organization_name || 'Sem organização'} · {user.trial_active ? `Trial até ${new Date(user.trial_ends_at).toLocaleDateString('pt-BR')}` : user.plan_name || 'Sem plano'}{(categoriesByUser[`${user.organization_id}-${user.user_id}`] || []).includes('unconfirmed') ? ' · E-mail não confirmado' : ''}</small>
               </div>
               <div className="row-actions">
                 <select

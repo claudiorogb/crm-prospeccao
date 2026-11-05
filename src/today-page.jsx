@@ -1,3 +1,4 @@
+import { notifyLeadsChanged, onLeadsChanged } from './leads-sync.js'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, RefreshCw } from 'lucide-react'
 import { supabase } from './lib/supabase'
@@ -81,7 +82,8 @@ export default function TodayPage({ organization, userEmail, onOpenLead, userId 
     setLoaded(false)
     refresh()
     const timer = setInterval(refresh, 30000)
-    return () => clearInterval(timer)
+    const stopSync = onLeadsChanged(refresh)
+    return () => { clearInterval(timer); stopSync() }
   }, [refresh])
 
   const hasMine = Boolean(userId) && leads.some(lead => lead.assigned_to === userId)
@@ -103,6 +105,7 @@ export default function TodayPage({ organization, userEmail, onOpenLead, userId 
     if (error) { setMessage(error.message || 'Não foi possível salvar.'); return }
     setMessage(okMessage)
     await refresh()
+    notifyLeadsChanged()
   }
 
   const markDone = lead => updateLead(lead, { last_contact_date: today }, `Contato com ${lead.business_name} registrado hoje.`)

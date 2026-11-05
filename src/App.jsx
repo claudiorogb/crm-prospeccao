@@ -10385,6 +10385,10 @@ export default function App() {
                   onClick={() => { setAdminCommercialPage('test-settings'); setMobileMenuOpen(false) }}
                 ><Settings size={18}/> Configurações do Teste</button>
                 <button
+                  className={`nav-item ${adminCommercialPage === 'tutorials' ? 'active' : ''}`}
+                  onClick={() => { setAdminCommercialPage('tutorials'); setMobileMenuOpen(false) }}
+                ><Play size={18}/> Tutoriais</button>
+                <button
                   className="nav-item"
                   onClick={() => { setSystemAdminView('administration'); setMobileMenuOpen(false) }}
                 >
@@ -10501,6 +10505,7 @@ export default function App() {
           {commercialMode && sandboxOrganization && adminSandboxSettings?.feature_flags?.ai_assistant === true && adminCommercialPage === 'ai-assistant' && (
             <AiAssistant userEmail={userEmail} />
           )}
+          {commercialMode && adminCommercialPage === 'tutorials' && <TutorialsPage />}
           {commercialMode && sandboxOrganization && adminSandboxSettings && adminCommercialPage === 'test-settings' && (
             <AdminTestSettings organization={sandboxOrganization} userEmail={userEmail} userId={session.user.id} />
           )}

@@ -4794,36 +4794,69 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
       return
     }
 
-    // Último envio de cada cliente da página: maior horário entre as mensagens enviadas pelo CRM
-    // e as enviadas pelo celular (conversa do WhatsApp). Recalculado em toda carga/atualização.
+    // Últimos envios de cada cliente da página, separados por tipo:
+    // WhatsApp de campanha, e-mail de campanha (prospecção) e e-mail marketing (lista de marketing).
     const contactedIds = (contactedResult.data || []).map(item => item.id)
     const lastSentMap = {}
+    const keep = (leadId, kind, when) => {
+      if (!leadId || !when) return
+      const entry = lastSentMap[leadId] || (lastSentMap[leadId] = {})
+      if (!entry[kind] || when > entry[kind]) entry[kind] = when
+    }
     if (contactedIds.length) {
-      const [crmSent, phoneSent] = await Promise.all([
+      const emailToLeadIds = {}
+      for (const item of contactedResult.data || []) {
+        const key = String(item.email || '').trim().toLowerCase()
+        if (key) (emailToLeadIds[key] ||= []).push(item.id)
+      }
+      const [whatsappSent, emailSent, marketingContacts] = await Promise.all([
         supabase
           .from('outbound_messages')
           .select('lead_id,sent_at')
           .eq('organization_id', organization.id)
           .in('lead_id', contactedIds)
+          .eq('channel', 'whatsapp')
           .eq('status', 'sent')
           .not('sent_at', 'is', null)
           .order('sent_at', { ascending: false })
           .limit(2000),
         supabase
-          .from('whatsapp_messages')
-          .select('lead_id,occurred_at')
+          .from('email_campaign_recipients')
+          .select('lead_id,sent_at')
           .eq('organization_id', organization.id)
           .in('lead_id', contactedIds)
-          .eq('direction', 'outbound')
-          .is('deleted_at', null)
-          .order('occurred_at', { ascending: false })
-          .limit(2000)
+          .in('status', ['sent', 'replied'])
+          .not('sent_at', 'is', null)
+          .order('sent_at', { ascending: false })
+          .limit(2000),
+        Object.keys(emailToLeadIds).length
+          ? supabase
+              .from('email_marketing_contacts')
+              .select('id,email_normalized')
+              .eq('organization_id', organization.id)
+              .in('email_normalized', Object.keys(emailToLeadIds))
+              .limit(2000)
+          : Promise.resolve({ data: [] })
       ])
-      for (const row of crmSent.data || []) {
-        if (row.lead_id && (!lastSentMap[row.lead_id] || row.sent_at > lastSentMap[row.lead_id])) lastSentMap[row.lead_id] = row.sent_at
-      }
-      for (const row of phoneSent.data || []) {
-        if (row.lead_id && (!lastSentMap[row.lead_id] || row.occurred_at > lastSentMap[row.lead_id])) lastSentMap[row.lead_id] = row.occurred_at
+      for (const row of whatsappSent.data || []) keep(row.lead_id, 'whatsapp', row.sent_at)
+      for (const row of emailSent.data || []) keep(row.lead_id, 'email', row.sent_at)
+
+      const contactToLeadIds = {}
+      for (const contact of marketingContacts.data || []) contactToLeadIds[contact.id] = emailToLeadIds[contact.email_normalized] || []
+      const contactIds = Object.keys(contactToLeadIds)
+      if (contactIds.length) {
+        const { data: marketingSent } = await supabase
+          .from('email_campaign_recipients')
+          .select('marketing_contact_id,sent_at')
+          .eq('organization_id', organization.id)
+          .in('marketing_contact_id', contactIds)
+          .in('status', ['sent', 'replied'])
+          .not('sent_at', 'is', null)
+          .order('sent_at', { ascending: false })
+          .limit(2000)
+        for (const row of marketingSent || []) {
+          for (const leadId of contactToLeadIds[row.marketing_contact_id] || []) keep(leadId, 'marketing', row.sent_at)
+        }
       }
     }
     if (seq !== loadSeqRef.current) return
@@ -5731,11 +5764,17 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
                   />
                   <div>
                     <strong>{lead.business_name}</strong>
-                    <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'} • {lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
+                    <span>Campanha: {lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'} • Cidade: {lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
                     <small>{lead.phone || 'Sem telefone'}{lead.email ? ` • ${lead.email}` : ''}</small>
-                    <small className="last-sent-v110"><strong>Último envio:</strong> {contactedLastSent[lead.id]
-                      ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(contactedLastSent[lead.id]))
-                      : '—'}</small>
+                    {[
+                      ['whatsapp', 'Último envio de campanha de whatsapp'],
+                      ['email', 'Último envio de campanha de e-mail'],
+                      ['marketing', 'Último e-mail mkt enviado']
+                    ].map(([kind, label]) => (
+                      <small className="last-sent-v110" key={kind}><strong>{label}:</strong> {contactedLastSent[lead.id]?.[kind]
+                        ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(contactedLastSent[lead.id][kind]))
+                        : '—'}</small>
+                    ))}
                     {(lead.website || lead.email) && (
                       <small className="lead-contact-links">
                         {lead.website && <ExternalWebsiteLink value={lead.website} />}

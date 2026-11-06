@@ -4651,3 +4651,23 @@ button:not(:disabled):active,
 
 .email-day-label { display: inline-flex; align-items: center; gap: 6px; }
 .email-day-input { width: 64px; min-width: 0; padding: 4px 8px; text-align: center; }
+
+/* Equipe > Adicionar usuário: 5 colunas no computador, campos empilhados no celular */
+.add-user-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+.add-user-grid label { min-width: 0; }
+.add-user-grid input, .add-user-grid select { width: 100%; box-sizing: border-box; }
+@media (max-width: 760px) {
+  .add-user-grid { grid-template-columns: 1fr; }
+  .add-user-grid button { width: 100%; justify-content: center; }
+}
+
+/* Meu plano > Licenças por usuário: no celular cada usuário vira um cartão (e-mail e botão sem cortar) */
+@media (max-width: 760px) {
+  .license-table, .license-table tbody, .license-table tr, .license-table td { display: block; width: 100%; box-sizing: border-box; }
+  .license-table thead { display: none; }
+  .license-table tr { padding: 10px 0; }
+  .license-table td { padding: 4px 0 !important; text-align: left !important; overflow-wrap: anywhere; }
+  .license-table td[data-label]::before { content: attr(data-label) ": "; color: #64748b; font-size: 12px; }
+  .license-table select { width: 100%; min-width: 0 !important; }
+  .license-table .license-actions button { width: 100%; justify-content: center; }
+}

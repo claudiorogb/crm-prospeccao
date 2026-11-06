@@ -170,7 +170,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
             <p><strong>{money(fc.total)}</strong> previstos • {money(fc.openTotal)} em negócios abertos ({fc.count})</p>
             <table className="goals-table"><thead><tr><th>Etapa</th><th>Negócios</th><th>Valor em aberto</th><th>Chance</th><th>Previsto</th></tr></thead>
               <tbody>{fc.byStage.map(r => <tr key={r.stage}><td>{r.label}</td><td>{r.count}</td><td>{money(r.open)}</td>
-                <td>{canEdit ? <input type="number" min="0" max="100" style={{ width: 64 }} aria-label={`Chance de fechar em ${r.label}`} value={probDraft ? probDraft[r.stage] : r.probability} onChange={e => setProbDraft({ ...(probDraft || probs), [r.stage]: e.target.value })} /> : null}{canEdit ? '%' : `${r.probability}%`}</td>
+                <td><span className="goals-pct">{canEdit ? <input type="number" min="0" max="100" style={{ width: 64 }} aria-label={`Chance de fechar em ${r.label}`} value={probDraft ? probDraft[r.stage] : r.probability} onChange={e => setProbDraft({ ...(probDraft || probs), [r.stage]: e.target.value })} /> : null}{canEdit ? '%' : `${r.probability}%`}</span></td>
                 <td>{money(r.weighted)}</td></tr>)}</tbody></table>
             {canEdit && <p><button type="button" className="secondary mini" disabled={!probDraft} onClick={saveProbs}>Salvar probabilidades</button></p>}
             {(canEdit ? fc.sellers : fc.sellers.filter(x => x.user_id === userId)).map(x => <div className="goals-row" key={x.user_id || 'none'}><strong>{x.name}</strong><span>{x.count} negócio(s) • {money(x.weighted)} previstos</span></div>)}

@@ -249,7 +249,7 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table className="license-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr><th style={{ textAlign: 'left', padding: 10 }}>Usuário</th><th style={{ textAlign: 'left', padding: 10 }}>Plano</th><th style={{ textAlign: 'right', padding: 10 }}>Valor</th>{canManage && <th />}</tr></thead>
             <tbody>
               {members.map(member => {
@@ -259,7 +259,7 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
                 return (
                   <tr key={member.user_id} style={{ borderTop: '1px solid #e2e8f0' }}>
                     <td style={{ padding: 10 }}><strong>{member.full_name || member.email}</strong><div className="muted" style={{ fontSize: 12 }}>{member.email}</div></td>
-                    <td style={{ padding: 10 }}>
+                    <td data-label="Plano" style={{ padding: 10 }}>
                       {canManage && hasPaid ? (
                         <select
                           value={active ? (member.plan_id || 'axiva') : ''}
@@ -307,8 +307,8 @@ export default function BillingManagementScreen({ onBackToCrm, isFreeTrial = fal
                         </div>
                       ) : <span>{active ? member.plan_name : 'Sem licença'}</span>}
                     </td>
-                    <td style={{ padding: 10, textAlign: 'right' }}>{active ? money(member.price_monthly) : '—'}</td>
-                    {canManage && <td style={{ padding: 10, textAlign: 'right' }}>{active && activeCount > 1 && <button className="secondary inline-btn" onClick={() => manage('remove_user', member.user_id)} disabled={Boolean(busy)}>{busy === 'remove_user:' + member.user_id ? <Loader2 size={15} className="spin" /> : <UserMinus size={15} />} Remover licença</button>}</td>}
+                    <td data-label="Valor" style={{ padding: 10, textAlign: 'right' }}>{active ? money(member.price_monthly) : '—'}</td>
+                    {canManage && <td className="license-actions" style={{ padding: 10, textAlign: 'right' }}>{active && activeCount > 1 && <button className="secondary inline-btn" onClick={() => manage('remove_user', member.user_id)} disabled={Boolean(busy)}>{busy === 'remove_user:' + member.user_id ? <Loader2 size={15} className="spin" /> : <UserMinus size={15} />} Remover licença</button>}</td>}
                   </tr>
                 )
               })}

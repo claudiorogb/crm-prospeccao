@@ -21,3 +21,6 @@
 
 .goals-month{flex-wrap:wrap}
 .goals-period-tabs{display:inline-flex;gap:6px;margin-right:12px}
+
+/* Chance (%) sempre na mesma linha do campo */
+.goals-pct{white-space:nowrap;display:inline-flex;align-items:center;gap:4px}

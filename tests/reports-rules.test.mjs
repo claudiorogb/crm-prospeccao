@@ -64,3 +64,13 @@ test('períodos: trimestre, semestre e ano somam meses e metas', async () => {
   assert.equal(c.goal.target_won_count, 5)
   assert.ok(Array.isArray(bySeller(leads, periodMonths('year', '2026-01-01'), [{ user_id: 'u1', display_name: 'A' }], goals)))
 })
+
+test('contatado considera quem recebeu qualquer contato (WhatsApp, e-mail) ou está em Contato pendente', async () => {
+  const { isContacted, funnelCounts } = await import('../src/reports-rules.js')
+  assert.equal(isContacted({ status: 'new' }), false)
+  assert.equal(isContacted({ status: 'new', had_contact: true }), true)
+  assert.equal(isContacted({ status: 'contacted_pending' }), true)
+  assert.equal(isContacted({ status: 'replied' }), true)
+  const leads = [{ status: 'new', had_contact: true }, { status: 'captured_pending' }, { status: 'contacted_pending' }]
+  assert.equal(funnelCounts(leads).find(([label]) => label === 'Contatados')[1], 2)
+})

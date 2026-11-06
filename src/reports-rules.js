@@ -5,6 +5,12 @@ const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const REPLIED = ['replied', 'interested', 'proposal', 'negotiation', 'won', 'lost']
 const CONTACTED = ['contacted', ...REPLIED]
 
+// Contatado = já recebeu algum contato (WhatsApp, e-mail de campanha ou e-mail marketing: lead.had_contact)
+// ou está numa etapa que pressupõe contato (inclui "Contato pendente").
+export function isContacted(lead) {
+  return Boolean(lead.had_contact) || lead.status === 'contacted_pending' || CONTACTED.includes(lead.status)
+}
+
 // Ganhos do mês: usa contract_signed_at; se vazio, a data da mudança de status.
 export function wonDate(lead) {
   return String(lead.contract_signed_at || lead.status_changed_at || '').slice(0, 10)
@@ -68,7 +74,7 @@ export function byCampaign(leads) {
     const name = l.campaigns?.name || l.target_segments?.name || 'Sem campanha'
     const row = map.get(name) || { name, total: 0, contacted: 0, replied: 0, won: 0 }
     row.total += 1
-    if (CONTACTED.includes(l.status)) row.contacted += 1
+    if (isContacted(l)) row.contacted += 1
     if (REPLIED.includes(l.status)) row.replied += 1
     if (l.status === 'won') row.won += 1
     map.set(name, row)
@@ -78,7 +84,7 @@ export function byCampaign(leads) {
 
 export function funnelCounts(leads) {
   const count = s => leads.filter(l => l.status === s).length
-  return [['Contatados', leads.filter(l => CONTACTED.includes(l.status)).length], ['Responderam', leads.filter(l => REPLIED.includes(l.status)).length],
+  return [['Contatados', leads.filter(isContacted).length], ['Responderam', leads.filter(l => REPLIED.includes(l.status)).length],
     ['Interessados', leads.filter(l => ['interested', 'proposal', 'negotiation', 'won'].includes(l.status)).length],
     ['Proposta', leads.filter(l => ['proposal', 'negotiation', 'won'].includes(l.status)).length], ['Ganhos', count('won')], ['Perdidos', count('lost')]]
 }

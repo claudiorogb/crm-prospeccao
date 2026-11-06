@@ -218,8 +218,29 @@ function EmailProspectingSequence({ organization, connection }) {
         .order('created_at', { ascending: true })
     ])
 
-    if (leadsResult.error) setMessage(leadsResult.error.message)
-    else setLeads((leadsResult.data || []).filter(item => validEmail(item.email)))
+    // Último e-mail enviado a cada contato (o mais recente de todos os envios da prospecção).
+    const lastSentByLead = {}
+    if (!sequenceResult.error) {
+      for (const row of sequenceResult.data || []) {
+        if (row.lead_id && row.sent_at && (!lastSentByLead[row.lead_id] || row.sent_at > lastSentByLead[row.lead_id])) lastSentByLead[row.lead_id] = row.sent_at
+      }
+    }
+    // Contatos do CRM: quem recebeu e-mail mais recentemente aparece primeiro; quem ainda não recebeu
+    // fica depois, em ordem alfabética.
+    if (leadsResult.error) {
+      setMessage(leadsResult.error.message)
+    } else {
+      const valid = (leadsResult.data || []).filter(item => validEmail(item.email))
+      valid.sort((a, b) => {
+        const sentA = lastSentByLead[a.id] || ''
+        const sentB = lastSentByLead[b.id] || ''
+        if (sentA && sentB) return sentA < sentB ? 1 : sentA > sentB ? -1 : 0
+        if (sentA) return -1
+        if (sentB) return 1
+        return String(a.business_name || '').localeCompare(String(b.business_name || ''), 'pt-BR')
+      })
+      setLeads(valid)
+    }
 
     if (!sequenceResult.error) {
       const latestByLead = {}

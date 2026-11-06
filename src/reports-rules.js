@@ -65,7 +65,7 @@ export function companyProgress(leads, month, goals) {
 export function byCampaign(leads) {
   const map = new Map()
   for (const l of leads) {
-    const name = l.campaigns?.name || 'Sem campanha'
+    const name = l.campaigns?.name || l.target_segments?.name || 'Sem campanha'
     const row = map.get(name) || { name, total: 0, contacted: 0, replied: 0, won: 0 }
     row.total += 1
     if (CONTACTED.includes(l.status)) row.contacted += 1

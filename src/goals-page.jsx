@@ -5,7 +5,7 @@ import { lossReasonLabel } from './loss-reasons.js'
 import { monthStart, periodMonths, PERIOD_TYPES, bySeller, companyProgress, byCampaign, funnelCounts, lossBreakdown, avgDaysToWin, forecast, normalizeProbabilities, FORECAST_STAGES } from './reports-rules.js'
 import './goals-page.css'
 
-const FIELDS = 'id,status,campaign_id,assigned_to,contract_value,contract_signed_at,status_changed_at,created_at,loss_reason,proposal_value,renegotiated_value,campaigns(name)'
+const FIELDS = 'id,status,campaign_id,assigned_to,contract_value,contract_signed_at,status_changed_at,created_at,loss_reason,proposal_value,renegotiated_value,campaigns(name),target_segments(name)'
 const BATCH = 1000
 const MAX_ROWS = 20000
 
@@ -39,9 +39,11 @@ function shiftMonth(month, delta) {
   return d.toISOString().slice(0, 10)
 }
 
-function Bar({ pct }) {
-  if (pct === null) return <span className="muted">sem meta</span>
-  return <span className="goal-bar"><span style={{ width: `${Math.min(100, pct)}%` }} /><em>{pct}%</em></span>
+function Bar({ pct, label }) {
+  const body = pct === null
+    ? <span className="muted">sem meta</span>
+    : <span className="goal-bar"><span style={{ width: `${Math.min(100, pct)}%` }} /><em>{pct}%</em></span>
+  return <span className="goal-bar-item"><small className="muted">{label}</small>{body}</span>
 }
 
 export default function GoalsPage({ organization, userEmail, userId, canEdit }) {
@@ -134,9 +136,11 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
                 <button key={id} type="button" role="tab" aria-selected={periodType === id} className={periodType === id ? 'primary mini' : 'secondary mini'} onClick={() => setPeriodType(id)}>{label}</button>
               ))}
             </div>
-            <button type="button" className="secondary mini" aria-label="Período anterior" onClick={() => setAnchor(shiftMonth(month, -months.length))}>‹</button>
-            <strong>{periodLabel(periodType, months)}</strong>
-            <button type="button" className="secondary mini" aria-label="Próximo período" onClick={() => setAnchor(shiftMonth(month, months.length))}>›</button>
+            <div className="goals-period-nav">
+              <button type="button" className="secondary mini" aria-label="Período anterior" onClick={() => setAnchor(shiftMonth(month, -months.length))}>‹</button>
+              <strong>{periodLabel(periodType, months)}</strong>
+              <button type="button" className="secondary mini" aria-label="Próximo período" onClick={() => setAnchor(shiftMonth(month, months.length))}>›</button>
+            </div>
           </div>
           {!isMonthView && <p className="muted goals-note">Nesta visão as metas são a soma das metas mensais. Para definir ou alterar uma meta, use a visão "Mês".</p>}
 
@@ -145,7 +149,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
               <h2>Meta da empresa</h2>
               <div className="goals-row">
                 <span>{company.won} ganho(s) • {money(company.value)}</span>
-                <Bar pct={company.pctCount} /><Bar pct={company.pctValue} />
+                <span className="goal-bars"><Bar pct={company.pctCount} label="Quantidade" /><Bar pct={company.pctValue} label="Valor" /></span>
                 {isMonthView && goalEditor('company', null, company.goal)}
               </div>
             </section>
@@ -158,7 +162,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
               <div className="goals-row" key={s.user_id || 'none'}>
                 <strong>{s.name}</strong>
                 <span>{s.won} ganho(s) • {money(s.value)}</span>
-                <Bar pct={s.pctCount} /><Bar pct={s.pctValue} />
+                <span className="goal-bars"><Bar pct={s.pctCount} label="Quantidade" /><Bar pct={s.pctValue} label="Valor" /></span>
                 {canEdit && isMonthView && s.user_id && goalEditor(s.user_id, s.user_id, s.goal)}
               </div>
             ))}

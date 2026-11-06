@@ -4825,7 +4825,6 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
           .select('lead_id,sent_at')
           .eq('organization_id', organization.id)
           .in('lead_id', contactedIds)
-          .in('status', ['sent', 'replied'])
           .not('sent_at', 'is', null)
           .order('sent_at', { ascending: false })
           .limit(2000),
@@ -4850,7 +4849,6 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
           .select('marketing_contact_id,sent_at')
           .eq('organization_id', organization.id)
           .in('marketing_contact_id', contactIds)
-          .in('status', ['sent', 'replied'])
           .not('sent_at', 'is', null)
           .order('sent_at', { ascending: false })
           .limit(2000)

@@ -158,9 +158,13 @@ function EmailProspectingSequence({ organization, connection }) {
   const [openProspectingId, setOpenProspectingId] = useState(null)
   // "Contatos do CRM": 20 por página; a seleção (Set de ids) continua valendo entre páginas.
   const [leadPage, setLeadPage] = useState(1)
-  const leadPageCount = Math.max(1, Math.ceil(leads.length / PROSPECT_PAGE_SIZE))
+  // Leads ocultados manualmente de "Contatos do CRM" (só visual): a lista mostra os visíveis ou, em "Ver ocultos", só os ocultos.
+  const [showHiddenContacts, setShowHiddenContacts] = useState(false)
+  const hiddenContactsCount = leads.filter(item => item.email_contacts_hidden_at).length
+  const visibleLeads = leads.filter(item => showHiddenContacts ? item.email_contacts_hidden_at : !item.email_contacts_hidden_at)
+  const leadPageCount = Math.max(1, Math.ceil(visibleLeads.length / PROSPECT_PAGE_SIZE))
   const safeLeadPage = Math.min(Math.max(1, leadPage), leadPageCount)
-  const pagedLeads = leads.slice((safeLeadPage - 1) * PROSPECT_PAGE_SIZE, safeLeadPage * PROSPECT_PAGE_SIZE)
+  const pagedLeads = visibleLeads.slice((safeLeadPage - 1) * PROSPECT_PAGE_SIZE, safeLeadPage * PROSPECT_PAGE_SIZE)
   const [recipientActionId, setRecipientActionId] = useState(null)
   const subjectRef = useRef(null)
   const firstRef = useRef(null)
@@ -192,7 +196,7 @@ function EmailProspectingSequence({ organization, connection }) {
     const [leadsResult, sequenceResult, runsResult, recipientsResult] = await Promise.all([
       supabase
         .from('leads')
-        .select('id,business_name,contact_name,email,website,city,state,status,email_marketing_opt_out')
+        .select('id,business_name,contact_name,email,website,city,state,status,email_marketing_opt_out,email_contacts_hidden_at')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .order('business_name'),
@@ -309,6 +313,22 @@ function EmailProspectingSequence({ organization, connection }) {
       else next.delete(id)
       return next
     })
+  }
+
+  // Ocultar / restaurar contatos desta lista. Só muda a exibição: o lead segue na Lista de clientes e no Kanban.
+  async function setContactsHidden(ids, hide) {
+    const list = [...new Set(ids)].filter(Boolean)
+    if (!list.length) return
+    const stamp = hide ? new Date().toISOString() : null
+    const { error } = await supabase.from('leads').update({ email_contacts_hidden_at: stamp })
+      .eq('organization_id', organization.id).is('deleted_at', null).in('id', list)
+    if (error) { setMessage(error.message || 'Não foi possível atualizar os contatos.'); return }
+    const changed = new Set(list)
+    setLeads(current => current.map(item => changed.has(item.id) ? { ...item, email_contacts_hidden_at: stamp } : item))
+    if (hide) setSelected(current => { const next = new Set(current); list.forEach(id => next.delete(id)); return next })
+    setMessage(hide
+      ? `${list.length} contato(s) ocultado(s) desta lista. Eles continuam na Lista de clientes e podem ser restaurados em "Ver ocultos".`
+      : `${list.length} contato(s) restaurado(s) na lista.`)
   }
 
   async function addManualProspect() {
@@ -475,17 +495,28 @@ function EmailProspectingSequence({ organization, connection }) {
             <div><h3>Contatos do CRM</h3><p className="muted">A mesma base pode ser usada aqui e em E-mail marketing. Quem cancelou o recebimento permanece bloqueado para envio.</p></div>
             <strong>{selected.size} selecionado(s)</strong>
           </div>
-          {leads.length === 0 ? (
-            <p className="muted">Nenhum lead elegível com e-mail no momento.</p>
+          <p className="hide-list-note">
+            <button type="button" className="hide-link" disabled={!selected.size} onClick={() => setContactsHidden([...selected], !showHiddenContacts)}>
+              {showHiddenContacts ? 'Restaurar selecionados' : 'Ocultar selecionados'}
+            </button>
+            {(hiddenContactsCount > 0 || showHiddenContacts) && (
+              <> · <button type="button" className="hide-link" onClick={() => { setShowHiddenContacts(value => !value); setLeadPage(1) }}>
+                {showHiddenContacts ? 'Voltar à lista' : `Ver ocultos (${hiddenContactsCount})`}
+              </button></>
+            )}
+          </p>
+          {visibleLeads.length === 0 ? (
+            <p className="muted">{showHiddenContacts ? 'Nenhum contato oculto.' : 'Nenhum lead elegível com e-mail no momento.'}</p>
           ) : pagedLeads.map(lead => (
             <label className={`email-prospect-row ${lead.email_marketing_opt_out ? 'disabled' : ''}`} key={lead.id}>
               <input type="checkbox" disabled={Boolean(lead.email_marketing_opt_out)} checked={selected.has(lead.id)} onChange={e => toggle(lead.id, e.target.checked)} />
               <span><strong>{lead.business_name}</strong><small>{lead.email}{lead.city ? ` • ${lead.city}${lead.state ? `/${lead.state}` : ''}` : ''}{lead.email_marketing_opt_out ? ' • Recebimento cancelado' : ''}</small></span>
               <span className="email-prospect-progress"><strong>{prospectingLabel(lead.id)}</strong><small>Próximo envio: {nextProspectingSend(lead.id)}</small></span>
               {lead.website && <a href={/^https?:\/\//i.test(lead.website) ? lead.website : `https://${lead.website}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Site</a>}
+              <button type="button" className="hide-link" onClick={e => { e.preventDefault(); e.stopPropagation(); setContactsHidden([lead.id], !showHiddenContacts) }}>{showHiddenContacts ? 'restaurar' : 'ocultar'}</button>
             </label>
           ))}
-          <PaginationControls page={safeLeadPage} total={leads.length} pageSize={PROSPECT_PAGE_SIZE} onPageChange={setLeadPage} itemLabel="contatos" />
+          <PaginationControls page={safeLeadPage} total={visibleLeads.length} pageSize={PROSPECT_PAGE_SIZE} onPageChange={setLeadPage} itemLabel="contatos" />
         </div>
 
         <label className="email-consent-check">

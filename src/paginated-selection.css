@@ -175,3 +175,11 @@
 /* Último envio em "Clientes contactados" */
 .last-sent-v110{color:#0f766e}
 .admin-list-row small.last-sent-v110 strong{display:inline}
+
+/* Texto clicável "ocultar" / "restaurar" nas listas (sem aparência de botão) */
+button.hide-link{background:none;border:0;padding:0;margin:0;font:inherit;font-size:12px;color:#0f766e;text-decoration:underline;cursor:pointer;display:inline;width:auto;box-shadow:none}
+button.hide-link:hover{color:#115e59}
+button.hide-link:disabled{color:#94a3b8;cursor:default;text-decoration:none}
+.admin-list-row button.hide-link,.sending-row button.hide-link{display:block;margin-top:4px}
+.hide-list-note{margin:6px 0;font-size:13px;color:#475569}
+.sending-bulk-actions-v52 button.hide-link{font-size:13px;align-self:center}

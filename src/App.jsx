@@ -4611,6 +4611,10 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
   const [leads, setLeads] = useState([])
   const [sendingTotal, setSendingTotal] = useState(0)
   const [sendingPage, setSendingPage] = useState(1)
+  // Leads ocultados da lista de envio (só visual): quantidade e se a tela está mostrando os ocultos.
+  const [showHiddenSending, setShowHiddenSending] = useState(false)
+  const showHiddenSendingRef = useRef(false)
+  const [hiddenSendingCount, setHiddenSendingCount] = useState(0)
   const [intakeLeads, setIntakeLeads] = useState([])
   const [intakeView, setIntakeView] = useState(null)
   // Página atual de "Clientes contactados" (paginada no servidor).
@@ -4664,6 +4668,8 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
       .is('deleted_at', null)
       .in('status', SENDING_LIST_STATUSES)
       .is('email_contacts_at', null) // leads já movidos para Contatos do CRM (e-mail) saem desta lista
+    // Leads ocultados manualmente saem da lista (e aparecem só em "Ver ocultos").
+    query = showHiddenSendingRef.current ? query.not('sending_hidden_at', 'is', null) : query.is('sending_hidden_at', null)
     // Leads com falha de envio não resolvida não aparecem como aptos (mesma regra de antes, agora no servidor).
     if (excludedIds.length) query = query.not('id', 'in', `(${excludedIds.join(',')})`)
     return query
@@ -4717,6 +4723,14 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
         found.push(...(data || []).filter(item => String(item.phone || '').replace(/\D/g, '')))
       }
       if (!active) return
+      // Quem foi escolhido de propósito na Lista de clientes volta a aparecer, mesmo se estava oculto.
+      if (found.length) {
+        await supabase.from('leads').update({ sending_hidden_at: null })
+          .eq('organization_id', organization.id)
+          .in('id', found.map(item => item.id))
+          .not('sending_hidden_at', 'is', null)
+        loadData()
+      }
       if (found.length) setSelected(previous => withSelection(previous, found, true))
       const ignored = pre.ids.length - found.length
       setMessage(found.length
@@ -4860,6 +4874,17 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
     }
     if (seq !== loadSeqRef.current) return
     setContactedLastSent(lastSentMap)
+    {
+      const { count: hiddenCount } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organization.id)
+        .is('deleted_at', null)
+        .in('status', SENDING_LIST_STATUSES)
+        .is('email_contacts_at', null)
+        .not('sending_hidden_at', 'is', null)
+      if (seq === loadSeqRef.current) setHiddenSendingCount(hiddenCount || 0)
+    }
 
     excludedLeadIdsRef.current = excludedIds
     pagesRef.current = { sending: leadResult.page, contacted: contactedResult.page }
@@ -5189,6 +5214,40 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
     setSelected(previous => withSelection(previous, ids.map(id => ({ id })), false))
     setLoading(false)
     if (onOpenEmailProspecting) onOpenEmailProspecting()
+  }
+
+  // Ocultar / restaurar leads da lista de envio. Só muda a exibição: o lead segue na Lista de clientes e no Kanban.
+  async function setSendingHidden(items, hide) {
+    const picked = items.filter(lead => lead?.id && lead.status !== 'queued' && !queuedLeadIds.has(lead.id))
+    if (!picked.length || loading) return
+    setLoading(true); setMessage('')
+    const { error } = await supabase
+      .from('leads')
+      .update({ sending_hidden_at: hide ? new Date().toISOString() : null })
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .in('id', picked.map(lead => lead.id))
+    if (error) {
+      setMessage(error.message || 'Não foi possível atualizar os leads.')
+    } else {
+      setMessage(hide
+        ? `${picked.length} lead(s) ocultado(s) desta lista. Eles continuam na Lista de clientes e podem ser restaurados em "Ver ocultos".`
+        : `${picked.length} lead(s) restaurado(s) na lista de envio.`)
+      setSelected(previous => withSelection(previous, picked, false))
+      await loadData()
+    }
+    setLoading(false)
+  }
+
+  function toggleHiddenSendingView() {
+    const next = !showHiddenSendingRef.current
+    showHiddenSendingRef.current = next
+    setShowHiddenSending(next)
+    pagesRef.current = { ...pagesRef.current, sending: 1 }
+    setSendingPage(1)
+    setSelected(new Map())
+    setMessage('')
+    loadData()
   }
 
   async function discardSelected() {
@@ -6101,6 +6160,9 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
           loading={loading}
         />
         <div className="sending-bulk-actions-v52">
+          <button type="button" className="hide-link" onClick={() => setSendingHidden([...selected.values()], !showHiddenSending)} disabled={!selected.size || loading}>
+            {showHiddenSending ? 'Restaurar selecionados' : 'Ocultar selecionados'}
+          </button>
           <button type="button" className="secondary danger inline-btn" onClick={discardSelected} disabled={!selected.size || loading}>
             <Trash2 size={16}/>Excluir selecionados
           </button>
@@ -6175,9 +6237,17 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
         </section>
       )}
 
+      {(hiddenSendingCount > 0 || showHiddenSending) && (
+        <p className="hide-list-note">
+          {showHiddenSending
+            ? <>Mostrando os leads ocultados desta lista. <button type="button" className="hide-link" onClick={toggleHiddenSendingView}>Voltar à lista de envio</button></>
+            : <button type="button" className="hide-link" onClick={toggleHiddenSendingView}>Ver ocultos ({hiddenSendingCount})</button>}
+        </p>
+      )}
+
       <section className="sending-list">
         {sendingLeads.length === 0 ? (
-          <article className="panel empty-state"><Send size={30}/><h2>Nenhum lead disponível para envio</h2></article>
+          <article className="panel empty-state"><Send size={30}/><h2>{showHiddenSending ? 'Nenhum lead oculto' : 'Nenhum lead disponível para envio'}</h2></article>
         ) : sendingLeads.map(lead => {
           const hasPhone = Boolean(normalizeWhatsAppNumber(lead.phone))
           const hasTemplate = lead.send_template_id
@@ -6189,7 +6259,11 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
           return (
             <article className="panel sending-row" key={lead.id}>
               <input type="checkbox" checked={selected.has(lead.id)} onChange={event => toggleLead(lead, event.target.checked)} disabled={!canSelect} aria-label={`Selecionar ${lead.business_name}`} />
-              <div><strong>{lead.business_name}</strong><span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'}</span></div>
+              <div>
+                <strong>{lead.business_name}</strong>
+                <span>{lead.campaigns?.name || lead.target_segments?.name || 'Sem campanha'}</span>
+                {!isQueued && <button type="button" className="hide-link" onClick={() => setSendingHidden([lead], !showHiddenSending)} disabled={loading}>{showHiddenSending ? 'restaurar' : 'ocultar'}</button>}
+              </div>
               <span>{lead.city || '—'}{lead.state ? `/${lead.state}` : ''}</span>
               <span>
                 {lead.phone || 'Sem telefone'}

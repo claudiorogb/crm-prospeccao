@@ -168,10 +168,10 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
           <section className="panel goals-card">
             <h2>Previsão de vendas <small className="muted">(estimativa, negócios abertos hoje)</small></h2>
             <p><strong>{money(fc.total)}</strong> previstos • {money(fc.openTotal)} em negócios abertos ({fc.count})</p>
-            <table className="goals-table"><thead><tr><th>Etapa</th><th>Negócios</th><th>Valor em aberto</th><th>Chance</th><th>Previsto</th></tr></thead>
+            <div className="goals-table-scroll"><table className="goals-table"><thead><tr><th>Etapa</th><th>Negócios</th><th>Valor em aberto</th><th>Chance</th><th>Previsto</th></tr></thead>
               <tbody>{fc.byStage.map(r => <tr key={r.stage}><td>{r.label}</td><td>{r.count}</td><td>{money(r.open)}</td>
                 <td><span className="goals-pct">{canEdit ? <input type="number" min="0" max="100" style={{ width: 64 }} aria-label={`Chance de fechar em ${r.label}`} value={probDraft ? probDraft[r.stage] : r.probability} onChange={e => setProbDraft({ ...(probDraft || probs), [r.stage]: e.target.value })} /> : null}{canEdit ? '%' : `${r.probability}%`}</span></td>
-                <td>{money(r.weighted)}</td></tr>)}</tbody></table>
+                <td>{money(r.weighted)}</td></tr>)}</tbody></table></div>
             {canEdit && <p><button type="button" className="secondary mini" disabled={!probDraft} onClick={saveProbs}>Salvar probabilidades</button></p>}
             {(canEdit ? fc.sellers : fc.sellers.filter(x => x.user_id === userId)).map(x => <div className="goals-row" key={x.user_id || 'none'}><strong>{x.name}</strong><span>{x.count} negócio(s) • {money(x.weighted)} previstos</span></div>)}
             <p className="muted goals-note">Estimativa: valor da proposta (ou renegociado) × chance da etapa. Negócios sem valor de proposta contam como R$ 0. As chances são definidas pela sua empresa.</p>
@@ -185,8 +185,8 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
 
           <section className="panel goals-card">
             <h2>Resposta por campanha <small className="muted">(leads captados no período)</small></h2>
-            <table className="goals-table"><thead><tr><th>Campanha</th><th>Leads</th><th>Contatados</th><th>Responderam</th><th>Taxa</th><th>Ganhos</th></tr></thead>
-              <tbody>{campaigns.map(c => <tr key={c.name}><td>{c.name}</td><td>{c.total}</td><td>{c.contacted}</td><td>{c.replied}</td><td>{c.replyRate === null ? '—' : `${c.replyRate}%`}</td><td>{c.won}</td></tr>)}</tbody></table>
+            <div className="goals-table-scroll"><table className="goals-table"><thead><tr><th>Campanha</th><th>Leads</th><th>Contatados</th><th>Responderam</th><th>Taxa</th><th>Ganhos</th></tr></thead>
+              <tbody>{campaigns.map(c => <tr key={c.name}><td>{c.name}</td><td>{c.total}</td><td>{c.contacted}</td><td>{c.replied}</td><td>{c.replyRate === null ? '—' : `${c.replyRate}%`}</td><td>{c.won}</td></tr>)}</tbody></table></div>
           </section>
 
           <section className="panel goals-card">

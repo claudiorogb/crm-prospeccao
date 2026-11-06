@@ -24,3 +24,10 @@
 
 /* Chance (%) sempre na mesma linha do campo */
 .goals-pct{white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+
+/* Tabelas de metas/previsão: no celular ficam numa caixa com rolagem horizontal (nada espremido) */
+.goals-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:700px){
+  .goals-table-scroll .goals-table{min-width:560px}
+  .goals-table-scroll .goals-table th,.goals-table-scroll .goals-table td{white-space:nowrap}
+}

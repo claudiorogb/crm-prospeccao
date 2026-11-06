@@ -59,15 +59,18 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
   const [probDraft, setProbDraft] = useState(null)
 
   const load = useCallback(async () => {
-    const [leadRes, memberRes, goalRes, probRes] = await Promise.all([
+    const [leadRes, memberRes, goalRes, probRes, contactRes] = await Promise.all([
       loadLeads(organization.id),
       supabase.from('organization_members').select('user_id,display_name').eq('organization_id', organization.id).eq('is_active', true).is('deleted_at', null),
       supabase.from('sales_goals').select('id,user_id,period,target_won_count,target_value').eq('organization_id', organization.id),
-      supabase.from('forecast_settings').select('probabilities').eq('organization_id', organization.id).maybeSingle()
+      supabase.from('forecast_settings').select('probabilities').eq('organization_id', organization.id).maybeSingle(),
+      // Leads que já receberam algum contato (WhatsApp, e-mail de campanha, e-mail marketing). Se falhar, usa só a etapa do lead.
+      supabase.rpc('leads_with_contact', { p_organization_id: organization.id })
     ])
     const err = leadRes.error || memberRes.error || goalRes.error || probRes.error
     if (err) { setMessage(err.message || 'Não foi possível carregar.'); return }
-    setMessage(''); setLeads(leadRes.rows); setMembers(memberRes.data || []); setGoals(goalRes.data || []); setProbs(normalizeProbabilities(probRes.data?.probabilities)); setLoaded(true)
+    const contacted = new Set((contactRes.error ? [] : (contactRes.data || [])).map(row => row.lead_id))
+    setMessage(''); setLeads(leadRes.rows.map(l => (contacted.has(l.id) ? { ...l, had_contact: true } : l))); setMembers(memberRes.data || []); setGoals(goalRes.data || []); setProbs(normalizeProbabilities(probRes.data?.probabilities)); setLoaded(true)
   }, [organization.id])
 
   useEffect(() => { setLoaded(false); load() }, [load])

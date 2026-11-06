@@ -22,6 +22,12 @@ async function loadLeads(organizationId) {
   return { error: null, rows }
 }
 
+const maskBRL = raw => {
+  const digits = String(raw ?? '').replace(/\D/g, '').replace(/^0+/, '')
+  if (!digits) return ''
+  return (Number(digits) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+const goalValueText = v => (v === null || v === undefined || v === '') ? '' : `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const monthLabel = m => new Date(`${m}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 function periodLabel(type, list) {
@@ -121,7 +127,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
     return (
       <span className="goal-edit">
         <input type="number" min="0" placeholder="Qtd." value={d.count ?? goal?.target_won_count ?? ''} onChange={e => set({ count: e.target.value })} aria-label="Meta de negócios ganhos" />
-        <input type="text" inputMode="decimal" placeholder="Valor R$" value={d.value ?? goal?.target_value ?? ''} onChange={e => set({ value: e.target.value })} aria-label="Meta de valor" />
+        <input type="text" inputMode="numeric" placeholder="R$ 0,00" value={d.value !== undefined ? (d.value ? `R$ ${d.value}` : '') : goalValueText(goal?.target_value)} onChange={e => set({ value: maskBRL(e.target.value) })} aria-label="Meta de valor" />
         <button type="button" className="secondary mini" onClick={() => saveGoal(k, uid)} disabled={!drafts[k]}>Salvar</button>
       </span>
     )

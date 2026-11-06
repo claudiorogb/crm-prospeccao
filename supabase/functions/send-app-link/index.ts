@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 // Envia por e-mail o link do AXIVA CRM (app instalável no celular).
 // Somente administrador do sistema ativo pode usar; o destinatário é o e-mail digitado na Administração.
-const APP_URL = "https://crm.axiva.com.br/";
+const APP_URL = "https://crm.axiva.com.br/instalar/";
 const FROM = "AXIVA CRM <no-reply@auth.axiva.com.br>";
 const ALLOWED_ORIGINS = new Set(["https://crm.axiva.com.br", "https://crm-prospeccao-app.vercel.app"]);
 const PREVIEW_ORIGIN = /^https:\/\/crm-prospeccao-[a-z0-9]+-claudiorogb-3509\.vercel\.app$/;
@@ -27,12 +27,10 @@ function json(req: Request, data: unknown, status = 200) {
 
 function buildHtml() {
   return `<!doctype html><html lang="pt-BR"><body style="margin:0;background:#F8FAFC;font-family:Arial,Helvetica,sans-serif;color:#0B192C;line-height:1.55">
-<div style="max-width:560px;margin:32px auto;padding:32px;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px">
-<h2 style="margin:0 0 12px;font-size:22px">Instale o AXIVA CRM no seu celular</h2>
-<p style="margin:0 0 20px;color:#475569">Acesse o link abaixo pelo celular, entre com o seu e-mail e senha e siga o passo a passo para colocar o app na tela inicial. Não precisa de loja de aplicativos.</p>
-<p style="margin:0 0 24px"><a href="${APP_URL}" style="display:inline-block;background:#00A88F;color:#0B192C;text-decoration:none;font-weight:700;padding:14px 24px;border-radius:12px">Abrir o AXIVA CRM</a></p>
-<p style="margin:0 0 6px"><b>iPhone (Safari):</b> toque em Compartilhar e depois em “Adicionar à Tela de Início”.</p>
-<p style="margin:0 0 20px"><b>Android (Chrome):</b> toque no menu do navegador e em “Instalar app” (ou, dentro do CRM, em “Instalar CRM no celular”).</p>
+<div style="max-width:560px;margin:32px auto;padding:32px;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;text-align:center">
+<h2 style="margin:0 0 12px;font-size:22px">AXIVA CRM no seu celular</h2>
+<p style="margin:0 0 24px;color:#475569">Toque no botão abaixo, pelo celular, para instalar o app. Depois de instalado, é só abrir e entrar com o seu e-mail e senha.</p>
+<p style="margin:0 0 24px"><a href="${APP_URL}" style="display:inline-block;background:#00A88F;color:#0B192C;text-decoration:none;font-weight:700;padding:16px 32px;border-radius:12px;font-size:17px">Instalar o app</a></p>
 <p style="margin:0;color:#64748b;font-size:13px">Se o botão não funcionar, copie e cole este endereço no navegador do celular:<br>${APP_URL}</p>
 </div></body></html>`;
 }
@@ -69,7 +67,7 @@ Deno.serve(async (req) => {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: FROM, to: [email], subject: "Instale o AXIVA CRM no seu celular", html: buildHtml() }),
+      body: JSON.stringify({ from: FROM, to: [email], subject: "Instale o app do AXIVA CRM", html: buildHtml() }),
     });
     if (!response.ok) {
       console.error("send-app-link: falha no Resend", response.status);

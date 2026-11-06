@@ -2242,8 +2242,10 @@ select:focus {
   .dashboard-commercial-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
-  .workspace-tabs { overflow-x: auto; flex-wrap: nowrap; }
-  .workspace-tabs button { white-space: nowrap; }
+  .workspace-tabs { overflow-x: auto; flex-wrap: nowrap; align-items: center; -webkit-overflow-scrolling: touch; }
+  .workspace-tabs > button,
+  .workspace-tabs > a { flex: 0 0 auto; white-space: nowrap; }
+  .workspace-tabs a.workspace-tab-link { margin-left: 0; }
   .dashboard-commercial-grid { grid-template-columns: 1fr; }
   .sales-kanban { grid-template-columns: repeat(9, minmax(260px, 1fr)); }
   .kanban-column { width: 260px; }

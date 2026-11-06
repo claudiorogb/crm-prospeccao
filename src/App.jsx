@@ -6,7 +6,7 @@ import {
   Pause, Play, RefreshCw, XCircle, CheckCircle2, Activity, UserPlus,
   Save, ChevronDown, Menu, X, CalendarDays, Clock, UserRound, Bot
 } from 'lucide-react'
-import { Link2, Mail } from 'lucide-react'
+import { Link2, Mail, Smartphone } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import ImportLists from './import-lists'
 
@@ -59,6 +59,7 @@ import { commitScreen, installScreenPopHandler } from './back-navigation'
 import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import AdminTutorials from './admin-tutorials'
+import AdminSendAppLink from './admin-send-app-link'
 import TutorialsPage from './tutorials-page'
 import TrialExpiredScreen from './trial-expired-screen'
 import BillingReturnScreen from './billing-return-screen'
@@ -9897,6 +9898,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
     ['clients', 'Organizações', Building2],
     ['plans', 'Planos', SlidersHorizontal],
     ['tutorials', 'Tutoriais', Play],
+    ['app', 'App no celular', Smartphone],
     ['users', 'Usuários', Users],
     ['catalog', 'Catálogo CRM', Tags],
     ['audit', 'Auditoria', History]
@@ -9942,6 +9944,7 @@ function Administration({ organizations, reloadOrganizations, userEmail, userId 
           {section === 'ai' && <AdminAiLimits reloadOrganizations={reloadOrganizations} />}
           {section === 'plans' && <AdminUserPlans />}
           {section === 'tutorials' && <AdminTutorials />}
+          {section === 'app' && <AdminSendAppLink />}
           {section === 'audit' && <AdminAudit organizations={productionOrganizations} userEmail={userEmail} />}
         </div>
       </div>

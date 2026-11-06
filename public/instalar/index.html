@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Instalar AXIVA CRM</title>
+<meta name="robots" content="noindex">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0B192C">
+<link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
+<link rel="icon" href="/pwa/icon-192.png">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#0B192C;color:#F8FAFC;font-family:Inter,Arial,Helvetica,sans-serif;line-height:1.5;text-align:center}
+main{width:min(380px,100%)}
+img{width:96px;height:96px;border-radius:22px;margin-bottom:20px}
+h1{margin:0 0 10px;font-size:24px}
+p{margin:0 0 24px;color:#cbd5e1;font-size:16px}
+button,a.btn{display:block;width:100%;border:0;border-radius:14px;background:#00A88F;color:#0B192C;font:inherit;font-weight:700;font-size:18px;padding:16px;cursor:pointer;text-decoration:none}
+.hint{margin:18px 0 0;font-size:14px;color:#94a3b8}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+  <img src="/pwa/icon-192.png" alt="AXIVA CRM" width="96" height="96">
+  <h1>AXIVA CRM</h1>
+  <div id="stateInstall">
+    <p>Toque no botão para instalar o app no seu celular. Depois de instalado, é só abrir e entrar com seu e-mail e senha.</p>
+    <button type="button" id="installBtn">Instalar app</button>
+    <p class="hint" id="iosHint" hidden>No iPhone, a Apple pede que a instalação seja feita pelo Safari: o botão acima mostra o passo a passo de dois toques.</p>
+  </div>
+  <div id="stateInstalled" class="hidden">
+    <p>O app já está instalado neste aparelho.</p>
+    <a class="btn" href="/">Abrir o app</a>
+  </div>
+  <div id="stateDesktop" class="hidden">
+    <p>Abra este link no celular para instalar o app.</p>
+    <a class="btn" href="/">Entrar pelo computador</a>
+  </div>
+</main>
+<script src="/pwa/pwa-install.js" data-app-name="AXIVA CRM" data-sw="/sw.js" data-scope="/" defer></script>
+<script>
+window.addEventListener('load', function () {
+  var ua = navigator.userAgent || ''
+  var mobile = /iPhone|iPad|iPod|Android/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  var installed = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true
+  function show(id) { ['stateInstall', 'stateInstalled', 'stateDesktop'].forEach(function (s) { document.getElementById(s).classList.toggle('hidden', s !== id) }) }
+  if (installed) show('stateInstalled')
+  else if (!mobile) show('stateDesktop')
+  else {
+    show('stateInstall')
+    if (/iPhone|iPad|iPod/.test(ua) || navigator.platform === 'MacIntel') document.getElementById('iosHint').hidden = false
+  }
+  document.getElementById('installBtn').addEventListener('click', function () { if (window.axivaPwa) window.axivaPwa.install() })
+  window.addEventListener('appinstalled', function () { show('stateInstalled') })
+})
+</script>
+</body>
+</html>

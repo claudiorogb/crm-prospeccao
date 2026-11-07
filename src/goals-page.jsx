@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { brazilToday } from './today-page.jsx'
 import { lossReasonLabel } from './loss-reasons.js'
-import { monthStart, periodMonths, PERIOD_TYPES, bySeller, companyProgress, byCampaign, funnelCounts, lossBreakdown, avgDaysToWin, forecast, normalizeProbabilities, FORECAST_STAGES } from './reports-rules.js'
+import { mergeGoalDraft, monthStart, periodMonths, PERIOD_TYPES, bySeller, companyProgress, byCampaign, funnelCounts, lossBreakdown, avgDaysToWin, forecast, normalizeProbabilities, FORECAST_STAGES } from './reports-rules.js'
 import './goals-page.css'
 
 const FIELDS = 'id,status,campaign_id,assigned_to,contract_value,contract_signed_at,status_changed_at,created_at,loss_reason,proposal_value,renegotiated_value,campaigns(name),target_segments(name)'
@@ -100,10 +100,8 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
 
   async function saveGoal(key, uid) {
     const draft = drafts[key] || {}
-    const count = draft.count === '' || draft.count === undefined ? null : Math.max(0, parseInt(draft.count, 10) || 0)
-    const value = draft.value === '' || draft.value === undefined ? null : Math.max(0, Number(String(draft.value).replace(/\./g, '').replace(',', '.')) || 0)
     const existing = goals.find(g => (g.user_id || null) === (uid || null) && g.period === month)
-    const payload = { target_won_count: count, target_value: value, updated_at: new Date().toISOString() }
+    const payload = { ...mergeGoalDraft(draft, existing), updated_at: new Date().toISOString() }
     const q = existing
       ? supabase.from('sales_goals').update(payload).eq('id', existing.id).eq('organization_id', organization.id)
       : supabase.from('sales_goals').insert({ ...payload, organization_id: organization.id, user_id: uid || null, period: month })

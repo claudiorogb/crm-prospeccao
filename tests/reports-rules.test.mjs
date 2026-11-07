@@ -74,3 +74,15 @@ test('contatado considera quem recebeu qualquer contato (WhatsApp, e-mail) ou es
   const leads = [{ status: 'new', had_contact: true }, { status: 'captured_pending' }, { status: 'contacted_pending' }]
   assert.equal(funnelCounts(leads).find(([label]) => label === 'Contatados')[1], 2)
 })
+
+import { mergeGoalDraft } from '../src/reports-rules.js'
+test('salvar só a quantidade mantém o valor da meta (e vice-versa)', () => {
+  const existing = { target_won_count: 10, target_value: '50000.00' }
+  assert.deepEqual(mergeGoalDraft({ count: '12' }, existing), { target_won_count: 12, target_value: 50000 })
+  assert.deepEqual(mergeGoalDraft({ value: '60.000,00' }, existing), { target_won_count: 10, target_value: 60000 })
+  assert.deepEqual(mergeGoalDraft({ count: '12', value: '60.000,00' }, existing), { target_won_count: 12, target_value: 60000 })
+})
+test('meta nova com um campo só deixa o outro vazio, e apagar o texto limpa o campo', () => {
+  assert.deepEqual(mergeGoalDraft({ count: '5' }, undefined), { target_won_count: 5, target_value: null })
+  assert.deepEqual(mergeGoalDraft({ count: '' }, { target_won_count: 10, target_value: 100 }), { target_won_count: null, target_value: 100 })
+})

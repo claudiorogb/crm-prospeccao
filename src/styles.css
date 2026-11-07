@@ -4671,3 +4671,13 @@ button:not(:disabled):active,
   .license-table select { width: 100%; min-width: 0 !important; }
   .license-table .license-actions button { width: 100%; justify-content: center; }
 }
+
+/* Menu lateral: barra de rolagem bem fina (não aperta os ícones no menu fechado) */
+.sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, .45) transparent;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, .45); border-radius: 4px; }
+.sidebar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, .75); }

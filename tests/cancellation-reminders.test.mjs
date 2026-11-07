@@ -35,10 +35,9 @@ test('e-mails trazem a data, dizem que os dados ficam e não prometem reativaç�
   assert.throws(() => buildReminderMail('x', '2026-11-14'))
 })
 
-import { noticeText, hideKey } from '../src/cancellation-notice.js'
+import { noticeText } from '../src/cancellation-notice.js'
 test('texto da faixa: último dia, amanhã e dias restantes', () => {
   assert.match(noticeText(0, '2026-11-07'), /hoje é o último dia.*07\/11\/2026/)
   assert.match(noticeText(1, '2026-11-08'), /termina amanhã.*08\/11\/2026/)
   assert.match(noticeText(7, '2026-11-14'), /até 14\/11\/2026 \(faltam 7 dias\)/)
-  assert.notEqual(hideKey('u1', '2026-11-07'), hideKey('u1', '2026-11-08'))
 })

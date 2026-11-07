@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
-import { brazilDay, hideKey, noticeText } from './cancellation-notice.js'
+import { noticeText } from './cancellation-notice.js'
 import './cancellation-banner.css'
 
-// Faixa fina no topo enquanto o plano está cancelado e o acesso ainda vale. Sem popup.
-// Pode ser ocultada por hoje (volta amanhã, até o fim do acesso).
+// Faixa fina no topo enquanto o plano está cancelado e o acesso ainda vale. Sem popup e sem botão de fechar:
+// fica visível durante todo o período restante.
 export default function CancellationBanner() {
   const [notice, setNotice] = useState(null)
-  const [hidden, setHidden] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -19,10 +18,7 @@ export default function CancellationBanner() {
       const { data, error } = await supabase.rpc('get_my_cancellation_notice')
       if (!active) return
       if (error || !data?.access_until) { setNotice(null); return }
-      let dismissed = false
-      try { dismissed = localStorage.getItem(hideKey(userId, brazilDay())) === '1' } catch { /* sem localStorage: mostra */ }
-      setNotice({ userId, accessUntil: data.access_until, daysLeft: data.days_left })
-      setHidden(dismissed)
+      setNotice({ accessUntil: data.access_until, daysLeft: data.days_left })
     }
 
     load()
@@ -30,17 +26,11 @@ export default function CancellationBanner() {
     return () => { active = false; listener?.subscription?.unsubscribe() }
   }, [])
 
-  if (!notice || hidden) return null
-
-  function hideToday() {
-    try { localStorage.setItem(hideKey(notice.userId, brazilDay()), '1') } catch { /* ignora */ }
-    setHidden(true)
-  }
+  if (!notice) return null
 
   return (
     <div className="cancel-notice" role="status">
       <span>{noticeText(notice.daysLeft, notice.accessUntil)}</span>
-      <button type="button" onClick={hideToday} aria-label="Ocultar aviso por hoje" title="Ocultar por hoje">×</button>
     </div>
   )
 }

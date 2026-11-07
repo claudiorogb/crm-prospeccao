@@ -11,9 +11,3 @@ export function noticeText(daysLeft, accessUntil) {
   if (n === 1) return `Plano cancelado — o acesso completo termina amanhã (${date}).`
   return `Plano cancelado — acesso completo até ${date} (faltam ${n} dias).`
 }
-
-export const hideKey = (userId, today) => `axiva_cancel_notice_hidden_v1:${userId}:${today}`
-
-export function brazilDay(date = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
-}

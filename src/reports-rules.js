@@ -141,3 +141,17 @@ export function forecast(leads, probabilities, members) {
   if (rest.length) sellers.push({ user_id: null, name: 'Sem vendedor', count: rest.length, weighted: sum(rest) })
   return { total: sum(open), openTotal: open.reduce((s, l) => s + openValue(l), 0), count: open.length, byStage, sellers }
 }
+
+// Monta a meta a gravar. Quantidade e valor se complementam: o campo que não foi mexido mantém o que já estava salvo;
+// só vira vazio quando a pessoa apagou o texto dele de propósito (string vazia).
+export function mergeGoalDraft(draft, existing) {
+  const keep = v => (v === null || v === undefined ? null : Number(v))
+  const d = draft || {}
+  const count = d.count === undefined
+    ? keep(existing?.target_won_count)
+    : (d.count === '' ? null : Math.max(0, parseInt(d.count, 10) || 0))
+  const value = d.value === undefined
+    ? keep(existing?.target_value)
+    : (d.value === '' ? null : Math.max(0, Number(String(d.value).replace(/\./g, '').replace(',', '.')) || 0))
+  return { target_won_count: count, target_value: value }
+}

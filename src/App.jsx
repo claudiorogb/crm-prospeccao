@@ -60,6 +60,7 @@ import AdminAiLimits from './admin-ai-limits'
 import AdminUserPlans from './admin-user-plans'
 import AdminTutorials from './admin-tutorials'
 import AdminSendAppLink from './admin-send-app-link'
+import { CLIENT_PERIODS, clientPeriodRange, salesInRange, salesMetrics } from './client-period.js'
 import TutorialsPage from './tutorials-page'
 import TrialExpiredScreen from './trial-expired-screen'
 import BillingReturnScreen from './billing-return-screen'
@@ -3787,6 +3788,12 @@ function Clients({ organization, userEmail, userId, onOpenImport }) {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [whatsappClientOpen, setWhatsappClientOpen] = useState(false)
+  const [clientPeriod, setClientPeriod] = useState('all')
+  const [clientPeriodStart, setClientPeriodStart] = useState('')
+  const [clientPeriodEnd, setClientPeriodEnd] = useState('')
+
+  // Ao abrir outro cliente (ou voltar à lista), o período volta para "Todo o histórico".
+  useEffect(() => { setClientPeriod('all'); setClientPeriodStart(''); setClientPeriodEnd('') }, [selectedId])
   const [clientForm, setClientForm] = useState({})
   const [interactionForm, setInteractionForm] = useState({
     type: 'whatsapp',
@@ -4143,7 +4150,11 @@ function Clients({ organization, userEmail, userId, onOpenImport }) {
   if (selectedClient) {
     const clientSales = salesByLead.get(selectedClient.id) || []
     const clientActivities = activitiesByLead.get(selectedClient.id) || []
-    const metrics = clientMetrics(selectedClient.id)
+    const periodRange = clientPeriodRange(clientPeriod, currentBrazilDate(), clientPeriodStart, clientPeriodEnd)
+    const periodSales = salesInRange(clientSales, periodRange)
+    const metrics = salesMetrics(periodSales)
+    const inPeriod = clientPeriod !== 'all'
+    const periodDate = iso => new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR')
 
     return (
       <>
@@ -4165,11 +4176,47 @@ function Clients({ organization, userEmail, userId, onOpenImport }) {
 
         {message && <div className="notice">{message}</div>}
 
+        <section className="panel sales-period-panel-v62">
+          <div className="sales-period-main-v62 sales-filters-v67">
+            <label>
+              Período das compras
+              <select value={clientPeriod} onChange={e => setClientPeriod(e.target.value)}>
+                {CLIENT_PERIODS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+              </select>
+            </label>
+
+            {clientPeriod === 'custom' && (
+              <div className="sales-custom-range-v62">
+                <label>
+                  De
+                  <input type="date" value={clientPeriodStart} onChange={e => setClientPeriodStart(e.target.value)} />
+                </label>
+                <span className="sales-range-separator-v62">até</span>
+                <label>
+                  Até
+                  <input type="date" value={clientPeriodEnd} onChange={e => setClientPeriodEnd(e.target.value)} />
+                </label>
+              </div>
+            )}
+          </div>
+
+          <div className="sales-period-current-v62">
+            <span>{CLIENT_PERIODS.find(([id]) => id === clientPeriod)?.[1]}</span>
+            <strong>
+              {periodRange.error
+                ? periodRange.error
+                : periodRange.start && periodRange.end
+                  ? `${periodDate(periodRange.start)} até ${periodDate(periodRange.end)}`
+                  : 'Todas as compras registradas'}
+            </strong>
+          </div>
+        </section>
+
         <section className="client-metrics-grid">
-          <StatCard label="Compras" value={metrics.count} detail="registros no histórico" />
-          <StatCard label="Total comprado" value={formatCurrency(metrics.total)} detail="soma das vendas registradas" />
+          <StatCard label="Compras" value={metrics.count} detail={inPeriod ? 'registros no período' : 'registros no histórico'} />
+          <StatCard label="Total comprado" value={formatCurrency(metrics.total)} detail={inPeriod ? 'soma das compras no período' : 'soma das vendas registradas'} />
           <StatCard label="Ticket médio" value={formatCurrency(metrics.average)} detail="média por compra" />
-          <StatCard label="Última compra" value={metrics.lastSale?.sale_date ? new Date(`${metrics.lastSale.sale_date}T12:00:00`).toLocaleDateString('pt-BR') : '—'} detail="data mais recente" />
+          <StatCard label="Última compra" value={metrics.lastSale?.sale_date ? new Date(`${metrics.lastSale.sale_date}T12:00:00`).toLocaleDateString('pt-BR') : '—'} detail={inPeriod ? 'mais recente no período' : 'data mais recente'} />
         </section>
 
         <section className="panel client-section">
@@ -4288,7 +4335,7 @@ function Clients({ organization, userEmail, userId, onOpenImport }) {
             </form>
 
             <div className="sales-history">
-              {clientSales.length === 0 ? <p className="muted">Nenhuma venda registrada.</p> : clientSales.map(sale => (
+              {periodSales.length === 0 ? <p className="muted">{inPeriod ? 'Nenhuma compra neste período.' : 'Nenhuma venda registrada.'}</p> : periodSales.map(sale => (
                 <article className="sale-row" key={sale.id}>
                   <div>
                     <strong>{formatCurrency(sale.amount)}</strong>

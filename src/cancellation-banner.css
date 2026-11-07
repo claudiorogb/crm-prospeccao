@@ -1,0 +1,4 @@
+/* Faixa discreta de plano cancelado: uma linha fina, sem fixar na tela e sem cobrir nada. */
+.cancel-notice{display:flex;justify-content:center;align-items:center;gap:6px;padding:3px 12px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:12.5px;line-height:1.4;text-align:center}
+.cancel-notice button{border:0;background:transparent;color:#94a3b8;font-size:16px;line-height:1;padding:0 4px;cursor:pointer}
+.cancel-notice button:hover{color:#475569}

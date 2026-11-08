@@ -3863,6 +3863,25 @@ button:not(:disabled):active,
 .lead-edit-head-v72 h2{margin:4px 0 0}
 @media(max-width:700px){.lead-edit-overlay-v72{padding:8px}.lead-edit-modal-v72{width:100%;max-height:96vh}}
 
+/* V109 - seleção de vendedor nos envios ao Kanban. */
+.seller-assignment-modal{width:min(480px,96vw)}
+.kanban-seller-edit-button{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.kanban-seller-edit-button:hover{text-decoration:underline;text-underline-offset:2px}
+.kanban-seller-edit-button:focus-visible{outline:2px solid rgba(15,118,110,.35);outline-offset:3px;border-radius:4px}
+.import-list-kanban-action{white-space:nowrap}
+
+
 .manual-recipient-panel-v73{display:grid;gap:14px}
 .manual-recipient-form-v73{
   display:grid;

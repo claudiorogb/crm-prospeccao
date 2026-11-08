@@ -207,8 +207,8 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
 
           <section className="panel goals-card">
             <h2>Resposta por campanha <small className="muted">(leads captados no período)</small></h2>
-            <div className="goals-table-scroll"><table className="goals-table"><thead><tr><th>Campanha</th><th>Leads</th><th>Contatados</th><th>Responderam</th><th>Taxa</th><th>Ganhos</th></tr></thead>
-              <tbody>{campaigns.map(c => <tr key={c.name}><td>{c.name}</td><td>{c.total}</td><td>{c.contacted}</td><td>{c.replied}</td><td>{c.replyRate === null ? '—' : `${c.replyRate}%`}</td><td>{c.won}</td></tr>)}</tbody></table></div>
+            <div className="goals-table-scroll"><table className="goals-table"><thead><tr><th>Campanha</th><th>Leads</th><th>Contatados</th><th>Responderam</th><th>Ganhos</th></tr></thead>
+              <tbody>{campaigns.map(c => <tr key={c.name}><td>{c.name}</td><td>{c.total}</td><td>{c.contacted}</td><td>{c.replied}</td><td>{c.won}</td></tr>)}</tbody></table></div>
           </section>
 
           <section className="panel goals-card">

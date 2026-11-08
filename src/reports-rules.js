@@ -90,7 +90,7 @@ export function byCampaign(leads) {
     if (l.status === 'won') row.won += 1
     map.set(name, row)
   }
-  return [...map.values()].map(r => ({ ...r, replyRate: r.contacted > 0 ? Math.round((r.replied / r.contacted) * 100) : null })).sort((a, b) => b.total - a.total)
+  return [...map.values()].sort((a, b) => b.total - a.total)
 }
 
 export function funnelCounts(leads) {

@@ -3867,14 +3867,19 @@ button:not(:disabled):active,
 .seller-assignment-modal{width:min(480px,96vw)}
 .kanban-seller-edit-button{
   display:inline-flex;
+  flex:0 1 auto;
   align-items:center;
-  gap:5px;
+  justify-content:flex-end;
+  gap:4px;
+  min-width:0;
   padding:0;
   border:0;
   background:transparent;
-  color:inherit;
+  color:#475569;
   font:inherit;
-  text-align:left;
+  font-size:11px;
+  line-height:1.2;
+  text-align:right;
   cursor:pointer;
 }
 .kanban-seller-edit-button:hover{text-decoration:underline;text-underline-offset:2px}

@@ -291,3 +291,40 @@ test('gestão dos limites da IA exige administrador do sistema no backend', () =
   assert.match(app, /\['ai', 'IA', Bot\]/)
   assert.match(app, /section === 'ai' && <AdminAiLimits/)
 })
+
+
+
+test('perguntas naturais sobre negócios e prioridades acionam leitura do CRM', () => {
+  const normalize = value => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  const matcherFor = (scope, extractionPattern) => {
+    const match = edge.match(extractionPattern)
+    assert.ok(match, 'matcher de ' + scope + ' encontrado')
+    const literal = match[1]
+    const end = literal.lastIndexOf('/')
+    return new RegExp(literal.slice(1, end), literal.slice(end + 1))
+  }
+
+  const pipelineMatcher = matcherFor(
+    'lead_summary',
+    /if \((\/[^;]+?\/)\.test\(value\)\)\s*\{\s*scopes\.add\("lead_summary"\);/s,
+  )
+  const salesMatcher = matcherFor(
+    'sales',
+    /if \((\/[^;]+?\/)\.test\(value\)\) scopes\.add\("sales"\);/s,
+  )
+  const overdueMatcher = matcherFor(
+    'overdue_returns',
+    /if \((\/[^;]+?\/)\.test\(value\)\) scopes\.add\("overdue_returns"\);/s,
+  )
+  const question = normalize('como estão meus negócios hoje? o que eu tenho que priorizar?')
+
+  assert.match(question, pipelineMatcher)
+  assert.match(question, salesMatcher)
+  assert.match(question, overdueMatcher)
+  assert.match(normalize('quais oportunidades devo priorizar?'), pipelineMatcher)
+  assert.match(normalize('o que eu priorizo hoje?'), overdueMatcher)
+})

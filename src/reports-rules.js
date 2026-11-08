@@ -51,11 +51,22 @@ export function progress(leads, goal) {
   return { won, value, pctCount: pct(won, num(goal?.target_won_count)), pctValue: pct(value, num(goal?.target_value)) }
 }
 
-export function bySeller(leads, month, members, goals) {
-  const wonLeads = wonInMonths(leads, month)
+// Busca a meta cadastrada exatamente para a empresa/vendedor e o período selecionado.
+// Metas trimestrais, semestrais e anuais não são calculadas pela soma das metas mensais.
+export function goalForPeriod(goals, months, userId, periodType = 'month') {
+  const period = [].concat(months)[0]
+  return goals.find(g =>
+    (g.user_id || null) === (userId || null) &&
+    g.period === period &&
+    (g.period_type || 'month') === periodType
+  ) || null
+}
+
+export function bySeller(leads, months, members, goals, periodType = 'month') {
+  const wonLeads = wonInMonths(leads, months)
   const rows = members.map(m => {
     const mine = wonLeads.filter(l => l.assigned_to === m.user_id)
-    const goal = sumGoals(goals, month, m.user_id)
+    const goal = goalForPeriod(goals, months, m.user_id, periodType)
     return { user_id: m.user_id, name: m.display_name || 'Usuário', goal, ...progress(mine, goal) }
   })
   const unassigned = wonLeads.filter(l => !l.assigned_to || !members.some(m => m.user_id === l.assigned_to))
@@ -63,9 +74,9 @@ export function bySeller(leads, month, members, goals) {
   return rows
 }
 
-export function companyProgress(leads, month, goals) {
-  const goal = sumGoals(goals, month, null)
-  return { goal, ...progress(wonInMonths(leads, month), goal) }
+export function companyProgress(leads, months, goals, periodType = 'month') {
+  const goal = goalForPeriod(goals, months, null, periodType)
+  return { goal, ...progress(wonInMonths(leads, months), goal) }
 }
 
 export function byCampaign(leads) {

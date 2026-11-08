@@ -6,11 +6,14 @@ export const LOSS_REASONS = [
   ['no_response', 'Parou de responder'],
   ['timing', 'Não é o momento'],
   ['no_need', 'Não tem necessidade'],
-  ['has_crm', 'Já tem CRM de outra empresa'],
   ['other', 'Outro']
 ]
 
-export const LOSS_REASON_LABEL = Object.fromEntries(LOSS_REASONS)
+export const LOSS_REASON_LABEL = {
+  ...Object.fromEntries(LOSS_REASONS),
+  // Mantém a leitura de registros históricos; o motivo não aparece mais nas novas escolhas.
+  has_crm: 'Já tem CRM de outra empresa'
+}
 
 export function lossReasonLabel(code) {
   return LOSS_REASON_LABEL[code] || ''

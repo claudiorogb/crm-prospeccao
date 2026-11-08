@@ -5587,7 +5587,8 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
         p_organization_id: organization.id,
         p_lead_id: intakeSellerLead.id,
         p_target_status: intakeSellerTargetStatus,
-        p_assigned_to: intakeSellerId
+        p_assigned_to: intakeSellerId,
+        p_expected_status: 'captured_pending'
       })
       if (error) throw error
       const targetLabel = intakeSellerTargetStatus === 'contacted' ? 'Contatado' : 'Novo'

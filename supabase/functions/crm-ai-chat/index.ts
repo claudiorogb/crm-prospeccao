@@ -100,7 +100,7 @@ function inferScopes(message: string): Scope[] {
   }
   if (/\b(venda|vendas|vendi|negocio|negocios|faturamento|ticket|receita|contrato|contratos)\b/.test(value)) scopes.add("sales");
   if (/\b(campanha|campanhas|captacao)\b/.test(value)) scopes.add("campaigns");
-  if (/\b(retorno|retornos|priorizar|priorizo|prioridade|prioridades|priorizacao|follow[- ]?up|atrasado|atrasados|proximo contato|proximos contatos)\b/.test(value)) scopes.add("overdue_returns");
+  if (/\b(retorno|retornos|priorizar|priorizo|prioridade|prioridades|priorizacao|follow[- ]?up|atrasado|atrasados|proximo contato|proximos contatos|hoje|agenda|tarefas?|programad[oa]s?)\b/.test(value)) scopes.add("overdue_returns");
   if (/\b(whatsapp|conversa|conversas|nao lida|nao lidas)\b/.test(value)) scopes.add("whatsapp_summary");
 
   if (/\b(resumo|dashboard|indicador|indicadores|desempenho|meus dados)\b/.test(value)) {
@@ -255,18 +255,47 @@ async function authorizedContext(userClient: any, organizationId: string, scopes
   }
 
   if (scopes.includes("overdue_returns")) {
+    const today = brazilDate();
     const { data, error } = await userClient
       .from("leads")
-      .select("business_name,status,next_contact_date")
+      .select("business_name,contact_name,status,next_contact_date,last_contact_date")
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .not("next_contact_date", "is", null)
-      .lt("next_contact_date", brazilDate())
+      .lte("next_contact_date", today)
       .order("next_contact_date", { ascending: true })
-      .limit(50);
+      .limit(1000);
 
     if (error) throw new Error("overdue_returns_failed");
-    context.overdue_returns = data || [];
+
+    // Mesmas regras da tela "Hoje": somente etapas abertas; um retorno vencido
+    // deixa de ser atraso quando houve contato em data posterior à data prevista.
+    const activeStatuses = new Set([
+      "new", "qualified", "queued", "contacted", "replied",
+      "interested", "proposal", "negotiation",
+    ]);
+    const eligible = (data || []).filter((row: any) => activeStatuses.has(String(row.status || "")));
+    const overdue = eligible.filter((row: any) =>
+      row.next_contact_date < today &&
+      (!row.last_contact_date || row.last_contact_date <= row.next_contact_date)
+    );
+    const dueToday = eligible.filter((row: any) => row.next_contact_date === today);
+
+    const sortByDate = (a: any, b: any) =>
+      String(a.next_contact_date || "").localeCompare(String(b.next_contact_date || ""));
+    overdue.sort(sortByDate);
+    dueToday.sort((a: any, b: any) =>
+      String(a.business_name || "").localeCompare(String(b.business_name || ""), "pt-BR")
+    );
+
+    context.overdue_returns = overdue;
+    context.today_agenda = {
+      date: today,
+      overdue,
+      due_today: dueToday,
+      overdue_count: overdue.length,
+      due_today_count: dueToday.length,
+    };
     recordsConsidered += (data || []).length;
   }
 
@@ -339,7 +368,10 @@ function buildInstructions(options: { support?: boolean; salesCoach?: boolean } 
     "Se faltarem dados para responder com segurança, diga exatamente o que não foi possível confirmar.",
     "Não invente nomes de telas, botões ou estados.",
     "Em análises comerciais, priorize fatos observáveis no contexto, explique por que merecem atenção e sugira uma ordem prática de atuação sem executar ações.",
-    "Quando o usuário pedir prioridades do dia, seja objetivo: apresente no máximo 5 prioridades, cite os nomes dos registros quando disponíveis e evite introduções longas.",
+    "Quando o usuário perguntar o que fazer hoje, pedir sua agenda ou perguntar por retornos programados, consulte obrigatoriamente o contexto today_agenda. Liste nominalmente os clientes com retorno atrasado e os clientes programados para hoje, separando as duas listas; informe a data prevista e a etapa quando disponíveis. Não substitua a lista por conselhos genéricos.",
+    "Considere retorno atrasado somente lead em etapa aberta com next_contact_date anterior à data atual de Brasília e sem contato registrado depois da data prevista. Contato realizado na própria data prevista não elimina o atraso; contato posterior elimina. Não liste etapas encerradas como won, lost, not_interested ou discarded.",
+    "Se today_agenda existir e as listas estiverem vazias, informe explicitamente que não há retornos atrasados nem contatos programados para hoje. Se a consulta falhar ou o contexto não existir, explique a falha de consulta; nunca afirme que não há tarefas sem ter consultado os dados.",
+    "Quando o usuário pedir prioridades do dia, seja objetivo: apresente primeiro os retornos atrasados e depois os contatos programados para hoje; cite os nomes dos registros quando disponíveis e evite introduções longas.",
   ];
   if (options.salesCoach) {
     base.push("", AXIVA_SALES_COACH_KNOWLEDGE);

@@ -68,7 +68,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
     const [leadRes, memberRes, goalRes, probRes, contactRes] = await Promise.all([
       loadLeads(organization.id),
       supabase.rpc('get_team_performance', { p_organization_id: organization.id }),
-      supabase.from('sales_goals').select('id,user_id,period,target_won_count,target_value').eq('organization_id', organization.id),
+      supabase.from('sales_goals').select('id,user_id,period,period_type,target_won_count,target_value').eq('organization_id', organization.id),
       supabase.from('forecast_settings').select('probabilities').eq('organization_id', organization.id).maybeSingle(),
       // Leads que já receberam algum contato (WhatsApp, e-mail de campanha, e-mail marketing). Se falhar, usa só a etapa do lead.
       supabase.rpc('leads_with_contact', { p_organization_id: organization.id })
@@ -83,13 +83,12 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
 
   const months = useMemo(() => periodMonths(periodType, anchor), [periodType, anchor])
   const month = months[0]
-  const isMonthView = periodType === 'month'
   const inPeriod = useMemo(() => {
     const set = new Set(months)
     return leads.filter(l => set.has(monthStart(String(l.created_at || '').slice(0, 10))))
   }, [leads, months])
-  const company = useMemo(() => companyProgress(leads, months, goals), [leads, months, goals])
-  const sellers = useMemo(() => bySeller(leads, months, members, goals), [leads, months, members, goals])
+  const company = useMemo(() => companyProgress(leads, months, goals, periodType), [leads, months, goals, periodType])
+  const sellers = useMemo(() => bySeller(leads, months, members, goals, periodType), [leads, months, members, goals, periodType])
   const mineOnly = !canEdit
   const visibleSellers = mineOnly ? sellers.filter(s => s.user_id === userId) : sellers
   const campaigns = useMemo(() => byCampaign(inPeriod), [inPeriod])
@@ -99,15 +98,26 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
   const avgDays = useMemo(() => avgDaysToWin(inPeriod), [inPeriod])
 
   async function saveGoal(key, uid) {
-    const draft = drafts[key] || {}
-    const existing = goals.find(g => (g.user_id || null) === (uid || null) && g.period === month)
+    const draftKey = `${periodType}:${month}:${key}`
+    const draft = drafts[draftKey] || {}
+    const existing = goals.find(g =>
+      (g.user_id || null) === (uid || null) &&
+      g.period === month &&
+      (g.period_type || 'month') === periodType
+    )
     const payload = { ...mergeGoalDraft(draft, existing), updated_at: new Date().toISOString() }
     const q = existing
       ? supabase.from('sales_goals').update(payload).eq('id', existing.id).eq('organization_id', organization.id)
-      : supabase.from('sales_goals').insert({ ...payload, organization_id: organization.id, user_id: uid || null, period: month })
+      : supabase.from('sales_goals').insert({
+          ...payload,
+          organization_id: organization.id,
+          user_id: uid || null,
+          period: month,
+          period_type: periodType
+        })
     const { error } = await q
     if (error) { setMessage(`Não foi possível salvar a meta: ${error.message}`); return }
-    setDrafts(old => { const n = { ...old }; delete n[key]; return n })
+    setDrafts(old => { const n = { ...old }; delete n[draftKey]; return n })
     setMessage('Meta salva.')
     load()
   }
@@ -120,13 +130,14 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
   }
 
   function goalEditor(k, uid, goal) {
-    const d = drafts[k] || {}
-    const set = patch => setDrafts(old => ({ ...old, [k]: { ...old[k], ...patch } }))
+    const draftKey = `${periodType}:${month}:${k}`
+    const d = drafts[draftKey] || {}
+    const set = patch => setDrafts(old => ({ ...old, [draftKey]: { ...old[draftKey], ...patch } }))
     return (
       <span className="goal-edit">
         <input type="number" min="0" placeholder="Qtd." value={d.count ?? goal?.target_won_count ?? ''} onChange={e => set({ count: e.target.value })} aria-label="Meta de negócios ganhos" />
         <input type="text" inputMode="numeric" placeholder="R$ 0,00" value={d.value !== undefined ? (d.value ? `R$ ${d.value}` : '') : goalValueText(goal?.target_value)} onChange={e => set({ value: maskBRL(e.target.value) })} aria-label="Meta de valor" />
-        <button type="button" className="secondary mini" onClick={() => saveGoal(k, uid)} disabled={!drafts[k]}>Salvar</button>
+        <button type="button" className="secondary mini" onClick={() => saveGoal(k, uid)} disabled={!drafts[draftKey]}>Salvar</button>
       </span>
     )
   }
@@ -149,7 +160,7 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
               <button type="button" className="secondary mini" aria-label="Próximo período" onClick={() => setAnchor(shiftMonth(month, months.length))}>›</button>
             </div>
           </div>
-          {!isMonthView && <p className="muted goals-note">Nesta visão as metas são a soma das metas mensais. Para definir ou alterar uma meta, use a visão "Mês".</p>}
+          {periodType !== 'month' && <p className="muted goals-note">A meta deste período é independente das metas mensais e é comparada com os resultados acumulados no período selecionado.</p>}
 
           {canEdit && (
             <section className="panel goals-card">
@@ -157,20 +168,20 @@ export default function GoalsPage({ organization, userEmail, userId, canEdit }) 
               <div className="goals-row">
                 <span>{company.won} ganho(s) • {money(company.value)}</span>
                 <span className="goal-bars"><Bar pct={company.pctCount} label="Quantidade" /><Bar pct={company.pctValue} label="Valor" /></span>
-                {isMonthView && goalEditor('company', null, company.goal)}
+                {goalEditor('company', null, company.goal)}
               </div>
             </section>
           )}
 
           <section className="panel goals-card">
             <h2>{mineOnly ? 'Minha meta' : 'Metas por vendedor'}</h2>
-            {visibleSellers.length === 0 && <p className="muted">Nenhum vendedor com negócios ou metas neste mês.</p>}
+            {visibleSellers.length === 0 && <p className="muted">Nenhum vendedor com negócios ou metas neste período.</p>}
             {visibleSellers.map(s => (
               <div className="goals-row" key={s.user_id || 'none'}>
                 <strong>{s.name}</strong>
                 <span>{s.won} ganho(s) • {money(s.value)}</span>
                 <span className="goal-bars"><Bar pct={s.pctCount} label="Quantidade" /><Bar pct={s.pctValue} label="Valor" /></span>
-                {canEdit && isMonthView && s.user_id && goalEditor(s.user_id, s.user_id, s.goal)}
+                {canEdit && s.user_id && goalEditor(s.user_id, s.user_id, s.goal)}
               </div>
             ))}
             <p className="muted goals-note">Barras: 1ª = quantidade de negócios ganhos, 2ª = valor dos contratos. Considera a data de assinatura do contrato.</p>

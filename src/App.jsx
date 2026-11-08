@@ -5582,7 +5582,7 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
     setIntakeSellerSaving(true)
     setIntakeSellerError('')
     try {
-      const { error } = await supabase.rpc('send_lead_to_kanban_with_seller', {
+      const { data, error } = await supabase.rpc('send_lead_to_kanban_with_seller', {
         p_organization_id: organization.id,
         p_lead_id: intakeSellerLead.id,
         p_target_status: intakeSellerTargetStatus,
@@ -5590,6 +5590,8 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
         p_expected_status: 'captured_pending'
       })
       if (error) throw error
+      const persisted = Array.isArray(data) ? data[0] : data
+      if (!persisted?.lead_id) throw new Error('O banco não confirmou o envio para o Kanban.')
       const targetLabel = intakeSellerTargetStatus === 'contacted' ? 'Contatado' : 'Novo'
       setMessage(`${intakeSellerLead.business_name} foi enviado para o Kanban em ${targetLabel}.`)
       setContactedSelected(previous => withSelection(previous, [intakeSellerLead], false))

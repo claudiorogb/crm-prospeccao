@@ -94,12 +94,13 @@ function inferScopes(message: string): Scope[] {
   const scopes = new Set<Scope>();
 
   if (/\b(cliente|clientes|carteira)\b/.test(value)) scopes.add("clients");
-  if (/\b(lead|leads|funil|kanban|novo|novos|contatado|contatados|respondeu|responderam|interessado|interessados|proposta|propostas|negociacao|negociacoes|perdido|perdidos|ganho|ganhos)\b/.test(value)) {
+  // Expressões naturais de oportunidades e priorização também precisam ativar a leitura comercial.
+  if (/\b(lead|leads|funil|kanban|negocio|negocios|oportunidade|oportunidades|priorizar|priorizo|prioridade|prioridades|priorizacao|novo|novos|contatado|contatados|respondeu|responderam|interessado|interessados|proposta|propostas|negociacao|negociacoes|perdido|perdidos|ganho|ganhos)\b/.test(value)) {
     scopes.add("lead_summary");
   }
-  if (/\b(venda|vendas|vendi|faturamento|ticket|receita|contrato|contratos)\b/.test(value)) scopes.add("sales");
+  if (/\b(venda|vendas|vendi|negocio|negocios|faturamento|ticket|receita|contrato|contratos)\b/.test(value)) scopes.add("sales");
   if (/\b(campanha|campanhas|captacao)\b/.test(value)) scopes.add("campaigns");
-  if (/\b(retorno|retornos|follow[- ]?up|atrasado|atrasados|proximo contato|proximos contatos)\b/.test(value)) scopes.add("overdue_returns");
+  if (/\b(retorno|retornos|priorizar|priorizo|prioridade|prioridades|priorizacao|follow[- ]?up|atrasado|atrasados|proximo contato|proximos contatos)\b/.test(value)) scopes.add("overdue_returns");
   if (/\b(whatsapp|conversa|conversas|nao lida|nao lidas)\b/.test(value)) scopes.add("whatsapp_summary");
 
   if (/\b(resumo|dashboard|indicador|indicadores|desempenho|meus dados)\b/.test(value)) {

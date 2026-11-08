@@ -293,6 +293,7 @@ test('gestão dos limites da IA exige administrador do sistema no backend', () =
 })
 
 
+
 test('perguntas naturais sobre negócios e prioridades acionam leitura do CRM', () => {
   const normalize = value => String(value || '')
     .normalize('NFD')
@@ -301,7 +302,7 @@ test('perguntas naturais sobre negócios e prioridades acionam leitura do CRM', 
 
   const matcherFor = (scope, extractionPattern) => {
     const match = edge.match(extractionPattern)
-    assert.ok(match, \`matcher de \${scope} encontrado\`)
+    assert.ok(match, 'matcher de ' + scope + ' encontrado')
     const literal = match[1]
     const end = literal.lastIndexOf('/')
     return new RegExp(literal.slice(1, end), literal.slice(end + 1))

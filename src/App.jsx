@@ -2291,7 +2291,7 @@ function LeadExportPanel({ leads, onClose, onMessage }) {
 }
 
 
-function Leads({ organization, settings, userEmail }) {
+function Leads({ organization, settings, userEmail, currentRole }) {
   const kanbanScrollRef = useRef(null)
   const kanbanFixedScrollRef = useRef(null)
   const [journeyEntries, setJourneyEntries] = useState([])
@@ -2388,6 +2388,12 @@ function Leads({ organization, settings, userEmail }) {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [sellerOptions, setSellerOptions] = useState([])
+  const [sellerOptionsLoading, setSellerOptionsLoading] = useState(true)
+  const [editingSellerLead, setEditingSellerLead] = useState(null)
+  const [sellerAssignmentId, setSellerAssignmentId] = useState('')
+  const [savingSellerAssignment, setSavingSellerAssignment] = useState(false)
+  const canManageSeller = ['owner', 'admin'].includes(currentRole)
   const [form, setForm] = useState({
     business_name: '',
     campaign_id: '',
@@ -2545,11 +2551,11 @@ function Leads({ organization, settings, userEmail }) {
 
     if (error) throw error
     const rows = (data || []).map(lead => {
-      const sellerId = lead.assigned_to || lead.captured_by || null
+      const sellerId = lead.assigned_to || null
       return {
         ...lead,
         seller_id: sellerId,
-        seller_name: sellerId ? (memberNames.get(sellerId) || 'Não atribuído') : 'Não atribuído'
+        seller_name: sellerId ? (memberNames.get(sellerId) || 'Sem responsável') : 'Sem responsável'
       }
     })
     const value = rows.reduce((sum, lead) => sum + Number(lead.contract_value ?? lead.renegotiated_value ?? lead.proposal_value ?? 0), 0)
@@ -2565,6 +2571,8 @@ function Leads({ organization, settings, userEmail }) {
         .eq('is_active', true)
         .is('deleted_at', null)
       const memberNames = new Map((members || []).map(member => [member.user_id, member.display_name || 'Usuário']))
+      setSellerOptions(members || [])
+      setSellerOptionsLoading(false)
 
       const requestedActiveStatuses = currentFilter.status === 'all'
         ? ACTIVE_FUNNEL_STATUSES
@@ -2579,7 +2587,11 @@ function Leads({ organization, settings, userEmail }) {
       ])
 
       const groups = [...activeGroups, ...terminalGroups]
-      const rows = groups.flatMap(group => group.rows)
+      const rows = groups.flatMap(group => group.rows).map(lead => ({
+        ...lead,
+        seller_id: lead.assigned_to || null,
+        seller_name: lead.assigned_to ? (memberNames.get(lead.assigned_to) || 'Sem responsável') : 'Sem responsável'
+      }))
       const counts = {}
       const values = {}
       const overdue = {}
@@ -2595,7 +2607,46 @@ function Leads({ organization, settings, userEmail }) {
       setStatusValueTotals(values)
       setStatusOverdueCounts(overdue)
     } catch (error) {
+      setSellerOptionsLoading(false)
       setMessage(`Não foi possível carregar os leads: ${error.message}`)
+    }
+  }
+
+  function openSellerAssignment(lead) {
+    if (!canManageSeller || !lead?.id) return
+    setEditingSellerLead(lead)
+    setSellerAssignmentId(lead.assigned_to || '')
+    setMessage('')
+  }
+
+  async function saveSellerAssignment() {
+    if (!canManageSeller || !editingSellerLead?.id || savingSellerAssignment) return
+    setSavingSellerAssignment(true)
+    setMessage('')
+    const assignedTo = sellerAssignmentId || null
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .update({ assigned_to: assignedTo })
+        .eq('id', editingSellerLead.id)
+        .eq('organization_id', organization.id)
+        .select('id')
+        .maybeSingle()
+      if (error) throw error
+      if (!data?.id) throw new Error('O lead não foi atualizado. Verifique se ele ainda pertence a esta empresa.')
+      const selectedSeller = sellerOptions.find(member => member.user_id === assignedTo)
+      setLeads(previous => previous.map(lead => lead.id === editingSellerLead.id ? {
+        ...lead,
+        assigned_to: assignedTo,
+        seller_id: assignedTo,
+        seller_name: selectedSeller?.display_name || 'Sem responsável'
+      } : lead))
+      setEditingSellerLead(null)
+      setMessage('Vendedor responsável atualizado.')
+    } catch (error) {
+      setMessage(error?.message || 'Não foi possível atualizar o vendedor responsável.')
+    } finally {
+      setSavingSellerAssignment(false)
     }
   }
 
@@ -3444,7 +3495,18 @@ function Leads({ organization, settings, userEmail }) {
 
                             <div className="kanban-people-row-v70">
                               <strong>{l.contact_name || 'Contato não informado'}</strong>
-                              <span className="kanban-seller-name-v71"><UserRound size={14}/>{l.seller_name || 'Não atribuído'}</span>
+                              {canManageSeller ? (
+                                <button
+                                  type="button"
+                                  className="kanban-seller-name-v71 kanban-seller-edit-button"
+                                  onClick={() => openSellerAssignment(l)}
+                                  title="Alterar vendedor responsável"
+                                >
+                                  <UserRound size={14}/>{l.seller_name || 'Sem responsável'}
+                                </button>
+                              ) : (
+                                <span className="kanban-seller-name-v71"><UserRound size={14}/>{l.seller_name || 'Sem responsável'}</span>
+                              )}
                             </div>
 
                             {whatsappSummary[l.id] && (
@@ -3761,6 +3823,34 @@ function Leads({ organization, settings, userEmail }) {
               <div className="form-actions">
                 <button className="primary inline-btn" disabled={loading}>Salvar alterações</button>
                 <button type="button" className="secondary inline-btn" onClick={() => { setEditingLead(null); setEditLeadForm(null) }}>Cancelar</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {editingSellerLead && canManageSeller && (
+        <div className="lead-edit-overlay-v72">
+          <section className="panel lead-edit-modal-v72 seller-assignment-modal" role="dialog" aria-modal="true" aria-label="Alterar vendedor responsável">
+            <div className="lead-edit-head-v72">
+              <div>
+                <span className="eyebrow">VENDEDOR RESPONSÁVEL</span>
+                <h2>{editingSellerLead.business_name}</h2>
+              </div>
+              <button type="button" className="secondary mini" onClick={() => setEditingSellerLead(null)} disabled={savingSellerAssignment}>Fechar</button>
+            </div>
+            <form className="campaign-form" onSubmit={event => { event.preventDefault(); saveSellerAssignment() }}>
+              <label>
+                Vendedor responsável
+                <select value={sellerAssignmentId} onChange={event => setSellerAssignmentId(event.target.value)} disabled={sellerOptionsLoading || savingSellerAssignment}>
+                  <option value="">Sem responsável</option>
+                  {sellerOptions.map(member => <option key={member.user_id} value={member.user_id}>{member.display_name || 'Usuário'}</option>)}
+                </select>
+              </label>
+              {sellerOptionsLoading && <p className="muted">Carregando vendedores da empresa...</p>}
+              <div className="form-actions">
+                <button className="primary inline-btn" disabled={savingSellerAssignment || sellerOptionsLoading}>{savingSellerAssignment ? 'Salvando...' : 'Salvar'}</button>
+                <button type="button" className="secondary inline-btn" onClick={() => setEditingSellerLead(null)} disabled={savingSellerAssignment}>Cancelar</button>
               </div>
             </form>
           </section>
@@ -4664,6 +4754,13 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
   const [hiddenSendingCount, setHiddenSendingCount] = useState(0)
   const [intakeLeads, setIntakeLeads] = useState([])
   const [intakeView, setIntakeView] = useState(null)
+  const [intakeSellerLead, setIntakeSellerLead] = useState(null)
+  const [intakeSellerTargetStatus, setIntakeSellerTargetStatus] = useState('new')
+  const [intakeSellerId, setIntakeSellerId] = useState('')
+  const [intakeSellerOptions, setIntakeSellerOptions] = useState([])
+  const [intakeSellerOptionsLoading, setIntakeSellerOptionsLoading] = useState(false)
+  const [intakeSellerSaving, setIntakeSellerSaving] = useState(false)
+  const [intakeSellerError, setIntakeSellerError] = useState('')
   // Página atual de "Clientes contactados" (paginada no servidor).
   const [contactedLeads, setContactedLeads] = useState([])
   const [contactedTotal, setContactedTotal] = useState(0)
@@ -5424,6 +5521,32 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
   async function moveIntakeLeadToKanban(lead, targetStatus) {
     if (!lead?.id || loading) return
 
+    if (targetStatus === 'new' || targetStatus === 'contacted') {
+      setIntakeSellerLead(lead)
+      setIntakeSellerTargetStatus(targetStatus)
+      setIntakeSellerId('')
+      setIntakeSellerError('')
+      setIntakeSellerOptionsLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from('organization_members')
+          .select('user_id,display_name')
+          .eq('organization_id', organization.id)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('display_name', { ascending: true })
+        if (error) throw error
+        setIntakeSellerOptions(data || [])
+        if (!data?.length) setIntakeSellerError('Esta empresa não possui vendedores ativos para atribuir ao lead.')
+      } catch (error) {
+        setIntakeSellerOptions([])
+        setIntakeSellerError(error?.message || 'Não foi possível carregar os vendedores da empresa.')
+      } finally {
+        setIntakeSellerOptionsLoading(false)
+      }
+      return
+    }
+
     setLoading(true)
     setMessage('')
     try {
@@ -5449,6 +5572,34 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
       setMessage(error?.message || 'Não foi possível enviar o lead para o Kanban.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function confirmIntakeSellerAssignment() {
+    if (!intakeSellerLead?.id || !intakeSellerId || intakeSellerSaving || intakeSellerOptionsLoading) {
+      if (!intakeSellerId) setIntakeSellerError('Selecione o vendedor responsável para continuar.')
+      return
+    }
+    setIntakeSellerSaving(true)
+    setIntakeSellerError('')
+    try {
+      const { error } = await supabase.rpc('send_lead_to_kanban_with_seller', {
+        p_organization_id: organization.id,
+        p_lead_id: intakeSellerLead.id,
+        p_target_status: intakeSellerTargetStatus,
+        p_assigned_to: intakeSellerId
+      })
+      if (error) throw error
+      const targetLabel = intakeSellerTargetStatus === 'contacted' ? 'Contatado' : 'Novo'
+      setMessage(`${intakeSellerLead.business_name} foi enviado para o Kanban em ${targetLabel}.`)
+      setContactedSelected(previous => withSelection(previous, [intakeSellerLead], false))
+      setSelected(previous => withSelection(previous, [intakeSellerLead], false))
+      setIntakeSellerLead(null)
+      await loadData()
+    } catch (error) {
+      setIntakeSellerError(error?.message || 'Não foi possível enviar o lead para o Kanban. O lead continua na lista.')
+    } finally {
+      setIntakeSellerSaving(false)
     }
   }
 
@@ -5792,6 +5943,35 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
             </div>
           )}
         </section>
+
+        {intakeSellerLead && (
+          <div className="lead-edit-overlay-v72">
+            <section className="panel lead-edit-modal-v72 seller-assignment-modal" role="dialog" aria-modal="true" aria-label="Escolher vendedor responsável">
+              <div className="lead-edit-head-v72">
+                <div>
+                  <span className="eyebrow">ENVIAR PARA O KANBAN</span>
+                  <h2>{intakeSellerLead.business_name}</h2>
+                  <p className="muted">Etapa escolhida: {intakeSellerTargetStatus === 'contacted' ? 'Contatado' : 'Novo'}</p>
+                </div>
+              </div>
+              <form className="campaign-form" onSubmit={event => { event.preventDefault(); confirmIntakeSellerAssignment() }}>
+                <label>
+                  Vendedor responsável
+                  <select value={intakeSellerId} onChange={event => setIntakeSellerId(event.target.value)} disabled={intakeSellerOptionsLoading || intakeSellerSaving} required>
+                    <option value="">Selecione um vendedor</option>
+                    {intakeSellerOptions.map(member => <option key={member.user_id} value={member.user_id}>{member.display_name || 'Usuário'}</option>)}
+                  </select>
+                </label>
+                {intakeSellerOptionsLoading && <p className="muted">Carregando vendedores da empresa...</p>}
+                {intakeSellerError && <div className="notice error">{intakeSellerError}</div>}
+                <div className="form-actions">
+                  <button className="primary inline-btn" disabled={intakeSellerSaving || intakeSellerOptionsLoading || !intakeSellerId}>{intakeSellerSaving ? 'Enviando...' : 'Confirmar envio'}</button>
+                  <button type="button" className="secondary inline-btn" onClick={() => { setIntakeSellerLead(null); setIntakeSellerError('') }} disabled={intakeSellerSaving}>Cancelar</button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
       </>
     )
   }
@@ -6403,6 +6583,7 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [targetSegments, setTargetSegments] = useState([])
+  const [sellerOptions, setSellerOptions] = useState([])
   const [capturerName, setCapturerName] = useState('')
   const [form, setForm] = useState({
     business_name: '',
@@ -6415,7 +6596,8 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
     contact_name: '',
     capture_notes: '',
     target_segment_id: '',
-    customer_origin: ''
+    customer_origin: '',
+    seller_id: ''
   })
 
   useEffect(() => {
@@ -6428,6 +6610,23 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
       .order('name')
       .then(({ data }) => {
         if (active) setTargetSegments(data || [])
+      })
+    return () => { active = false }
+  }, [organization.id])
+
+  useEffect(() => {
+    let active = true
+    supabase
+      .from('organization_members')
+      .select('user_id,display_name')
+      .eq('organization_id', organization.id)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('display_name', { ascending: true })
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) setMessage(`Não foi possível carregar os vendedores: ${error.message}`)
+        else setSellerOptions(data || [])
       })
     return () => { active = false }
   }, [organization.id])
@@ -6468,6 +6667,7 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
       contact_name: form.contact_name.trim() || null,
       capture_notes: form.capture_notes.trim() || null,
       captured_by: userId,
+      assigned_to: form.seller_id || null,
       status: 'new',
       source: 'manual'
     })
@@ -6485,7 +6685,8 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
         contact_name: '',
         capture_notes: '',
         target_segment_id: '',
-        customer_origin: ''
+        customer_origin: '',
+        seller_id: ''
       }))
     }
     setLoading(false)
@@ -6548,6 +6749,13 @@ function ManualLeadRegistration({ organization, settings, userEmail, userId }) {
               </select>
             </label>
           </div>
+          <label>
+            Vendedor responsável <span className="muted">(opcional)</span>
+            <select value={form.seller_id} onChange={e=>setForm({...form,seller_id:e.target.value})}>
+              <option value="">Sem responsável</option>
+              {sellerOptions.map(member => <option key={member.user_id} value={member.user_id}>{member.display_name || 'Usuário'}</option>)}
+            </select>
+          </label>
           <label>Site<input value={form.website} onChange={e=>setForm({...form,website:e.target.value})} /></label>
           <label>Endereço<input value={form.address} onChange={e=>setForm({...form,address:e.target.value})} /></label>
           <div className="field-grid">
@@ -6949,7 +7157,7 @@ function ReadOnlyArea({ children }) {
   )
 }
 
-function SalesFunnelWorkspace({ organization, settings, userEmail, userId, onOpenImport }) {
+function SalesFunnelWorkspace({ organization, settings, userEmail, userId, onOpenImport, currentRole }) {
   const [section, setSection] = useState('leads')
   const [leadSection, setLeadSection] = useState('funnel')
 
@@ -6968,7 +7176,7 @@ function SalesFunnelWorkspace({ organization, settings, userEmail, userId, onOpe
             <button className={leadSection === 'new-lead' ? 'active' : ''} onClick={() => setLeadSection('new-lead')}>Cadastro novo lead</button>
             <button className={leadSection === 'repository' ? 'active' : ''} onClick={() => setLeadSection('repository')}>Leads sem interesse</button>
           </div>
-          {leadSection === 'funnel' && <Leads organization={organization} settings={settings} userEmail={userEmail} />}
+          {leadSection === 'funnel' && <Leads organization={organization} settings={settings} userEmail={userEmail} currentRole={currentRole} />}
           {leadSection === 'new-lead' && <ManualLeadRegistration organization={organization} settings={settings} userEmail={userEmail} userId={userId} />}
           {leadSection === 'repository' && <NotInterestedRepository organization={organization} userEmail={userEmail} />}
         </>
@@ -10858,6 +11066,7 @@ export default function App() {
             settings={settings}
             userEmail={userLabel}
             userId={session.user.id}
+            currentRole={organizationMembershipRole}
             onOpenImport={() => { sessionStorage.setItem('crm_campaign_workspace_section', 'lists'); setPage('campaign-workspace') }}
           />
         )}

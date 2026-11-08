@@ -141,6 +141,13 @@ begin
     raise exception 'Este lead já está em uma etapa avançada do funil. A etapa atual foi preservada.';
   end if;
 
+  -- Usuários comuns só podem atribuir o vendedor ao encaminhar uma captação
+  -- que ainda não entrou no Kanban. Leads já presentes no funil exigem admin.
+  if v_previous <> 'captured_pending'
+     and not private.has_org_role(p_organization_id, array['owner', 'admin']::text[]) then
+    raise exception 'Este lead já está no funil ou não está aguardando envio. Somente o proprietário ou administrador pode alterar o responsável.';
+  end if;
+
   update public.leads
      set status = p_target_status,
          assigned_to = p_assigned_to,

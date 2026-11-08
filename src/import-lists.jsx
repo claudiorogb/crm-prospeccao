@@ -260,14 +260,19 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
     setKanbanSaving(true)
     setKanbanModalError('')
     try {
-      const { error } = await supabase.rpc('send_lead_to_kanban_with_seller', {
+      const { data, error } = await supabase.rpc('send_lead_to_kanban_with_seller', {
         p_organization_id: organization.id,
         p_lead_id: kanbanTarget.id,
         p_target_status: kanbanTargetStatus,
         p_assigned_to: kanbanSellerId
       })
       if (error) throw error
-      setMessage(`${kanbanTarget.business_name} foi enviado para o Kanban em ${kanbanTargetStatus === 'contacted' ? 'Contatado' : 'Novo'}.`)
+      const persisted = Array.isArray(data) ? data[0] : data
+      if (!persisted?.lead_id) throw new Error('O banco não confirmou o envio para o Kanban.')
+      const targetLabel = kanbanTargetStatus === 'contacted' ? 'Contatado' : 'Novo'
+      setMessage(persisted.created_new_opportunity
+        ? `${kanbanTarget.business_name} continua na lista de clientes. Uma nova oportunidade foi criada no Kanban em ${targetLabel}.`
+        : `${kanbanTarget.business_name} foi enviado para o Kanban em ${targetLabel}.`)
       setKanbanTarget(null)
       await Promise.all([loadRows(), loadCounts()])
     } catch (error) {

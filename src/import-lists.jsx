@@ -81,6 +81,13 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
   const [message, setMessage] = useState('')
   const [isAdmin, setIsAdmin] = useState(isSystemAdmin)
   const [lastMessages, setLastMessages] = useState({})
+  const [kanbanTarget, setKanbanTarget] = useState(null)
+  const [kanbanSellerOptions, setKanbanSellerOptions] = useState([])
+  const [kanbanSellerId, setKanbanSellerId] = useState('')
+  const [kanbanTargetStatus, setKanbanTargetStatus] = useState('new')
+  const [kanbanModalLoading, setKanbanModalLoading] = useState(false)
+  const [kanbanSaving, setKanbanSaving] = useState(false)
+  const [kanbanModalError, setKanbanModalError] = useState('')
 
   const config = LISTS[kind]
 
@@ -219,6 +226,57 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
     onOpenSection?.(rule.section)
   }
 
+  async function openKanbanAssignment(row) {
+    if (!row?.id || kanbanSaving) return
+    setKanbanTarget(row)
+    setKanbanSellerId('')
+    setKanbanTargetStatus('new')
+    setKanbanModalError('')
+    setKanbanSellerOptions([])
+    setKanbanModalLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('organization_members')
+        .select('user_id,display_name')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('display_name', { ascending: true })
+      if (error) throw error
+      setKanbanSellerOptions(data || [])
+      if (!data?.length) setKanbanModalError('Esta empresa não possui vendedores ativos para atribuir ao lead.')
+    } catch (error) {
+      setKanbanModalError(error?.message || 'Não foi possível carregar os vendedores da empresa.')
+    } finally {
+      setKanbanModalLoading(false)
+    }
+  }
+
+  async function sendRowToKanban() {
+    if (!kanbanTarget?.id || !kanbanSellerId || kanbanSaving || kanbanModalLoading) {
+      if (!kanbanSellerId) setKanbanModalError('Selecione o vendedor responsável para continuar.')
+      return
+    }
+    setKanbanSaving(true)
+    setKanbanModalError('')
+    try {
+      const { error } = await supabase.rpc('send_lead_to_kanban_with_seller', {
+        p_organization_id: organization.id,
+        p_lead_id: kanbanTarget.id,
+        p_target_status: kanbanTargetStatus,
+        p_assigned_to: kanbanSellerId
+      })
+      if (error) throw error
+      setMessage(`${kanbanTarget.business_name} foi enviado para o Kanban em ${kanbanTargetStatus === 'contacted' ? 'Contatado' : 'Novo'}.`)
+      setKanbanTarget(null)
+      await Promise.all([loadRows(), loadCounts()])
+    } catch (error) {
+      setKanbanModalError(error?.message || 'Não foi possível enviar o contato para o Kanban. O registro continua na lista.')
+    } finally {
+      setKanbanSaving(false)
+    }
+  }
+
   async function moveSelected() {
     const ids = [...selected]
     if (!ids.length || !isAdmin) return
@@ -324,6 +382,7 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
                   <th className="import-list-check"><input type="checkbox" aria-label="Selecionar todos os resultados" checked={allFilteredSelected} onChange={toggleAllFiltered} /></th>
                   <th>Empresa</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th>Cidade/UF</th><th>Origem</th>
                   {kind === 'leads' && <th>Etapa</th>}
+                  <th>Ação</th>
                 </tr>
               </thead>
               <tbody>
@@ -343,6 +402,11 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
                       {STATUS_LABEL[row.status] || row.status}
                       {shortDate(row.created_at) && <small className="import-list-last">Captado em {shortDate(row.created_at)}</small>}
                     </td>}
+                    <td className="import-list-kanban-action">
+                      <button type="button" className="secondary mini" onClick={() => openKanbanAssignment(row)} disabled={kanbanSaving || kanbanModalLoading}>
+                        Enviar para Kanban
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -358,6 +422,41 @@ export default function ImportLists({ organization, userId, isSystemAdmin = fals
           </div>
         )}
       </section>
+
+      {kanbanTarget && (
+        <div className="lead-edit-overlay-v72">
+          <section className="panel lead-edit-modal-v72 seller-assignment-modal" role="dialog" aria-modal="true" aria-label="Enviar para o Kanban">
+            <div className="lead-edit-head-v72">
+              <div>
+                <span className="eyebrow">ENVIAR PARA O KANBAN</span>
+                <h2>{kanbanTarget.business_name}</h2>
+              </div>
+            </div>
+            <form className="campaign-form" onSubmit={event => { event.preventDefault(); sendRowToKanban() }}>
+              <label>
+                Vendedor responsável
+                <select value={kanbanSellerId} onChange={event => setKanbanSellerId(event.target.value)} disabled={kanbanModalLoading || kanbanSaving} required>
+                  <option value="">Selecione um vendedor</option>
+                  {kanbanSellerOptions.map(member => <option key={member.user_id} value={member.user_id}>{member.display_name || 'Usuário'}</option>)}
+                </select>
+              </label>
+              <label>
+                Etapa no Kanban
+                <select value={kanbanTargetStatus} onChange={event => setKanbanTargetStatus(event.target.value)} disabled={kanbanSaving}>
+                  <option value="new">Novo</option>
+                  <option value="contacted">Contatado</option>
+                </select>
+              </label>
+              {kanbanModalLoading && <p className="muted">Carregando vendedores da empresa...</p>}
+              {kanbanModalError && <div className="notice error">{kanbanModalError}</div>}
+              <div className="form-actions">
+                <button className="primary inline-btn" disabled={kanbanSaving || kanbanModalLoading || !kanbanSellerId}>{kanbanSaving ? 'Enviando...' : 'Confirmar envio'}</button>
+                <button type="button" className="secondary inline-btn" onClick={() => { setKanbanTarget(null); setKanbanModalError('') }} disabled={kanbanSaving}>Cancelar</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </>
   )
 }

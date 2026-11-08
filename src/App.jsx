@@ -2291,7 +2291,7 @@ function LeadExportPanel({ leads, onClose, onMessage }) {
 }
 
 
-function Leads({ organization, settings, userEmail, currentRole }) {
+function Leads({ organization, settings, userEmail, currentRole, isSystemAdmin = false }) {
   const kanbanScrollRef = useRef(null)
   const kanbanFixedScrollRef = useRef(null)
   const [journeyEntries, setJourneyEntries] = useState([])
@@ -2393,7 +2393,7 @@ function Leads({ organization, settings, userEmail, currentRole }) {
   const [editingSellerLead, setEditingSellerLead] = useState(null)
   const [sellerAssignmentId, setSellerAssignmentId] = useState('')
   const [savingSellerAssignment, setSavingSellerAssignment] = useState(false)
-  const canManageSeller = ['owner', 'admin'].includes(currentRole)
+  const canManageSeller = isSystemAdmin || ['owner', 'admin'].includes(currentRole)
   const [form, setForm] = useState({
     business_name: '',
     campaign_id: '',
@@ -2625,15 +2625,14 @@ function Leads({ organization, settings, userEmail, currentRole }) {
     setMessage('')
     const assignedTo = sellerAssignmentId || null
     try {
-      const { data, error } = await supabase
-        .from('leads')
-        .update({ assigned_to: assignedTo })
-        .eq('id', editingSellerLead.id)
-        .eq('organization_id', organization.id)
-        .select('id')
-        .maybeSingle()
+      const { data, error } = await supabase.rpc('admin_assign_lead_seller', {
+        p_organization_id: organization.id,
+        p_lead_id: editingSellerLead.id,
+        p_assigned_to: assignedTo
+      })
       if (error) throw error
-      if (!data?.id) throw new Error('O lead não foi atualizado. Verifique se ele ainda pertence a esta empresa.')
+      const persisted = Array.isArray(data) ? data[0] : data
+      if (!persisted?.lead_id) throw new Error('O lead não foi atualizado. Verifique se ele ainda pertence a esta empresa.')
       const selectedSeller = sellerOptions.find(member => member.user_id === assignedTo)
       setLeads(previous => previous.map(lead => lead.id === editingSellerLead.id ? {
         ...lead,
@@ -7158,7 +7157,7 @@ function ReadOnlyArea({ children }) {
   )
 }
 
-function SalesFunnelWorkspace({ organization, settings, userEmail, userId, onOpenImport, currentRole }) {
+function SalesFunnelWorkspace({ organization, settings, userEmail, userId, onOpenImport, currentRole, isSystemAdmin = false }) {
   const [section, setSection] = useState('leads')
   const [leadSection, setLeadSection] = useState('funnel')
 
@@ -7177,7 +7176,7 @@ function SalesFunnelWorkspace({ organization, settings, userEmail, userId, onOpe
             <button className={leadSection === 'new-lead' ? 'active' : ''} onClick={() => setLeadSection('new-lead')}>Cadastro novo lead</button>
             <button className={leadSection === 'repository' ? 'active' : ''} onClick={() => setLeadSection('repository')}>Leads sem interesse</button>
           </div>
-          {leadSection === 'funnel' && <Leads organization={organization} settings={settings} userEmail={userEmail} currentRole={currentRole} />}
+          {leadSection === 'funnel' && <Leads organization={organization} settings={settings} userEmail={userEmail} currentRole={currentRole} isSystemAdmin={isSystemAdmin} />}
           {leadSection === 'new-lead' && <ManualLeadRegistration organization={organization} settings={settings} userEmail={userEmail} userId={userId} />}
           {leadSection === 'repository' && <NotInterestedRepository organization={organization} userEmail={userEmail} />}
         </>
@@ -9919,6 +9918,7 @@ function AdminCommercialArea({ organizations, userEmail, userId }) {
           settings={settings}
           userEmail={userEmail}
           userId={userId}
+          isSystemAdmin
           onOpenImport={() => { sessionStorage.setItem('crm_campaign_workspace_section', 'lists'); setWorkspacePage('campaign-workspace') }}
         />
       )}
@@ -10856,6 +10856,7 @@ export default function App() {
               settings={adminSandboxSettings}
               userEmail={userEmail}
               userId={session.user.id}
+              isSystemAdmin
               onOpenImport={() => { sessionStorage.setItem('crm_campaign_workspace_section', 'lists'); setAdminCommercialPage('campaign-workspace') }}
             />
           )}
@@ -11068,6 +11069,7 @@ export default function App() {
             userEmail={userLabel}
             userId={session.user.id}
             currentRole={organizationMembershipRole}
+            isSystemAdmin={isSystemAdmin}
             onOpenImport={() => { sessionStorage.setItem('crm_campaign_workspace_section', 'lists'); setPage('campaign-workspace') }}
           />
         )}

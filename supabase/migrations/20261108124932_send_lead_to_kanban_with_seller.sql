@@ -89,7 +89,7 @@ begin
       raise exception 'Já existe uma oportunidade ativa para este cliente no Kanban.';
     end if;
 
-    insert into public.leads (
+    insert into public.leads as inserted_lead (
       organization_id,
       business_name,
       segment,
@@ -126,7 +126,7 @@ begin
       p_target_status,
       'other'
     )
-    returning id, status_changed_at into v_target_id, v_changed_at;
+    returning inserted_lead.id, inserted_lead.status_changed_at into v_target_id, v_changed_at;
 
     return query
     select v_target_id, v_previous, p_target_status, v_changed_at, true;
@@ -148,13 +148,13 @@ begin
     raise exception 'Este lead já está no funil ou não está aguardando envio. Somente o proprietário ou administrador pode alterar o responsável.';
   end if;
 
-  update public.leads
+  update public.leads as updated_lead
      set status = p_target_status,
          assigned_to = p_assigned_to,
          updated_at = now()
-   where id = p_lead_id
-     and organization_id = p_organization_id
-  returning status_changed_at into v_changed_at;
+   where updated_lead.id = p_lead_id
+     and updated_lead.organization_id = p_organization_id
+  returning updated_lead.status_changed_at into v_changed_at;
 
   return query
   select v_lead.id, v_previous, p_target_status, v_changed_at, false;

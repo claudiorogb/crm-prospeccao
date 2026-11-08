@@ -6,7 +6,8 @@ create or replace function public.send_lead_to_kanban_with_seller(
   p_organization_id uuid,
   p_lead_id uuid,
   p_target_status text,
-  p_assigned_to uuid
+  p_assigned_to uuid,
+  p_expected_status text default null
 )
 returns table(
   lead_id uuid,
@@ -59,6 +60,12 @@ begin
 
   v_previous := v_lead.status;
 
+  if p_expected_status is not null then
+    if p_expected_status <> 'captured_pending' or v_previous <> p_expected_status then
+      raise exception 'Este lead não está mais aguardando envio na lista de Leads captados.';
+    end if;
+  end if;
+
   update public.leads
      set status = p_target_status,
          assigned_to = p_assigned_to,
@@ -74,6 +81,6 @@ begin
 end;
 $function$;
 
-revoke all on function public.send_lead_to_kanban_with_seller(uuid, uuid, text, uuid) from public;
-revoke execute on function public.send_lead_to_kanban_with_seller(uuid, uuid, text, uuid) from anon;
-grant execute on function public.send_lead_to_kanban_with_seller(uuid, uuid, text, uuid) to authenticated;
+revoke all on function public.send_lead_to_kanban_with_seller(uuid, uuid, text, uuid, text) from public;
+revoke execute on function public.send_lead_to_kanban_with_seller(uuid, uuid, text, uuid, text) from anon;
+grant execute on function public.send_lead_to_kanban_with_seller(uuid, uuid, text, uuid, text) to authenticated;

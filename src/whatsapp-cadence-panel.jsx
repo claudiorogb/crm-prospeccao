@@ -198,23 +198,77 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
     if (!segmentId) return
     if (!form.step1_body.trim()) { setMessage('Escreva o texto do 1º follow-up.'); return }
     if (!plan.ok) { setMessage('Não há dia de envio configurado para os follow-ups.'); return }
+    const cadenceId = pending?.id || crypto.randomUUID()
     const d1 = plan.d1
     const d2 = plan.d2 ?? Math.min(30, Math.max(2, parseInt(form.step2_delay_days, 10) || 5))
-    const payload = {
-      enabled: true, target_segment_id: segmentId, step1_body: form.step1_body.trim(), step1_delay_days: d1,
-      step2_body: form.step2_body.trim() || null, step2_delay_days: d2, updated_at: new Date().toISOString()
-    }
+    const oldAttachments = [pending?.step1_attachment, pending?.step2_attachment].filter(Boolean)
+    const uploaded = []
     setSaving(true)
-    const q = pending?.id
-      ? supabase.from('whatsapp_cadences').update(payload).eq('id', pending.id).eq('organization_id', organization.id)
-      : supabase.from('whatsapp_cadences').insert({ ...payload, organization_id: organization.id })
-    const { error } = await q
-    setSaving(false)
-    if (error) { setMessage(`Não foi possível salvar: ${error.message}`); return }
-    const campaign = segments.find(item => item.id === segmentId)?.name || 'a campanha'
-    setMessage(`Cadência salva. Ela será ativada junto com o próximo envio de ${campaign} em "Enviar mensagens".`)
-    setDirty(false)
-    load()
+    setMessage('')
+
+    try {
+      const nextAttachments = {}
+      for (const step of ['step1', 'step2']) {
+        const selected = attachmentFiles[step]
+        const removed = removedAttachments[step]
+        const existing = pending ? (pending[step + '_attachment'] || null) : null
+        if (selected) {
+          const metadata = await uploadCadenceAttachment(selected, organization.id, cadenceId, step)
+          uploaded.push(metadata)
+          nextAttachments[step] = metadata
+        } else {
+          nextAttachments[step] = removed ? null : existing
+        }
+      }
+
+      const payload = {
+        enabled: true, target_segment_id: segmentId, step1_body: form.step1_body.trim(), step1_delay_days: d1,
+        step2_body: form.step2_body.trim() || null, step2_delay_days: d2,
+        step1_attachment: nextAttachments.step1, step2_attachment: nextAttachments.step2,
+        updated_at: new Date().toISOString()
+      }
+      const q = pending?.id
+        ? supabase.from('whatsapp_cadences').update(payload).eq('id', pending.id).eq('organization_id', organization.id)
+        : supabase.from('whatsapp_cadences').insert({ ...payload, id: cadenceId, organization_id: organization.id })
+      const { error } = await q
+      if (error) throw error
+
+      const keepPaths = new Set([nextAttachments.step1?.storage_path, nextAttachments.step2?.storage_path].filter(Boolean))
+      for (const old of oldAttachments) {
+        if (old.storage_path && !keepPaths.has(old.storage_path)) {
+          await deleteCadenceAttachment(organization.id, old.storage_path)
+        }
+      }
+      const campaign = segments.find(item => item.id === segmentId)?.name || 'a campanha'
+      setMessage('Cadência salva. Ela será ativada junto com o próximo envio de ' + campaign + ' em "Enviar mensagens".')
+      setDirty(false)
+      setAttachmentFiles({ step1: null, step2: null })
+      setRemovedAttachments({ step1: false, step2: false })
+      await load()
+    } catch (error) {
+      for (const item of uploaded) await deleteCadenceAttachment(organization.id, item.storage_path)
+      setMessage('Não foi possível salvar: ' + (error?.message || String(error)))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function selectAttachment(step, file) {
+    if (!file) return
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      setMessage('Cada anexo deve ter no máximo 8 MB.')
+      return
+    }
+    setAttachmentFiles(current => ({ ...current, [step]: file }))
+    setRemovedAttachments(current => ({ ...current, [step]: false }))
+    setDirty(true)
+    setMessage('')
+  }
+
+  function removeAttachment(step) {
+    setAttachmentFiles(current => ({ ...current, [step]: null }))
+    setRemovedAttachments(current => ({ ...current, [step]: true }))
+    setDirty(true)
   }
 
   async function discardPending() {
@@ -302,6 +356,21 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
             </label>
           </div>
 
+          <div className="cadence-attachments-v2">
+            <div className="cadence-attachment-field">
+              <label htmlFor="cadence-step1-attachment">Anexo do 1º follow-up (opcional)</label>
+              <input id="cadence-step1-attachment" type="file" accept={ATTACHMENT_ACCEPT} onChange={e => { selectAttachment('step1', e.target.files?.[0]); e.target.value = '' }} />
+              <small>{attachmentFiles.step1 ? 'Novo arquivo: ' + attachmentFiles.step1.name : removedAttachments.step1 ? 'O anexo será removido ao salvar.' : pending?.step1_attachment?.file_name ? 'Arquivo atual: ' + pending.step1_attachment.file_name : 'Nenhum arquivo anexado.'}</small>
+              {(attachmentFiles.step1 || pending?.step1_attachment?.storage_path) && !removedAttachments.step1 && <button type="button" className="secondary mini" onClick={() => removeAttachment('step1')}>Remover anexo</button>}
+            </div>
+            <div className="cadence-attachment-field">
+              <label htmlFor="cadence-step2-attachment">Anexo do 2º follow-up (opcional)</label>
+              <input id="cadence-step2-attachment" type="file" accept={ATTACHMENT_ACCEPT} onChange={e => { selectAttachment('step2', e.target.files?.[0]); e.target.value = '' }} />
+              <small>{attachmentFiles.step2 ? 'Novo arquivo: ' + attachmentFiles.step2.name : removedAttachments.step2 ? 'O anexo será removido ao salvar.' : pending?.step2_attachment?.file_name ? 'Arquivo atual: ' + pending.step2_attachment.file_name : 'Nenhum arquivo anexado.'}</small>
+              {(attachmentFiles.step2 || pending?.step2_attachment?.storage_path) && !removedAttachments.step2 && <button type="button" className="secondary mini" onClick={() => removeAttachment('step2')}>Remover anexo</button>}
+            </div>
+          </div>
+
           <div className="cadence-actions-v2">
             <button type="button" className="primary" onClick={save} disabled={saving || !plan.ok || (!dirty && !plan.adjusted1 && !plan.adjusted2)}>{saving ? 'Salvando…' : pending ? 'Atualizar cadência' : 'Salvar cadência'}</button>
             {dirty && <span className="muted">Alterações não salvas</span>}
@@ -323,6 +392,8 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                 <p className="muted">1º follow-up após {row.step1_delay_days} dia(s){row.step2_body ? ` • 2º após mais ${row.step2_delay_days} dia(s)` : ' • sem 2º follow-up'}</p>
                 <pre className="cadence-text-v2">{row.step1_body}</pre>
                 {row.step2_body && <pre className="cadence-text-v2">{row.step2_body}</pre>}
+                {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}
+                {row.step2_attachment?.file_name && <p className="muted">Anexo do 2º follow-up: {row.step2_attachment.file_name}</p>}
                 <button type="button" className="secondary mini" onClick={() => toggleRunning(row)}>{row.enabled ? 'Desligar cadência' : 'Ligar cadência'}</button>
               </details>
             )

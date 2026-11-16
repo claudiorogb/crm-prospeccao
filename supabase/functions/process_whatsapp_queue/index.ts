@@ -260,6 +260,9 @@ async function sendQueuedMessage(admin: any, message: any, finalText: string) {
   if (mediaType === "audio" && finalText.trim()) {
     throw new Error("A Evolution API não permite legenda no envio de áudio. Use um anexo de documento, imagem ou vídeo para acompanhar o texto.");
   }
+  if (mediaType !== "audio" && finalText.length > 1024) {
+    throw new Error("O texto do follow-up ultrapassou 1.024 caracteres após a substituição das variáveis.");
+  }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const base64 = bytesToBase64(bytes);

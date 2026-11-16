@@ -413,8 +413,6 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                 {row.step2_body && <pre className="cadence-text-v2">{row.step2_body}</pre>}
                 {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}
                 {row.step2_attachment?.file_name && <p className="muted">Anexo do 2º follow-up: {row.step2_attachment.file_name}</p>}
-                {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}
-                {row.step2_attachment?.file_name && <p className="muted">Anexo do 2º follow-up: {row.step2_attachment.file_name}</p>}
                 <button type="button" className="secondary mini" onClick={() => toggleRunning(row)}>{row.enabled ? 'Desligar cadência' : 'Ligar cadência'}</button>
               </details>
             )

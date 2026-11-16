@@ -103,16 +103,71 @@ Deno.serve(async (req) => {
   const caller = userData?.user || null; const isServiceRole = caller?.role === "service_role" || token === serviceRole;
   let body: any; try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
 
-  const organizationId = String(body?.organization_id || ""); const targetBucket = String(body?.target_bucket || "");
-  const targetPath = String(body?.target_path || ""); const fileName = safeFileName(body?.file_name || "arquivo");
+  const action = String(body?.action || "");
+  const organizationId = String(body?.organization_id || "");
+  const targetPath = String(body?.target_path || "");
+  const targetBucket = String(body?.target_bucket || "");
+  const fileName = safeFileName(body?.file_name || "arquivo");
   const mimeType = String(body?.mime_type || "application/octet-stream").toLowerCase();
-  const source = String(body?.source || "unknown").slice(0, 80); const base64 = String(body?.base64 || "");
+  const source = String(body?.source || "unknown").slice(0, 80);
+  const base64 = String(body?.base64 || "");
+
+  // Remoção restrita a anexos de cadência, feita por admin/owner e somente quando
+  // o caminho não estiver mais referenciado por uma cadência, fila ou conversa.
+  if (action === "delete_whatsapp_cadence_attachment") {
+    if (!organizationId || !targetPath.startsWith(organizationId + "/cadence/") ||
+        targetPath.split("/").some((part: string) => part === "." || part === "..")) {
+      return json({ error: "Caminho de anexo de cadência inválido." }, 400);
+    }
+    if (!caller?.id || isServiceRole) return json({ error: "Unauthorized" }, 401);
+
+    const { data: member, error: memberError } = await admin.from("organization_members")
+      .select("role").eq("organization_id", organizationId).eq("user_id", caller.id)
+      .eq("is_active", true).is("deleted_at", null).maybeSingle();
+    if (memberError || !["admin", "owner"].includes(String(member?.role || ""))) {
+      return json({ error: "Somente administradores podem remover anexos de cadência." }, 403);
+    }
+
+    const { data: scan, error: scanError } = await admin.from("file_security_scans")
+      .select("id").eq("organization_id", organizationId).eq("target_bucket", "whatsapp-media")
+      .eq("target_path", targetPath).eq("policy_status", "allowed").maybeSingle();
+    if (scanError || !scan?.id) return json({ error: "Anexo não encontrado no registro de segurança." }, 404);
+
+    const references = await Promise.all([
+      admin.from("whatsapp_cadences").select("id").eq("organization_id", organizationId)
+        .contains("step1_attachment", { storage_path: targetPath }).limit(1),
+      admin.from("whatsapp_cadences").select("id").eq("organization_id", organizationId)
+        .contains("step2_attachment", { storage_path: targetPath }).limit(1),
+      admin.from("outbound_messages").select("id").eq("organization_id", organizationId)
+        .contains("media_metadata", { storage_path: targetPath }).limit(1),
+      admin.from("whatsapp_messages").select("id").eq("organization_id", organizationId)
+        .contains("media_metadata", { storage_path: targetPath }).limit(1),
+    ]);
+    if (references.some((result: any) => result.error)) {
+      return json({ error: "Não foi possível confirmar se o anexo ainda está em uso." }, 500);
+    }
+    if (references.some((result: any) => (result.data || []).length > 0)) {
+      return json({ error: "Este anexo ainda está associado a uma cadência ou mensagem enviada." }, 409);
+    }
+
+    const { error: removeError } = await admin.storage.from("whatsapp-media").remove([targetPath]);
+    if (removeError) return json({ error: "Não foi possível remover o arquivo armazenado." }, 500);
+    return json({ ok: true });
+  }
 
   if (!organizationId || !ALLOWED_BUCKETS.has(targetBucket) || !targetPath || !base64) return json({ error: "Dados do arquivo incompletos." }, 400);
   if (!targetPath.startsWith(organizationId + "/") || targetPath.includes("..")) return json({ error: "Caminho de arquivo inválido." }, 400);
   if (!isServiceRole) {
     if (!caller?.id) return json({ error: "Unauthorized" }, 401);
     if (!(await isOrganizationMember(admin, organizationId, caller.id))) return json({ error: "Você não pertence à empresa ativa." }, 403);
+    if (source === "whatsapp-cadence-followup") {
+      const { data: member } = await admin.from("organization_members").select("role")
+        .eq("organization_id", organizationId).eq("user_id", caller.id)
+        .eq("is_active", true).is("deleted_at", null).maybeSingle();
+      if (!["admin", "owner"].includes(String(member?.role || ""))) {
+        return json({ error: "Somente administradores podem anexar arquivos à cadência." }, 403);
+      }
+    }
   }
 
   let bytes: Uint8Array; try { bytes = bytesFromBase64(base64); } catch (error) {

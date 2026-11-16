@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
 
     const { data: scan, error: scanError } = await admin.from("file_security_scans")
       .select("id").eq("organization_id", organizationId).eq("target_bucket", "whatsapp-media")
-      .eq("target_path", targetPath).eq("policy_status", "allowed").maybeSingle();
+      .eq("target_path", targetPath).eq("source", "whatsapp-cadence-followup").eq("policy_status", "allowed").maybeSingle();
     if (scanError || !scan?.id) return json({ error: "Anexo não encontrado no registro de segurança." }, 404);
 
     const references = await Promise.all([

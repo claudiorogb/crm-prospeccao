@@ -9,7 +9,7 @@ const SPINTAX = '{quero te apresentar|gostaria de apresentar|posso te mostrar}'
 const EMPTY = { enabled: false, step1_delay_days: 3, step1_body: '', step2_delay_days: 5, step2_body: '' }
 
 const MAX_ATTACHMENT_SIZE = 8 * 1024 * 1024
-const ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.docx,.xlsx,.pptx,.txt,.csv,.mp3,.wav,.ogg,.mp4,.webm'
+const ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.docx,.xlsx,.pptx,.txt,.csv,.mp4,.webm'
 
 const MIME_BY_EXTENSION = {
   pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
@@ -17,8 +17,7 @@ const MIME_BY_EXTENSION = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  txt: 'text/plain', csv: 'text/csv', mp3: 'audio/mpeg', wav: 'audio/wav',
-  ogg: 'audio/ogg', mp4: 'video/mp4', webm: 'video/webm'
+  txt: 'text/plain', csv: 'text/csv', mp4: 'video/mp4', webm: 'video/webm'
 }
 
 function safeAttachmentName(value) {
@@ -32,7 +31,8 @@ async function uploadCadenceAttachment(file, organizationId, cadenceId, step) {
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('Cada anexo deve ter no máximo 8 MB.')
 
   const extension = String(file.name || '').split('.').pop().toLowerCase()
-  const mimeType = String(file.type || MIME_BY_EXTENSION[extension] || '').toLowerCase()
+  const browserMime = String(file.type || '').toLowerCase()
+  const mimeType = browserMime && browserMime !== 'application/octet-stream' ? browserMime : String(MIME_BY_EXTENSION[extension] || '').toLowerCase()
   if (!mimeType || mimeType === 'application/octet-stream') {
     throw new Error('Formato não reconhecido. Use PDF, imagem, vídeo, áudio, DOCX, XLSX, PPTX, TXT ou CSV.')
   }

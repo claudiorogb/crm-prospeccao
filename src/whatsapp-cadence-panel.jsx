@@ -11,6 +11,16 @@ const EMPTY = { enabled: false, step1_delay_days: 3, step1_body: '', step2_delay
 const MAX_ATTACHMENT_SIZE = 8 * 1024 * 1024
 const ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.docx,.xlsx,.pptx,.txt,.csv,.mp4,.webm'
 
+const SUPPORTED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+  'video/mp4', 'video/webm',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain', 'text/csv'
+])
+
 const MIME_BY_EXTENSION = {
   pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
   gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp',
@@ -33,8 +43,8 @@ async function uploadCadenceAttachment(file, organizationId, cadenceId, step) {
   const extension = String(file.name || '').split('.').pop().toLowerCase()
   const browserMime = String(file.type || '').toLowerCase()
   const mimeType = browserMime && browserMime !== 'application/octet-stream' ? browserMime : String(MIME_BY_EXTENSION[extension] || '').toLowerCase()
-  if (!mimeType || mimeType === 'application/octet-stream') {
-    throw new Error('Formato não reconhecido. Use PDF, imagem, vídeo, DOCX, XLSX, PPTX, TXT ou CSV.')
+  if (!MIME_BY_EXTENSION[extension] || !SUPPORTED_MIME_TYPES.has(mimeType)) {
+    throw new Error('Formato não suportado. Use PDF, imagens, vídeos MP4/WebM, DOCX, XLSX, PPTX, TXT ou CSV.')
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer())

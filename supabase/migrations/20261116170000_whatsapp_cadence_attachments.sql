@@ -99,7 +99,7 @@ begin
         )
         and l.deleted_at is null
         and l.status in ('contacted_pending','contacted')
-        and coalesce(nullif(regexp_replace(coalesce(l.phone,''), '\\D', '', 'g'), ''), '') <> ''
+        and coalesce(nullif(regexp_replace(coalesce(l.phone,''), '\D', '', 'g'), ''), '') <> ''
         and st.n_sent >= 1
         and st.n_sent <= case
           when (
@@ -126,7 +126,7 @@ begin
       if v_body is null and nullif(v_attachment->>'storage_path','') is null then continue; end if;
       v_body := coalesce(v_body, '');
 
-      v_phone := regexp_replace(coalesce(v_cand.phone,''), '\\D', '', 'g');
+      v_phone := regexp_replace(coalesce(v_cand.phone,''), '\D', '', 'g');
       if v_phone not like '55%' then v_phone := '55' || v_phone; end if;
       v_body := replace(replace(replace(replace(replace(replace(v_body,
         '{empresa}', coalesce(v_cand.business_name,'')), '{cidade}', coalesce(v_cand.city,'')),

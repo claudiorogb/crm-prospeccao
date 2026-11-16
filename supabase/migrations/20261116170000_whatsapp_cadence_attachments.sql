@@ -154,3 +154,5 @@ begin
   return v_total;
 end;
 $function$;
+
+revoke all on function private.run_whatsapp_cadence(boolean) from public, anon, authenticated;

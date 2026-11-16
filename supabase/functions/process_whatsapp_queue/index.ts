@@ -238,6 +238,18 @@ async function sendQueuedMessage(admin: any, message: any, finalText: string) {
     throw new Error("Os dados do anexo do follow-up estão inválidos.");
   }
 
+  const scanId = String(metadata.scan_id || "");
+  if (!scanId) throw new Error("O anexo do follow-up não possui registro de validação.");
+  const { data: scan, error: scanError } = await admin.from("file_security_scans")
+    .select("id")
+    .eq("id", scanId)
+    .eq("organization_id", message.organization_id)
+    .eq("target_bucket", "whatsapp-media")
+    .eq("target_path", storagePath)
+    .eq("policy_status", "allowed")
+    .maybeSingle();
+  if (scanError || !scan?.id) throw new Error("O anexo do follow-up não passou pela validação de segurança.");
+
   const { data: file, error: downloadError } = await admin.storage.from("whatsapp-media").download(storagePath);
   if (downloadError || !file) throw new Error("Não foi possível recuperar o anexo privado do follow-up.");
   if (file.size <= 0 || file.size > 8 * 1024 * 1024) throw new Error("O anexo do follow-up está vazio ou excede 8 MB.");

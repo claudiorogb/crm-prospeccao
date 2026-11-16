@@ -15,3 +15,10 @@
 .cadence-status-v2.on{color:#1a7f5a}
 .cadence-status-v2.off{color:#b45309}
 .cadence-text-v2{white-space:pre-wrap;font-family:inherit;font-size:13px;background:rgba(128,128,128,.08);padding:8px;border-radius:6px}
+
+.cadence-attachments-v2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.cadence-attachment-field{display:flex;flex-direction:column;align-items:flex-start;gap:7px;min-width:0;padding:12px;border:1px solid rgba(128,128,128,.22);border-radius:8px;background:rgba(128,128,128,.04)}
+.cadence-attachment-field label{font-weight:600}
+.cadence-attachment-field input[type=file]{max-width:100%;font-size:13px}
+.cadence-attachment-field small{color:var(--muted,#64748b);overflow-wrap:anywhere}
+@media(max-width:800px){.cadence-attachments-v2{grid-template-columns:1fr}}

@@ -7,7 +7,7 @@ const STALE_READY_MINUTES = 15;
 
 // Espelha no WhatsApp do CRM a mensagem que o CRM acabou de enviar (campanha ou cadência), para a conversa
 // mostrar também o que saiu antes de o cliente responder. Nunca derruba o envio: qualquer erro só vai para o log.
-async function mirrorSentMessage(admin: any, message: any, providerMessageId: string | null, text: string, sentAt: string) {
+async function mirrorSentMessage(admin: any, message: any, providerMessageId: string | null, text: string, sentAt: string, media: any = null) {
   try {
     const orgId = String(message.organization_id);
     const numberId = String(message.whatsapp_number_id);
@@ -46,11 +46,20 @@ async function mirrorSentMessage(admin: any, message: any, providerMessageId: st
     }
     if (!conversationId) return;
 
+    const messageType = media?.message_type || "text";
+    const mediaMetadata = media ? {
+      file_name: media.file_name,
+      mime_type: media.mime_type,
+      caption: text || null,
+      storage_path: media.storage_path,
+    } : {};
+    const fallback = messageType === "image" ? "Imagem enviada" : messageType === "video" ? "Vídeo enviado" : "Documento enviado";
+    const preview = text || (media ? fallback : "");
     const { error: insertError } = await admin.from("whatsapp_messages").insert({
       organization_id: orgId, conversation_id: conversationId, whatsapp_number_id: numberId,
       lead_id: message.lead_id || null, provider: "evolution",
       provider_message_id: providerMessageId || `crm-${message.id}`,
-      direction: "outbound", message_type: "text", text_body: text, media_metadata: {},
+      direction: "outbound", message_type: messageType, text_body: media ? (text || null) : text, media_metadata: mediaMetadata,
       delivery_status: "sent", is_automatic: false, source: "crm", occurred_at: sentAt,
     });
     // Duplicado = o eco do próprio WhatsApp chegou primeiro; a mensagem já está na conversa.
@@ -59,7 +68,7 @@ async function mirrorSentMessage(admin: any, message: any, providerMessageId: st
       return;
     }
     await admin.from("whatsapp_conversations").update({
-      last_message_at: sentAt, last_message_preview: text.slice(0, 240), last_outbound_at: sentAt, updated_at: sentAt,
+      last_message_at: sentAt, last_message_preview: preview.slice(0, 240), last_outbound_at: sentAt, updated_at: sentAt,
     }).eq("id", conversationId).eq("organization_id", orgId);
   } catch (error) {
     console.error("Espelho da mensagem enviada falhou:", error instanceof Error ? error.message : String(error));
@@ -188,6 +197,107 @@ async function evolution(path: string, options: RequestInit = {}) {
   return data;
 }
 
+
+
+function mediaTypeFromMime(mime: string) {
+  const value = String(mime || "").toLowerCase();
+  if (value.startsWith("image/")) return "image";
+  if (value.startsWith("video/")) return "video";
+  if (value.startsWith("audio/")) return "audio";
+  return "document";
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function sendQueuedMessage(admin: any, message: any, finalText: string) {
+  const { data: row, error } = await admin.from("outbound_messages")
+    .select("media_metadata")
+    .eq("id", message.id)
+    .eq("organization_id", message.organization_id)
+    .maybeSingle();
+  if (error) throw error;
+
+  const metadata = row?.media_metadata || {};
+  const storagePath = String(metadata.storage_path || "");
+  if (!Object.keys(metadata).length) {
+    const result = await evolution("/message/sendText/" + encodeURIComponent(message.evolution_instance_name), {
+      method: "POST",
+      body: JSON.stringify({ number: message.recipient, text: finalText }),
+    });
+    return { result, media: null };
+  }
+
+  if (!storagePath || !storagePath.startsWith(String(message.organization_id) + "/cadence/") || storagePath.includes("..")) {
+    throw new Error("Os dados do anexo do follow-up estão inválidos.");
+  }
+
+  const scanId = String(metadata.scan_id || "");
+  if (!scanId) throw new Error("O anexo do follow-up não possui registro de validação.");
+  const { data: scan, error: scanError } = await admin.from("file_security_scans")
+    .select("id")
+    .eq("id", scanId)
+    .eq("organization_id", message.organization_id)
+    .eq("target_bucket", "whatsapp-media")
+    .eq("target_path", storagePath)
+    .eq("policy_status", "allowed")
+    .maybeSingle();
+  if (scanError || !scan?.id) throw new Error("O anexo do follow-up não passou pela validação de segurança.");
+
+  const { data: file, error: downloadError } = await admin.storage.from("whatsapp-media").download(storagePath);
+  if (downloadError || !file) throw new Error("Não foi possível recuperar o anexo privado do follow-up.");
+  if (file.size <= 0 || file.size > 8 * 1024 * 1024) throw new Error("O anexo do follow-up está vazio ou excede 8 MB.");
+
+  const mimeType = String(metadata.mime_type || file.type || "application/octet-stream").toLowerCase();
+  if (!mimeType || mimeType === "application/octet-stream") throw new Error("O tipo do anexo do follow-up não é válido.");
+  const mediaType = mediaTypeFromMime(mimeType);
+  if (mediaType === "audio" && finalText.trim()) {
+    throw new Error("A Evolution API não permite legenda no envio de áudio. Use um anexo de documento, imagem ou vídeo para acompanhar o texto.");
+  }
+  if (mediaType !== "audio" && finalText.length > 1024) {
+    throw new Error("O texto do follow-up ultrapassou 1.024 caracteres após a substituição das variáveis.");
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const base64 = bytesToBase64(bytes);
+  const fileName = String(metadata.file_name || "arquivo").replace(/[\r\n]/g, "").slice(0, 180);
+  let result: any;
+
+  if (mediaType === "audio") {
+    result = await evolution("/message/sendWhatsAppAudio/" + encodeURIComponent(message.evolution_instance_name), {
+      method: "POST",
+      body: JSON.stringify({ number: message.recipient, audio: base64, encoding: true }),
+    });
+  } else {
+    result = await evolution("/message/sendMedia/" + encodeURIComponent(message.evolution_instance_name), {
+      method: "POST",
+      body: JSON.stringify({
+        number: message.recipient,
+        mediatype: mediaType,
+        mimetype: mimeType,
+        caption: finalText,
+        media: base64,
+        fileName,
+      }),
+    });
+  }
+
+  return {
+    result,
+    media: {
+      message_type: mediaType,
+      file_name: fileName,
+      mime_type: mimeType,
+      storage_path: storagePath,
+    },
+  };
+}
 
 async function connectionState(instanceName: string) {
   const data = await evolution(`/instance/connectionState/${encodeURIComponent(instanceName)}`);
@@ -342,17 +452,14 @@ Deno.serve(async (req) => {
         }).eq("id", message.whatsapp_number_id).eq("organization_id", message.organization_id);
 
         const finalText = applySpintax(applySmartGreeting(message.rendered_message));
-        const result = await evolution(`/message/sendText/${encodeURIComponent(message.evolution_instance_name)}`, {
-          method: "POST",
-          body: JSON.stringify({ number: message.recipient, text: finalText }),
-        });
+        const { result, media } = await sendQueuedMessage(admin, message, finalText);
         const sentAt = new Date().toISOString();
         const providerMessageId = result?.key?.id || result?.messageId || result?.id || null;
         const { error: updateError } = await admin.from("outbound_messages").update({
           status: "sent", provider_message_id: providerMessageId, sent_at: sentAt, error_message: null, updated_at: sentAt,
         }).eq("id", message.id).eq("status", "ready");
         if (updateError) throw updateError;
-        await mirrorSentMessage(admin, message, providerMessageId, finalText, sentAt);
+        await mirrorSentMessage(admin, message, providerMessageId, finalText, sentAt, media);
         const brazilDate = new Intl.DateTimeFormat("en-CA", {
           timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
         }).format(new Date());

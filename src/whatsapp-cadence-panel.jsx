@@ -8,6 +8,92 @@ const TOKENS = [['{saudacao}', 'Saudação'], ['{empresa}', 'Empresa'], ['{cidad
 const SPINTAX = '{quero te apresentar|gostaria de apresentar|posso te mostrar}'
 const EMPTY = { enabled: false, step1_delay_days: 3, step1_body: '', step2_delay_days: 5, step2_body: '' }
 
+const MAX_ATTACHMENT_SIZE = 8 * 1024 * 1024
+const ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.docx,.xlsx,.pptx,.txt,.csv,.mp4,.webm'
+
+const SUPPORTED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+  'video/mp4', 'video/webm',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain', 'text/csv'
+])
+
+const MIME_BY_EXTENSION = {
+  pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain', csv: 'text/csv', mp4: 'video/mp4', webm: 'video/webm'
+}
+
+function safeAttachmentName(value) {
+  return String(value || 'arquivo').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120) || 'arquivo'
+}
+
+async function uploadCadenceAttachment(file, organizationId, cadenceId, step) {
+  if (!file) return null
+  if (file.size <= 0) throw new Error('O arquivo está vazio.')
+  if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('Cada anexo deve ter no máximo 8 MB.')
+
+  const extension = String(file.name || '').split('.').pop().toLowerCase()
+  const browserMime = String(file.type || '').toLowerCase()
+  const mimeType = browserMime && browserMime !== 'application/octet-stream' ? browserMime : String(MIME_BY_EXTENSION[extension] || '').toLowerCase()
+  if (!MIME_BY_EXTENSION[extension] || !SUPPORTED_MIME_TYPES.has(mimeType)) {
+    throw new Error('Formato não suportado. Use PDF, imagens, vídeos MP4/WebM, DOCX, XLSX, PPTX, TXT ou CSV.')
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
+  }
+  const base64 = btoa(binary)
+  const targetPath = organizationId + '/cadence/' + cadenceId + '/' + step + '/' + crypto.randomUUID() + '-' + safeAttachmentName(file.name)
+
+  const { data, error } = await supabase.functions.invoke('file-security-gate', {
+    body: {
+      organization_id: organizationId,
+      source: 'whatsapp-cadence-followup',
+      target_bucket: 'whatsapp-media',
+      target_path: targetPath,
+      file_name: file.name,
+      mime_type: mimeType,
+      base64
+    }
+  })
+  if (error) throw new Error(error.message || 'Não foi possível enviar o anexo para análise.')
+  if (!data?.ok || data?.blocked) throw new Error(data?.message || 'O arquivo foi bloqueado pela validação de segurança.')
+
+  return {
+    storage_path: data.storage_path,
+    file_name: file.name,
+    mime_type: mimeType,
+    size_bytes: data.size_bytes || file.size,
+    scan_id: data.scan_id
+  }
+}
+
+async function deleteCadenceAttachment(organizationId, storagePath) {
+  if (!storagePath) return
+  const { data, error } = await supabase.functions.invoke('file-security-gate', {
+    body: {
+      action: 'delete_whatsapp_cadence_attachment',
+      organization_id: organizationId,
+      target_path: storagePath
+    }
+  })
+  if (error || !data?.ok) {
+    console.warn('Não foi possível remover o anexo antigo da cadência:', error?.message || data?.error)
+  }
+}
+
+
 // Vincula a cadência pendente ao(s) envio(s) recém-criado(s) da mesma campanha.
 // Chamado depois de "Enviar mensagem". Nunca lança erro: falhar aqui não pode afetar o envio.
 export async function attachPendingCadence(organizationId, batchIds) {
@@ -35,11 +121,11 @@ export async function attachPendingCadence(organizationId, batchIds) {
 // Nunca lança erro (se falhar a consulta, não bloqueia o envio).
 export async function pendingCadenceProblem(organizationId, { days, end, now = Date.now() }) {
   try {
-    const { data } = await supabase.from('whatsapp_cadences').select('id,batch_ids,step1_delay_days,step2_delay_days,step2_body')
+    const { data } = await supabase.from('whatsapp_cadences').select('id,batch_ids,step1_delay_days,step2_delay_days,step2_body,step2_attachment')
       .eq('organization_id', organizationId).eq('enabled', true)
     const pending = (data || []).find(row => !row.batch_ids?.length)
     if (!pending) return null
-    return followupsProblem({ days, end, now, step1: pending.step1_delay_days, step2: pending.step2_delay_days, hasStep2: Boolean(String(pending.step2_body || '').trim()) })
+    return followupsProblem({ days, end, now, step1: pending.step1_delay_days, step2: pending.step2_delay_days, hasStep2: Boolean(String(pending.step2_body || '').trim() || pending.step2_attachment?.storage_path) })
   } catch {
     return null
   }
@@ -57,6 +143,8 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
   const [form, setForm] = useState(EMPTY)
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [attachmentFiles, setAttachmentFiles] = useState({ step1: null, step2: null })
+  const [removedAttachments, setRemovedAttachments] = useState({ step1: false, step2: false })
   const [dirty, setDirty] = useState(false)
   const [activeField, setActiveField] = useState('step1_body')
   const refs = { step1_body: useRef(null), step2_body: useRef(null) }
@@ -90,8 +178,12 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
         enabled: true, step1_delay_days: pending.step1_delay_days ?? 3, step1_body: pending.step1_body || '',
         step2_delay_days: pending.step2_delay_days ?? 5, step2_body: pending.step2_body || ''
       })
+      setAttachmentFiles({ step1: null, step2: null })
+      setRemovedAttachments({ step1: false, step2: false })
     } else {
       setForm(EMPTY)
+      setAttachmentFiles({ step1: null, step2: null })
+      setRemovedAttachments({ step1: false, step2: false })
     }
     setDirty(false)
   }, [pending])
@@ -99,7 +191,7 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
   const change = patch => { setForm(old => ({ ...old, ...patch })); setDirty(true) }
 
   // Trava: cada follow-up só pode cair em dia de envio (ex.: segunda, quarta ou sexta).
-  const plan = planFollowups({ days: sendDays, end: sendEnd, now, step1: form.step1_delay_days, step2: form.step2_delay_days, hasStep2: Boolean(form.step2_body.trim()) })
+  const plan = planFollowups({ days: sendDays, end: sendEnd, now, step1: form.step1_delay_days, step2: form.step2_delay_days, hasStep2: Boolean(form.step2_body.trim() || attachmentFiles.step2 || (!removedAttachments.step2 && pending?.step2_attachment?.storage_path)) })
   const daysLabel = (sendDays || []).map(day => dayName(Number(day))).join(', ')
 
   function insertToken(token) {
@@ -116,29 +208,92 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
     if (!segmentId) return
     if (!form.step1_body.trim()) { setMessage('Escreva o texto do 1º follow-up.'); return }
     if (!plan.ok) { setMessage('Não há dia de envio configurado para os follow-ups.'); return }
+    const hasStep1Attachment = Boolean(attachmentFiles.step1 || (!removedAttachments.step1 && pending?.step1_attachment?.storage_path))
+    const hasStep2Attachment = Boolean(attachmentFiles.step2 || (!removedAttachments.step2 && pending?.step2_attachment?.storage_path))
+    if ((hasStep1Attachment && form.step1_body.length > 1024) || (hasStep2Attachment && form.step2_body.length > 1024)) {
+      setMessage('Quando há anexo, o texto que acompanha o arquivo deve ter no máximo 1.024 caracteres.')
+      return
+    }
+    const cadenceId = pending?.id || crypto.randomUUID()
     const d1 = plan.d1
     const d2 = plan.d2 ?? Math.min(30, Math.max(2, parseInt(form.step2_delay_days, 10) || 5))
-    const payload = {
-      enabled: true, target_segment_id: segmentId, step1_body: form.step1_body.trim(), step1_delay_days: d1,
-      step2_body: form.step2_body.trim() || null, step2_delay_days: d2, updated_at: new Date().toISOString()
-    }
+    const oldAttachments = [pending?.step1_attachment, pending?.step2_attachment].filter(Boolean)
+    const uploaded = []
     setSaving(true)
-    const q = pending?.id
-      ? supabase.from('whatsapp_cadences').update(payload).eq('id', pending.id).eq('organization_id', organization.id)
-      : supabase.from('whatsapp_cadences').insert({ ...payload, organization_id: organization.id })
-    const { error } = await q
-    setSaving(false)
-    if (error) { setMessage(`Não foi possível salvar: ${error.message}`); return }
-    const campaign = segments.find(item => item.id === segmentId)?.name || 'a campanha'
-    setMessage(`Cadência salva. Ela será ativada junto com o próximo envio de ${campaign} em "Enviar mensagens".`)
-    setDirty(false)
-    load()
+    setMessage('')
+
+    try {
+      const nextAttachments = {}
+      for (const step of ['step1', 'step2']) {
+        const selected = attachmentFiles[step]
+        const removed = removedAttachments[step]
+        const existing = pending ? (pending[step + '_attachment'] || null) : null
+        if (selected) {
+          const metadata = await uploadCadenceAttachment(selected, organization.id, cadenceId, step)
+          uploaded.push(metadata)
+          nextAttachments[step] = metadata
+        } else {
+          nextAttachments[step] = removed ? null : existing
+        }
+      }
+
+      const payload = {
+        enabled: true, target_segment_id: segmentId, step1_body: form.step1_body.trim(), step1_delay_days: d1,
+        step2_body: form.step2_body.trim() || null, step2_delay_days: d2,
+        step1_attachment: nextAttachments.step1, step2_attachment: nextAttachments.step2,
+        updated_at: new Date().toISOString()
+      }
+      const q = pending?.id
+        ? supabase.from('whatsapp_cadences').update(payload).eq('id', pending.id).eq('organization_id', organization.id)
+        : supabase.from('whatsapp_cadences').insert({ ...payload, id: cadenceId, organization_id: organization.id })
+      const { error } = await q
+      if (error) throw error
+
+      const keepPaths = new Set([nextAttachments.step1?.storage_path, nextAttachments.step2?.storage_path].filter(Boolean))
+      for (const old of oldAttachments) {
+        if (old.storage_path && !keepPaths.has(old.storage_path)) {
+          await deleteCadenceAttachment(organization.id, old.storage_path)
+        }
+      }
+      const campaign = segments.find(item => item.id === segmentId)?.name || 'a campanha'
+      setMessage('Cadência salva. Ela será ativada junto com o próximo envio de ' + campaign + ' em "Enviar mensagens".')
+      setDirty(false)
+      setAttachmentFiles({ step1: null, step2: null })
+      setRemovedAttachments({ step1: false, step2: false })
+      await load()
+    } catch (error) {
+      for (const item of uploaded) await deleteCadenceAttachment(organization.id, item.storage_path)
+      setMessage('Não foi possível salvar: ' + (error?.message || String(error)))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function selectAttachment(step, file) {
+    if (!file) return
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      setMessage('Cada anexo deve ter no máximo 8 MB.')
+      return
+    }
+    setAttachmentFiles(current => ({ ...current, [step]: file }))
+    setRemovedAttachments(current => ({ ...current, [step]: false }))
+    setDirty(true)
+    setMessage('')
+  }
+
+  function removeAttachment(step) {
+    setAttachmentFiles(current => ({ ...current, [step]: null }))
+    setRemovedAttachments(current => ({ ...current, [step]: true }))
+    setDirty(true)
   }
 
   async function discardPending() {
     if (!pending || !window.confirm('Descartar a cadência que ainda não foi iniciada?')) return
     const { error } = await supabase.from('whatsapp_cadences').delete().eq('id', pending.id).eq('organization_id', organization.id)
     if (error) { setMessage(error.message); return }
+    for (const attachment of [pending.step1_attachment, pending.step2_attachment]) {
+      if (attachment?.storage_path) await deleteCadenceAttachment(organization.id, attachment.storage_path)
+    }
     setMessage('Cadência descartada.')
     load()
   }
@@ -220,6 +375,21 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
             </label>
           </div>
 
+          <div className="cadence-attachments-v2">
+            <div className="cadence-attachment-field">
+              <label htmlFor="cadence-step1-attachment">Anexo do 1º follow-up (opcional)</label>
+              <input id="cadence-step1-attachment" type="file" accept={ATTACHMENT_ACCEPT} disabled={saving} onChange={e => { selectAttachment('step1', e.target.files?.[0]); e.target.value = '' }} />
+              <small>{attachmentFiles.step1 ? 'Novo arquivo: ' + attachmentFiles.step1.name : removedAttachments.step1 ? 'O anexo será removido ao salvar.' : pending?.step1_attachment?.file_name ? 'Arquivo atual: ' + pending.step1_attachment.file_name : 'Nenhum arquivo anexado.'}</small>
+              {(attachmentFiles.step1 || pending?.step1_attachment?.storage_path) && !removedAttachments.step1 && <button type="button" className="secondary mini" onClick={() => removeAttachment('step1')}>Remover anexo</button>}
+            </div>
+            <div className="cadence-attachment-field">
+              <label htmlFor="cadence-step2-attachment">Anexo do 2º follow-up (opcional)</label>
+              <input id="cadence-step2-attachment" type="file" accept={ATTACHMENT_ACCEPT} disabled={saving} onChange={e => { selectAttachment('step2', e.target.files?.[0]); e.target.value = '' }} />
+              <small>{attachmentFiles.step2 ? 'Novo arquivo: ' + attachmentFiles.step2.name : removedAttachments.step2 ? 'O anexo será removido ao salvar.' : pending?.step2_attachment?.file_name ? 'Arquivo atual: ' + pending.step2_attachment.file_name : 'Nenhum arquivo anexado.'}</small>
+              {(attachmentFiles.step2 || pending?.step2_attachment?.storage_path) && !removedAttachments.step2 && <button type="button" className="secondary mini" onClick={() => removeAttachment('step2')}>Remover anexo</button>}
+            </div>
+          </div>
+
           <div className="cadence-actions-v2">
             <button type="button" className="primary" onClick={save} disabled={saving || !plan.ok || (!dirty && !plan.adjusted1 && !plan.adjusted2)}>{saving ? 'Salvando…' : pending ? 'Atualizar cadência' : 'Salvar cadência'}</button>
             {dirty && <span className="muted">Alterações não salvas</span>}
@@ -238,9 +408,11 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                   <span><strong>{campaignName(row.target_segment_id)}</strong> • {row.name || 'Envio'}</span>
                   <span className={`cadence-status-v2 ${status === 'Ativa' ? 'on' : 'off'}`}>{status}</span>
                 </summary>
-                <p className="muted">1º follow-up após {row.step1_delay_days} dia(s){row.step2_body ? ` • 2º após mais ${row.step2_delay_days} dia(s)` : ' • sem 2º follow-up'}</p>
+                <p className="muted">1º follow-up após {row.step1_delay_days} dia(s){(row.step2_body || row.step2_attachment?.storage_path) ? ` • 2º após mais ${row.step2_delay_days} dia(s)` : ' • sem 2º follow-up'}</p>
                 <pre className="cadence-text-v2">{row.step1_body}</pre>
                 {row.step2_body && <pre className="cadence-text-v2">{row.step2_body}</pre>}
+                {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}
+                {row.step2_attachment?.file_name && <p className="muted">Anexo do 2º follow-up: {row.step2_attachment.file_name}</p>}
                 <button type="button" className="secondary mini" onClick={() => toggleRunning(row)}>{row.enabled ? 'Desligar cadência' : 'Ligar cadência'}</button>
               </details>
             )

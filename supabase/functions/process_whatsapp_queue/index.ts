@@ -59,7 +59,7 @@ async function mirrorSentMessage(admin: any, message: any, providerMessageId: st
       organization_id: orgId, conversation_id: conversationId, whatsapp_number_id: numberId,
       lead_id: message.lead_id || null, provider: "evolution",
       provider_message_id: providerMessageId || `crm-${message.id}`,
-      direction: "outbound", message_type: messageType, text_body: text || null, media_metadata: mediaMetadata,
+      direction: "outbound", message_type: messageType, text_body: media ? (text || null) : text, media_metadata: mediaMetadata,
       delivery_status: "sent", is_automatic: false, source: "crm", occurred_at: sentAt,
     });
     // Duplicado = o eco do próprio WhatsApp chegou primeiro; a mensagem já está na conversa.

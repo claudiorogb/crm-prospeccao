@@ -368,13 +368,13 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
           <div className="cadence-attachments-v2">
             <div className="cadence-attachment-field">
               <label htmlFor="cadence-step1-attachment">Anexo do 1º follow-up (opcional)</label>
-              <input id="cadence-step1-attachment" type="file" accept={ATTACHMENT_ACCEPT} onChange={e => { selectAttachment('step1', e.target.files?.[0]); e.target.value = '' }} />
+              <input id="cadence-step1-attachment" type="file" accept={ATTACHMENT_ACCEPT} disabled={saving} onChange={e => { selectAttachment('step1', e.target.files?.[0]); e.target.value = '' }} />
               <small>{attachmentFiles.step1 ? 'Novo arquivo: ' + attachmentFiles.step1.name : removedAttachments.step1 ? 'O anexo será removido ao salvar.' : pending?.step1_attachment?.file_name ? 'Arquivo atual: ' + pending.step1_attachment.file_name : 'Nenhum arquivo anexado.'}</small>
               {(attachmentFiles.step1 || pending?.step1_attachment?.storage_path) && !removedAttachments.step1 && <button type="button" className="secondary mini" onClick={() => removeAttachment('step1')}>Remover anexo</button>}
             </div>
             <div className="cadence-attachment-field">
               <label htmlFor="cadence-step2-attachment">Anexo do 2º follow-up (opcional)</label>
-              <input id="cadence-step2-attachment" type="file" accept={ATTACHMENT_ACCEPT} onChange={e => { selectAttachment('step2', e.target.files?.[0]); e.target.value = '' }} />
+              <input id="cadence-step2-attachment" type="file" accept={ATTACHMENT_ACCEPT} disabled={saving} onChange={e => { selectAttachment('step2', e.target.files?.[0]); e.target.value = '' }} />
               <small>{attachmentFiles.step2 ? 'Novo arquivo: ' + attachmentFiles.step2.name : removedAttachments.step2 ? 'O anexo será removido ao salvar.' : pending?.step2_attachment?.file_name ? 'Arquivo atual: ' + pending.step2_attachment.file_name : 'Nenhum arquivo anexado.'}</small>
               {(attachmentFiles.step2 || pending?.step2_attachment?.storage_path) && !removedAttachments.step2 && <button type="button" className="secondary mini" onClick={() => removeAttachment('step2')}>Remover anexo</button>}
             </div>
@@ -398,9 +398,11 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                   <span><strong>{campaignName(row.target_segment_id)}</strong> • {row.name || 'Envio'}</span>
                   <span className={`cadence-status-v2 ${status === 'Ativa' ? 'on' : 'off'}`}>{status}</span>
                 </summary>
-                <p className="muted">1º follow-up após {row.step1_delay_days} dia(s){row.step2_body ? ` • 2º após mais ${row.step2_delay_days} dia(s)` : ' • sem 2º follow-up'}</p>
+                <p className="muted">1º follow-up após {row.step1_delay_days} dia(s){(row.step2_body || row.step2_attachment?.storage_path) ? ` • 2º após mais ${row.step2_delay_days} dia(s)` : ' • sem 2º follow-up'}</p>
                 <pre className="cadence-text-v2">{row.step1_body}</pre>
                 {row.step2_body && <pre className="cadence-text-v2">{row.step2_body}</pre>}
+                {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}
+                {row.step2_attachment?.file_name && <p className="muted">Anexo do 2º follow-up: {row.step2_attachment.file_name}</p>}
                 {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}
                 {row.step2_attachment?.file_name && <p className="muted">Anexo do 2º follow-up: {row.step2_attachment.file_name}</p>}
                 <button type="button" className="secondary mini" onClick={() => toggleRunning(row)}>{row.enabled ? 'Desligar cadência' : 'Ligar cadência'}</button>

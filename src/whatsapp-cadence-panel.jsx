@@ -34,7 +34,7 @@ async function uploadCadenceAttachment(file, organizationId, cadenceId, step) {
   const browserMime = String(file.type || '').toLowerCase()
   const mimeType = browserMime && browserMime !== 'application/octet-stream' ? browserMime : String(MIME_BY_EXTENSION[extension] || '').toLowerCase()
   if (!mimeType || mimeType === 'application/octet-stream') {
-    throw new Error('Formato não reconhecido. Use PDF, imagem, vídeo, áudio, DOCX, XLSX, PPTX, TXT ou CSV.')
+    throw new Error('Formato não reconhecido. Use PDF, imagem, vídeo, DOCX, XLSX, PPTX, TXT ou CSV.')
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer())
@@ -198,6 +198,12 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
     if (!segmentId) return
     if (!form.step1_body.trim()) { setMessage('Escreva o texto do 1º follow-up.'); return }
     if (!plan.ok) { setMessage('Não há dia de envio configurado para os follow-ups.'); return }
+    const hasStep1Attachment = Boolean(attachmentFiles.step1 || (!removedAttachments.step1 && pending?.step1_attachment?.storage_path))
+    const hasStep2Attachment = Boolean(attachmentFiles.step2 || (!removedAttachments.step2 && pending?.step2_attachment?.storage_path))
+    if ((hasStep1Attachment && form.step1_body.length > 1024) || (hasStep2Attachment && form.step2_body.length > 1024)) {
+      setMessage('Quando há anexo, o texto que acompanha o arquivo deve ter no máximo 1.024 caracteres.')
+      return
+    }
     const cadenceId = pending?.id || crypto.randomUUID()
     const d1 = plan.d1
     const d2 = plan.d2 ?? Math.min(30, Math.max(2, parseInt(form.step2_delay_days, 10) || 5))
@@ -275,6 +281,9 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
     if (!pending || !window.confirm('Descartar a cadência que ainda não foi iniciada?')) return
     const { error } = await supabase.from('whatsapp_cadences').delete().eq('id', pending.id).eq('organization_id', organization.id)
     if (error) { setMessage(error.message); return }
+    for (const attachment of [pending.step1_attachment, pending.step2_attachment]) {
+      if (attachment?.storage_path) await deleteCadenceAttachment(organization.id, attachment.storage_path)
+    }
     setMessage('Cadência descartada.')
     load()
   }

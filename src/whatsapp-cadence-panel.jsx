@@ -408,7 +408,7 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                   <span><strong>{campaignName(row.target_segment_id)}</strong> • {row.name || 'Envio'}</span>
                   <span className={`cadence-status-v2 ${status === 'Ativa' ? 'on' : 'off'}`}>{status}</span>
                 </summary>
-                <p className="muted">2º envio ${row.step1_delay_days} dia(s) após o 1º{(row.step2_body || row.step2_attachment?.storage_path) ? ` • 3º envio ${row.step2_delay_days} dia(s) após o 2º` : ' • sem 3º envio'}</p>
+                <p className="muted">{`2º envio ${row.step1_delay_days} dia(s) após o 1º${(row.step2_body || row.step2_attachment?.storage_path) ? ` • 3º envio ${row.step2_delay_days} dia(s) após o 2º` : ' • sem 3º envio'}`}</p>
                 <pre className="cadence-text-v2">{row.step1_body}</pre>
                 {row.step2_body && <pre className="cadence-text-v2">{row.step2_body}</pre>}
                 {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}

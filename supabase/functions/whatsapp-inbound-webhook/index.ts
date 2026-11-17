@@ -414,60 +414,46 @@ Deno.serve(async (req) => {
     const updates = Array.isArray(data) ? data : [data];
     let updated = 0;
     let markedRead = 0;
-    const isDelocReadTest = numberRow.id === "68bb1f59-698d-4d1c-a019-c91cc8abb9c3";
     for (const item of updates) {
       const key = item?.key || item?.data?.key || {};
       const status = mapDeliveryStatus(item?.update?.status ?? item?.status ?? item?.data?.status);
 
       // A Evolution envia keyId como ID da mensagem no WhatsApp.
       // messageId é um identificador interno da Evolution e não deve ser usado aqui.
-      if (isDelocReadTest) {
-        const providerMessageId = String(item?.keyId || key?.id || "");
-        if (!providerMessageId) continue;
+      const providerMessageId = String(item?.keyId || key?.id || "");
+      if (!providerMessageId) continue;
 
-        const fromMe = typeof item?.fromMe === "boolean"
-          ? item.fromMe
-          : typeof key?.fromMe === "boolean"
-          ? key.fromMe
-          : null;
+      const fromMe = typeof item?.fromMe === "boolean"
+        ? item.fromMe
+        : typeof key?.fromMe === "boolean"
+        ? key.fromMe
+        : null;
 
-        if (status === "read" && fromMe === false) {
-          const { data: didMarkRead, error: markReadError } = await admin.rpc(
-            "mark_whatsapp_inbound_message_read",
-            {
-              p_organization_id: numberRow.organization_id,
-              p_whatsapp_number_id: numberRow.id,
-              p_provider_message_id: providerMessageId,
-            },
-          );
-          if (markReadError) {
-            console.error("[wa-read-sync] failed to mark inbound read", markReadError.message);
-            return json({ error: "Unable to synchronize WhatsApp read status" }, 503);
-          }
-          if (didMarkRead === true) markedRead++;
-          updated++;
-          continue;
+      if (status === "read" && fromMe === false) {
+        const { data: didMarkRead, error: markReadError } = await admin.rpc(
+          "mark_whatsapp_inbound_message_read",
+          {
+            p_organization_id: numberRow.organization_id,
+            p_whatsapp_number_id: numberRow.id,
+            p_provider_message_id: providerMessageId,
+          },
+        );
+        if (markReadError) {
+          console.error("[wa-read-sync] failed to mark inbound read", markReadError.message);
+          return json({ error: "Unable to synchronize WhatsApp read status" }, 503);
         }
-
-        const { error: updateError } = await admin.from("whatsapp_messages")
-          .update({ delivery_status: status })
-          .eq("organization_id", numberRow.organization_id)
-          .eq("whatsapp_number_id", numberRow.id)
-          .eq("provider", "evolution")
-          .eq("provider_message_id", providerMessageId);
-        if (!updateError) updated++;
+        if (didMarkRead === true) markedRead++;
+        updated++;
         continue;
       }
 
-      // Mantém o comportamento anterior nas demais organizações durante o teste isolado da Deloc.
-      const messageId = String(key?.id || item?.id || item?.messageId || "");
-      if (!messageId) continue;
-      await admin.from("whatsapp_messages")
+      const { error: updateError } = await admin.from("whatsapp_messages")
         .update({ delivery_status: status })
         .eq("organization_id", numberRow.organization_id)
+        .eq("whatsapp_number_id", numberRow.id)
         .eq("provider", "evolution")
-        .eq("provider_message_id", messageId);
-      updated++;
+        .eq("provider_message_id", providerMessageId);
+      if (!updateError) updated++;
     }
     return json({ ok: true, updated, marked_read: markedRead });
   }

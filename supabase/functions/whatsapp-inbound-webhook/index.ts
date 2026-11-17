@@ -411,9 +411,16 @@ Deno.serve(async (req) => {
       keys: Object.keys(item || {}).slice(0, 30),
       key_keys: Object.keys(item?.key || item?.data?.key || {}).slice(0, 20),
       has_message_id: Boolean(item?.key?.id || item?.data?.key?.id || item?.id || item?.messageId),
-      from_me: typeof (item?.key?.fromMe ?? item?.data?.key?.fromMe) === "boolean"
-        ? (item?.key?.fromMe ?? item?.data?.key?.fromMe)
+      from_me: typeof item?.fromMe === "boolean"
+        ? item.fromMe
+        : typeof item?.key?.fromMe === "boolean"
+        ? item.key.fromMe
+        : typeof item?.data?.fromMe === "boolean"
+        ? item.data.fromMe
+        : typeof item?.data?.key?.fromMe === "boolean"
+        ? item.data.key.fromMe
         : null,
+      has_remote_jid: Boolean(item?.remoteJid || item?.key?.remoteJid || item?.data?.remoteJid || item?.data?.key?.remoteJid),
       update_status: item?.update?.status ?? item?.status ?? item?.data?.status ?? null,
     })),
   }));

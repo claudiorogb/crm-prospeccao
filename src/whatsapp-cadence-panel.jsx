@@ -6,7 +6,7 @@ import './whatsapp-cadence-panel.css'
 
 const TOKENS = [['{saudacao}', 'Saudação'], ['{empresa}', 'Empresa'], ['{cidade}', 'Cidade'], ['{uf}', 'UF'], ['{telefone}', 'Telefone'], ['{segmento}', 'Segmento'], ['{email}', 'E-mail']]
 const SPINTAX = '{quero te apresentar|gostaria de apresentar|posso te mostrar}'
-const EMPTY = { enabled: false, step1_delay_days: 3, step1_body: '', step2_delay_days: 5, step2_body: '' }
+const EMPTY = { enabled: false, step1_delay_days: 5, step1_body: '', step2_delay_days: 7, step2_body: '' }
 
 const MAX_ATTACHMENT_SIZE = 8 * 1024 * 1024
 const ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.docx,.xlsx,.pptx,.txt,.csv,.mp4,.webm'
@@ -175,8 +175,8 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
     if (pending) {
       setSegmentId(pending.target_segment_id)
       setForm({
-        enabled: true, step1_delay_days: pending.step1_delay_days ?? 3, step1_body: pending.step1_body || '',
-        step2_delay_days: pending.step2_delay_days ?? 5, step2_body: pending.step2_body || ''
+        enabled: true, step1_delay_days: pending.step1_delay_days ?? 5, step1_body: pending.step1_body || '',
+        step2_delay_days: pending.step2_delay_days ?? 7, step2_body: pending.step2_body || ''
       })
       setAttachmentFiles({ step1: null, step2: null })
       setRemovedAttachments({ step1: false, step2: false })
@@ -320,7 +320,7 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
         <div>
           <span className="eyebrow">PROSPECÇÃO POR WHATSAPP</span>
           <h2>Sequência automática de follow-up
-            <HelpTip label="Como funciona a sequência automática de follow-up" text={`Crie a cadência e inicie o envio das mensagens da campanha. Ao iniciar o envio, a cadência fica vinculada a ele. Se o lead não responder, o CRM envia o 1º follow-up após ${form.step1_delay_days || 3} dias e, se ainda assim o lead não responder, envia o último após ${form.step2_delay_days || 5} dias. Se o lead responder, os próximos envios são cancelados.`} />
+            <HelpTip label="Como funciona a sequência automática de follow-up" text={`O 1º envio acontece na data de início da campanha. Se o lead não responder, o CRM envia o 2º envio ${form.step1_delay_days || 5} dias após o 1º. Se ainda não houver resposta, envia o 3º ${form.step2_delay_days || 7} dias após o 2º. Se o lead responder, os próximos envios são cancelados.`} />
           </h2>
         </div>
       </div>
@@ -341,12 +341,12 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                 {segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}
               </select>
             </label>
-            <label>1º follow-up após (dias)
+            <label>2º envio — dias após o 1º envio
               <select value={plan.d1 ?? ''} onChange={e => change({ step1_delay_days: Number(e.target.value) })}>
                 {plan.options1.map(day => <option key={day} value={day}>{day} dias — cai {plan.first != null ? dayName((plan.first + day) % 7) : ''}</option>)}
               </select>
             </label>
-            <label>2º follow-up após o 1º (dias)
+            <label>3º envio — dias após o 2º envio
               <select value={plan.d2 ?? ''} onChange={e => change({ step2_delay_days: Number(e.target.value) })}>
                 {plan.options2.map(day => <option key={day} value={day}>{day} dias — cai {plan.weekday1 != null ? dayName((plan.weekday1 + day) % 7) : ''}</option>)}
               </select>
@@ -408,7 +408,7 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                   <span><strong>{campaignName(row.target_segment_id)}</strong> • {row.name || 'Envio'}</span>
                   <span className={`cadence-status-v2 ${status === 'Ativa' ? 'on' : 'off'}`}>{status}</span>
                 </summary>
-                <p className="muted">1º follow-up após {row.step1_delay_days} dia(s){(row.step2_body || row.step2_attachment?.storage_path) ? ` • 2º após mais ${row.step2_delay_days} dia(s)` : ' • sem 2º follow-up'}</p>
+                <p className="muted">2º envio ${row.step1_delay_days} dia(s) após o 1º{(row.step2_body || row.step2_attachment?.storage_path) ? ` • 3º envio ${row.step2_delay_days} dia(s) após o 2º` : ' • sem 3º envio'}</p>
                 <pre className="cadence-text-v2">{row.step1_body}</pre>
                 {row.step2_body && <pre className="cadence-text-v2">{row.step2_body}</pre>}
                 {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}

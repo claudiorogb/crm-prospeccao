@@ -400,6 +400,24 @@ Deno.serve(async (req) => {
   const data = payload?.data || payload;
   const instanceName = String(payload?.instance || data?.instance || payload?.instanceName || "");
 
+  // Diagnóstico temporário de leitura WhatsApp: registra somente estrutura e status,
+  // nunca texto da mensagem, telefone, identificador da instância ou token.
+  const diagnosticItems = Array.isArray(data) ? data.slice(0, 10) : [data];
+  console.info("[wa-read-diagnostic]", JSON.stringify({
+    event: ev || "UNKNOWN",
+    payload_keys: Object.keys(payload || {}).slice(0, 30),
+    data_keys: Object.keys(data || {}).slice(0, 30),
+    items: diagnosticItems.map((item: any) => ({
+      keys: Object.keys(item || {}).slice(0, 30),
+      key_keys: Object.keys(item?.key || item?.data?.key || {}).slice(0, 20),
+      has_message_id: Boolean(item?.key?.id || item?.data?.key?.id || item?.id || item?.messageId),
+      from_me: typeof (item?.key?.fromMe ?? item?.data?.key?.fromMe) === "boolean"
+        ? (item?.key?.fromMe ?? item?.data?.key?.fromMe)
+        : null,
+      update_status: item?.update?.status ?? item?.status ?? item?.data?.status ?? null,
+    })),
+  }));
+
   if (ev === "MESSAGES_UPDATE") {
     if (!instanceName) return json({ ok: true, ignored: true, reason: "missing_instance" });
     const { data: numberRow } = await admin

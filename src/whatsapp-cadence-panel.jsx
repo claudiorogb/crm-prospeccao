@@ -6,7 +6,7 @@ import './whatsapp-cadence-panel.css'
 
 const TOKENS = [['{saudacao}', 'Saudação'], ['{empresa}', 'Empresa'], ['{cidade}', 'Cidade'], ['{uf}', 'UF'], ['{telefone}', 'Telefone'], ['{segmento}', 'Segmento'], ['{email}', 'E-mail']]
 const SPINTAX = '{quero te apresentar|gostaria de apresentar|posso te mostrar}'
-const EMPTY = { enabled: false, step1_delay_days: 3, step1_body: '', step2_delay_days: 5, step2_body: '' }
+const EMPTY = { enabled: false, step1_delay_days: 5, step1_body: '', step2_delay_days: 7, step2_body: '' }
 
 const MAX_ATTACHMENT_SIZE = 8 * 1024 * 1024
 const ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.docx,.xlsx,.pptx,.txt,.csv,.mp4,.webm'
@@ -175,8 +175,8 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
     if (pending) {
       setSegmentId(pending.target_segment_id)
       setForm({
-        enabled: true, step1_delay_days: pending.step1_delay_days ?? 3, step1_body: pending.step1_body || '',
-        step2_delay_days: pending.step2_delay_days ?? 5, step2_body: pending.step2_body || ''
+        enabled: true, step1_delay_days: pending.step1_delay_days ?? 5, step1_body: pending.step1_body || '',
+        step2_delay_days: pending.step2_delay_days ?? 7, step2_body: pending.step2_body || ''
       })
       setAttachmentFiles({ step1: null, step2: null })
       setRemovedAttachments({ step1: false, step2: false })
@@ -320,7 +320,7 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
         <div>
           <span className="eyebrow">PROSPECÇÃO POR WHATSAPP</span>
           <h2>Sequência automática de follow-up
-            <HelpTip label="Como funciona a sequência automática de follow-up" text={`Crie a cadência e inicie o envio das mensagens da campanha. Ao iniciar o envio, a cadência fica vinculada a ele. Se o lead não responder, o CRM envia o 1º follow-up após ${form.step1_delay_days || 3} dias e, se ainda assim o lead não responder, envia o último após ${form.step2_delay_days || 5} dias. Se o lead responder, os próximos envios são cancelados.`} />
+            <HelpTip label="Como funciona a sequência automática de follow-up" text={`O 1º envio acontece na data de início da campanha. Se o lead não responder, o CRM envia o 2º envio ${form.step1_delay_days || 5} dias após o 1º. Se ainda não houver resposta, envia o 3º ${form.step2_delay_days || 7} dias após o 2º. Se o lead responder, os próximos envios são cancelados.`} />
           </h2>
         </div>
       </div>
@@ -341,12 +341,12 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                 {segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}
               </select>
             </label>
-            <label>1º follow-up após (dias)
+            <label>2º envio — dias após o 1º envio
               <select value={plan.d1 ?? ''} onChange={e => change({ step1_delay_days: Number(e.target.value) })}>
                 {plan.options1.map(day => <option key={day} value={day}>{day} dias — cai {plan.first != null ? dayName((plan.first + day) % 7) : ''}</option>)}
               </select>
             </label>
-            <label>2º follow-up após o 1º (dias)
+            <label>3º envio — dias após o 2º envio
               <select value={plan.d2 ?? ''} onChange={e => change({ step2_delay_days: Number(e.target.value) })}>
                 {plan.options2.map(day => <option key={day} value={day}>{day} dias — cai {plan.weekday1 != null ? dayName((plan.weekday1 + day) % 7) : ''}</option>)}
               </select>
@@ -367,23 +367,23 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
           </div>
 
           <div className="field-grid two">
-            <label>1º follow-up
+            <label>2º envio — 1º follow-up
               <textarea ref={refs.step1_body} rows="6" value={form.step1_body} onFocus={() => setActiveField('step1_body')} onChange={e => change({ step1_body: e.target.value })} placeholder="Ex.: {saudacao} Passando para saber se você viu minha mensagem sobre a {empresa}." />
             </label>
-            <label>2º follow-up (opcional — último contato)
+            <label>3º envio — 2º follow-up (opcional — último contato)
               <textarea ref={refs.step2_body} rows="6" value={form.step2_body} onFocus={() => setActiveField('step2_body')} onChange={e => change({ step2_body: e.target.value })} placeholder="Deixe em branco para enviar só um follow-up." />
             </label>
           </div>
 
           <div className="cadence-attachments-v2">
             <div className="cadence-attachment-field">
-              <label htmlFor="cadence-step1-attachment">Anexo do 1º follow-up (opcional)</label>
+              <label htmlFor="cadence-step1-attachment">Anexo do 2º envio — 1º follow-up (opcional)</label>
               <input id="cadence-step1-attachment" type="file" accept={ATTACHMENT_ACCEPT} disabled={saving} onChange={e => { selectAttachment('step1', e.target.files?.[0]); e.target.value = '' }} />
               <small>{attachmentFiles.step1 ? 'Novo arquivo: ' + attachmentFiles.step1.name : removedAttachments.step1 ? 'O anexo será removido ao salvar.' : pending?.step1_attachment?.file_name ? 'Arquivo atual: ' + pending.step1_attachment.file_name : 'Nenhum arquivo anexado.'}</small>
               {(attachmentFiles.step1 || pending?.step1_attachment?.storage_path) && !removedAttachments.step1 && <button type="button" className="secondary mini" onClick={() => removeAttachment('step1')}>Remover anexo</button>}
             </div>
             <div className="cadence-attachment-field">
-              <label htmlFor="cadence-step2-attachment">Anexo do 2º follow-up (opcional)</label>
+              <label htmlFor="cadence-step2-attachment">Anexo do 3º envio — 2º follow-up (opcional)</label>
               <input id="cadence-step2-attachment" type="file" accept={ATTACHMENT_ACCEPT} disabled={saving} onChange={e => { selectAttachment('step2', e.target.files?.[0]); e.target.value = '' }} />
               <small>{attachmentFiles.step2 ? 'Novo arquivo: ' + attachmentFiles.step2.name : removedAttachments.step2 ? 'O anexo será removido ao salvar.' : pending?.step2_attachment?.file_name ? 'Arquivo atual: ' + pending.step2_attachment.file_name : 'Nenhum arquivo anexado.'}</small>
               {(attachmentFiles.step2 || pending?.step2_attachment?.storage_path) && !removedAttachments.step2 && <button type="button" className="secondary mini" onClick={() => removeAttachment('step2')}>Remover anexo</button>}
@@ -408,11 +408,11 @@ export default function WhatsappCadencePanel({ organization, refreshKey = 0, sen
                   <span><strong>{campaignName(row.target_segment_id)}</strong> • {row.name || 'Envio'}</span>
                   <span className={`cadence-status-v2 ${status === 'Ativa' ? 'on' : 'off'}`}>{status}</span>
                 </summary>
-                <p className="muted">1º follow-up após {row.step1_delay_days} dia(s){(row.step2_body || row.step2_attachment?.storage_path) ? ` • 2º após mais ${row.step2_delay_days} dia(s)` : ' • sem 2º follow-up'}</p>
+                <p className="muted">{`2º envio ${row.step1_delay_days} dia(s) após o 1º${(row.step2_body || row.step2_attachment?.storage_path) ? ` • 3º envio ${row.step2_delay_days} dia(s) após o 2º` : ' • sem 3º envio'}`}</p>
                 <pre className="cadence-text-v2">{row.step1_body}</pre>
                 {row.step2_body && <pre className="cadence-text-v2">{row.step2_body}</pre>}
-                {row.step1_attachment?.file_name && <p className="muted">Anexo do 1º follow-up: {row.step1_attachment.file_name}</p>}
-                {row.step2_attachment?.file_name && <p className="muted">Anexo do 2º follow-up: {row.step2_attachment.file_name}</p>}
+                {row.step1_attachment?.file_name && <p className="muted">Anexo do 2º envio: {row.step1_attachment.file_name}</p>}
+                {row.step2_attachment?.file_name && <p className="muted">Anexo do 3º envio: {row.step2_attachment.file_name}</p>}
                 <button type="button" className="secondary mini" onClick={() => toggleRunning(row)}>{row.enabled ? 'Desligar cadência' : 'Ligar cadência'}</button>
               </details>
             )

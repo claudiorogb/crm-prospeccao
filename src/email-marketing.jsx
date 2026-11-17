@@ -147,7 +147,7 @@ async function invokeReplySettings(body) {
 function EmailProspectingSequence({ organization, connection }) {
   const [leads, setLeads] = useState([])
   const [selected, setSelected] = useState(() => new Set())
-  const [form, setForm] = useState({ name: '', subject: '', first: '', followup1: '', followup2: '', day2: 4, day3: 8 })
+  const [form, setForm] = useState({ name: '', subject: '', first: '', followup1: '', followup2: '', day2: 5, day3: 7 })
   const [basisConfirmed, setBasisConfirmed] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -409,11 +409,11 @@ function EmailProspectingSequence({ organization, connection }) {
     if (!form.name.trim() || !form.subject.trim() || !form.first.trim() || !form.followup1.trim() || !form.followup2.trim()) return setMessage('Preencha o nome, assunto e as três mensagens da sequência.')
 
     const day2 = Math.trunc(Number(form.day2)), day3 = Math.trunc(Number(form.day3))
-    if (!Number.isFinite(day2) || !Number.isFinite(day3) || day2 < 2 || day2 > 30 || day3 <= day2 || day3 > 60) return setMessage('Dias inválidos: o 2º contato deve ser do dia 2 ao 30 e o 3º contato deve ser depois do 2º (até o dia 60).')
+    if (!Number.isFinite(day2) || !Number.isFinite(day3) || day2 < 2 || day2 > 30 || day3 < 2 || day3 > 30) return setMessage('Informe intervalos entre 2 e 30 dias para cada follow-up.')
 
     setLoading(true); setMessage('')
     try {
-      const { data, error } = await supabase.rpc('create_email_prospecting_sequence', {
+      const { data, error } = await supabase.rpc('create_email_prospecting_sequence_v2', {
         p_organization_id: organization.id,
         p_name: form.name.trim(),
         p_subject: form.subject.trim(),
@@ -426,13 +426,13 @@ function EmailProspectingSequence({ organization, connection }) {
       })
       if (error) throw error
       const row = Array.isArray(data) ? data[0] : data
-      setMessage(`Sequência iniciada para ${row?.recipient_count || selected.size} lead(s). 1º contato agora, 2º no dia ${day2} e 3º no dia ${day3}, salvo se houver resposta.`)
+      setMessage(`Sequência iniciada para ${row?.recipient_count || selected.size} lead(s). 1º envio na data de início, 2º ${day2} dias após o 1º e 3º ${day3} dias após o 2º, salvo se houver resposta.`)
       // Quem entrou na sequência sai da lista de envio por WhatsApp e fica em Contatos do CRM.
       await supabase.from('leads').update({ email_contacts_at: new Date().toISOString() })
         .eq('organization_id', organization.id).in('id', [...selected]).is('email_contacts_at', null)
       setSelected(new Set())
       try { sessionStorage.removeItem('crm_email_preselect') } catch {}
-      setForm({ name: '', subject: '', first: '', followup1: '', followup2: '', day2: 4, day3: 8 })
+      setForm({ name: '', subject: '', first: '', followup1: '', followup2: '', day2: 5, day3: 7 })
       setBasisConfirmed(false)
       await loadProspects()
     } catch (error) {
@@ -448,7 +448,7 @@ function EmailProspectingSequence({ organization, connection }) {
         <div>
           <span className="eyebrow">PROSPECÇÃO POR E-MAIL</span>
           <h2>Sequência automática de envios
-            <HelpTip label="Como funciona a sequência automática de envios" text="Primeiro contato no Dia 1; o dia do 2º e do 3º contato você escolhe (padrão: Dia 4 e Dia 8), contando a partir do Dia 1. Assim dá para evitar finais de semana. Se o lead responder, os próximos envios são cancelados e ele vai para Respondeu." />
+            <HelpTip label="Como funciona a sequência automática de envios" text="1º envio na data de início; 2º envio após o intervalo escolhido, contado a partir do 1º; 3º envio após o intervalo escolhido, contado a partir do 2º. Padrão: 5 dias e depois mais 7 dias. Se o lead responder, os próximos envios são cancelados e ele vai para Respondeu." />
           </h2>
         </div>
         {connection?.provider === 'gmail' && (
@@ -475,8 +475,8 @@ function EmailProspectingSequence({ organization, connection }) {
         <EmailVariableButtons onInsert={insertSequenceToken} />
         <div className="field-grid three">
           <label>Dia 1 — primeiro contato<textarea ref={firstRef} rows="6" value={form.first} onFocus={() => setActiveComposeField('first')} onChange={e => setForm({ ...form, first: e.target.value })} /></label>
-          <label><span className="email-day-label">Dia <input type="number" className="email-day-input" min="2" max="30" value={form.day2} onChange={e => setForm({ ...form, day2: e.target.value })} aria-label="Dia do 2º contato" /> — follow-up</span><textarea ref={followup1Ref} rows="6" value={form.followup1} onFocus={() => setActiveComposeField('followup1')} onChange={e => setForm({ ...form, followup1: e.target.value })} /></label>
-          <label><span className="email-day-label">Dia <input type="number" className="email-day-input" min="3" max="60" value={form.day3} onChange={e => setForm({ ...form, day3: e.target.value })} aria-label="Dia do 3º contato" /> — último contato</span><textarea ref={followup2Ref} rows="6" value={form.followup2} onFocus={() => setActiveComposeField('followup2')} onChange={e => setForm({ ...form, followup2: e.target.value })} /></label>
+          <label><span className="email-day-label">2º envio — <input type="number" className="email-day-input" min="2" max="30" value={form.day2} onChange={e => setForm({ ...form, day2: e.target.value })} aria-label="Dias após o 1º envio" /> dias após o 1º</span><textarea ref={followup1Ref} rows="6" value={form.followup1} onFocus={() => setActiveComposeField('followup1')} onChange={e => setForm({ ...form, followup1: e.target.value })} /></label>
+          <label><span className="email-day-label">3º envio — <input type="number" className="email-day-input" min="2" max="30" value={form.day3} onChange={e => setForm({ ...form, day3: e.target.value })} aria-label="Dias após o 2º envio" /> dias após o 2º</span><textarea ref={followup2Ref} rows="6" value={form.followup2} onFocus={() => setActiveComposeField('followup2')} onChange={e => setForm({ ...form, followup2: e.target.value })} /></label>
         </div>
 
         <div className="email-manual-prospect-add">

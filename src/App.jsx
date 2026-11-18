@@ -10483,6 +10483,11 @@ export default function App() {
         }
       }
 
+      if (effectiveMembership?.organization_id) {
+        syncCurrentLeadsBrasilOrganization(effectiveMembership.organization_id)
+          .catch(syncError => console.error('Leads Brasil company sync:', syncError))
+      }
+
       setUserPlan(effectivePlan)
       setBillingBlocked(!effectivePlan && Boolean(suspendedPlanResult.data))
       if (effectivePlan?.plan_id === 'free_30_days' && page === 'team') setPage('dashboard')

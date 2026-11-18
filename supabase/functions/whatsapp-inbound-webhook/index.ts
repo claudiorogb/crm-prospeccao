@@ -400,24 +400,6 @@ Deno.serve(async (req) => {
   const data = payload?.data || payload;
   const instanceName = String(payload?.instance || data?.instance || payload?.instanceName || "");
 
-  // Diagnóstico temporário de leitura WhatsApp: registra somente estrutura e status,
-  // nunca texto da mensagem, telefone, identificador da instância ou token.
-  const diagnosticItems = Array.isArray(data) ? data.slice(0, 10) : [data];
-  console.info("[wa-read-diagnostic]", JSON.stringify({
-    event: ev || "UNKNOWN",
-    payload_keys: Object.keys(payload || {}).slice(0, 30),
-    data_keys: Object.keys(data || {}).slice(0, 30),
-    items: diagnosticItems.map((item: any) => ({
-      keys: Object.keys(item || {}).slice(0, 30),
-      key_keys: Object.keys(item?.key || item?.data?.key || {}).slice(0, 20),
-      has_message_id: Boolean(item?.key?.id || item?.data?.key?.id || item?.id || item?.messageId),
-      from_me: typeof (item?.key?.fromMe ?? item?.data?.key?.fromMe) === "boolean"
-        ? (item?.key?.fromMe ?? item?.data?.key?.fromMe)
-        : null,
-      update_status: item?.update?.status ?? item?.status ?? item?.data?.status ?? null,
-    })),
-  }));
-
   if (ev === "MESSAGES_UPDATE") {
     if (!instanceName) return json({ ok: true, ignored: true, reason: "missing_instance" });
     const { data: numberRow } = await admin
@@ -430,18 +412,50 @@ Deno.serve(async (req) => {
     if (!numberRow) return json({ ok: true, ignored: true, reason: "unknown_instance" });
 
     const updates = Array.isArray(data) ? data : [data];
+    let updated = 0;
+    let markedRead = 0;
     for (const item of updates) {
       const key = item?.key || item?.data?.key || {};
-      const messageId = String(key?.id || item?.id || item?.messageId || "");
-      if (!messageId) continue;
       const status = mapDeliveryStatus(item?.update?.status ?? item?.status ?? item?.data?.status);
-      await admin.from("whatsapp_messages")
+
+      // A Evolution envia keyId como ID da mensagem no WhatsApp.
+      // messageId é um identificador interno da Evolution e não deve ser usado aqui.
+      const providerMessageId = String(item?.keyId || key?.id || "");
+      if (!providerMessageId) continue;
+
+      const fromMe = typeof item?.fromMe === "boolean"
+        ? item.fromMe
+        : typeof key?.fromMe === "boolean"
+        ? key.fromMe
+        : null;
+
+      if (status === "read" && fromMe === false) {
+        const { data: didMarkRead, error: markReadError } = await admin.rpc(
+          "mark_whatsapp_inbound_message_read",
+          {
+            p_organization_id: numberRow.organization_id,
+            p_whatsapp_number_id: numberRow.id,
+            p_provider_message_id: providerMessageId,
+          },
+        );
+        if (markReadError) {
+          console.error("[wa-read-sync] failed to mark inbound read", markReadError.message);
+          return json({ error: "Unable to synchronize WhatsApp read status" }, 503);
+        }
+        if (didMarkRead === true) markedRead++;
+        updated++;
+        continue;
+      }
+
+      const { error: updateError } = await admin.from("whatsapp_messages")
         .update({ delivery_status: status })
         .eq("organization_id", numberRow.organization_id)
+        .eq("whatsapp_number_id", numberRow.id)
         .eq("provider", "evolution")
-        .eq("provider_message_id", messageId);
+        .eq("provider_message_id", providerMessageId);
+      if (!updateError) updated++;
     }
-    return json({ ok: true, updated: updates.length });
+    return json({ ok: true, updated, marked_read: markedRead });
   }
 
   if (ev === "CONTACTS_UPSERT" || ev === "CONTACTS_UPDATE") {

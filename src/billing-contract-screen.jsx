@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, Loader2, FileText } from 'lucide-react'
-import { supabase } from './lib/supabase'
+import { supabase } from './lib/supabase'\nimport { syncCurrentLeadsBrasilOrganization } from './leads-brasil-sync'
 
 export const AXIVA_PAID_CONTRACT_VERSION = '2026-10-05-v2'
 
@@ -45,6 +45,11 @@ export default function BillingContractScreen({ planId, licenseQuantity = 1, onB
           p_license_quantity: licenseQuantity,
         })
         if (prepared.error) throw prepared.error
+        const preparedOrganizationId = Array.isArray(prepared.data) ? prepared.data[0]?.organization_id : prepared.data?.organization_id
+        if (preparedOrganizationId) {
+          try { await syncCurrentLeadsBrasilOrganization(preparedOrganizationId) }
+          catch (syncError) { console.error('Leads Brasil company sync:', syncError) }
+        }
       }
 
       const contractResult = await supabase.functions.invoke('billing-v2-production', {

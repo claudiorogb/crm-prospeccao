@@ -6517,10 +6517,12 @@ function MessageSending({ organization, settings, userEmail, onOpenEmailProspect
 }
 
 function CampaignWorkspace({ organization, settings, userEmail, userId, isSystemAdmin = false }) {
+  const emailToolsAllowed = ['38683b10-0557-4df5-b04a-f9375f3d2ff9','baa3deb2-2d42-49a3-b601-beddb804ec55','290668f5-630a-4d78-a799-30ada60392ba'].includes(String(organization?.id || ''))
   const [section, setSection] = useState(() => {
     const saved = sessionStorage.getItem('crm_campaign_workspace_section')
     if (saved) sessionStorage.removeItem('crm_campaign_workspace_section')
-    return saved || 'targets'
+    const restrictedEmailSection = ['email-prospecting','email','email-connection'].includes(saved)
+    return restrictedEmailSection && !emailToolsAllowed ? 'targets' : (saved || 'targets')
   })
   const items = [
     ['targets','Público-alvo'],
@@ -6528,9 +6530,7 @@ function CampaignWorkspace({ organization, settings, userEmail, userId, isSystem
     ['capture','Captação'],
     ['messages','Mensagens'],
     ['sending','Enviar mensagens'],
-    ['email-prospecting','Prospecção por e-mail'],
-    ['email','E-mail marketing'],
-    ['email-connection','Cadastrar e-mail'],
+    ...(emailToolsAllowed ? [['email-prospecting','Prospecção por e-mail'],['email','E-mail marketing'],['email-connection','Cadastrar e-mail']] : []),
     ['lists','Lista de clientes']
   ]
 
@@ -6550,9 +6550,9 @@ function CampaignWorkspace({ organization, settings, userEmail, userId, isSystem
       {section === 'capture' && settings?.feature_flags?.capture !== false && <Capture organization={organization} settings={settings} userEmail={userEmail} />}
       {section === 'messages' && settings?.feature_flags?.messages !== false && <Messages organization={organization} userEmail={userEmail} />}
       {section === 'sending' && <MessageSending organization={organization} settings={settings} userEmail={userEmail} onOpenEmailProspecting={() => setSection('email-prospecting')} />}
-      {section === 'email-prospecting' && <EmailProspecting organization={organization} userEmail={userEmail} />}
-      {section === 'email-connection' && <EmailMarketing organization={organization} userEmail={userEmail} mode="connection" />}
-      {section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} mode="marketing" />}
+      {emailToolsAllowed && section === 'email-prospecting' && <EmailProspecting organization={organization} userEmail={userEmail} />}
+      {emailToolsAllowed && section === 'email-connection' && <EmailMarketing organization={organization} userEmail={userEmail} mode="connection" />}
+      {emailToolsAllowed && section === 'email' && <EmailMarketing organization={organization} userEmail={userEmail} mode="marketing" />}
     </>
   )
 }

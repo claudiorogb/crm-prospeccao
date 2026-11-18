@@ -8,7 +8,8 @@ import {
 } from 'lucide-react'
 import { Link2, Mail, Smartphone } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import ImportLists from './import-lists'\nimport { syncCurrentLeadsBrasilOrganization } from './leads-brasil-sync'
+import ImportLists from './import-lists'
+import { syncCurrentLeadsBrasilOrganization } from './leads-brasil-sync'
 
 const LEADS_BRASIL_URL = 'https://leads-sp.vercel.app'
 

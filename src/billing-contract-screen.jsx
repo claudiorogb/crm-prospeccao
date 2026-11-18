@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, Loader2, FileText } from 'lucide-react'
-import { supabase } from './lib/supabase'\nimport { syncCurrentLeadsBrasilOrganization } from './leads-brasil-sync'
+import { supabase } from './lib/supabase'
+import { syncCurrentLeadsBrasilOrganization } from './leads-brasil-sync'
 
 export const AXIVA_PAID_CONTRACT_VERSION = '2026-10-05-v2'
 

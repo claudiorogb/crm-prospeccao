@@ -9,21 +9,31 @@ import {
 import { Link2, Mail, Smartphone } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import ImportLists from './import-lists'
+import { syncCurrentLeadsBrasilOrganization } from './leads-brasil-sync'
 
 const LEADS_BRASIL_URL = 'https://leads-sp.vercel.app'
 
-// Abre o Leads Brasil já logado: leva a sessão do CRM (depois do #, que não vai a servidor algum).
-// Se algo falhar, abre o Leads Brasil normalmente, com o login dele.
-async function openLeadsBrasil(event) {
+// Abre o Leads Brasil com a sessão e a organização ativa do CRM.
+async function openLeadsBrasil(event, organization) {
   event?.preventDefault?.()
   const popup = window.open('', '_blank')
-  let url = LEADS_BRASIL_URL
   try {
-    const { data } = await supabase.auth.getSession()
-    if (data?.session?.access_token) url = `${LEADS_BRASIL_URL}/#crm_sso=${encodeURIComponent(data.session.access_token)}`
-  } catch {}
-  if (popup) { try { popup.opener = null } catch {} ; popup.location.href = url }
-  else window.location.assign(url)
+    if (!organization?.id) throw new Error('Não foi possível identificar a empresa ativa no CRM.')
+    let { data, error } = await supabase.auth.getSession()
+    if (error || !data?.session?.access_token) {
+      const refreshed = await supabase.auth.refreshSession()
+      data = refreshed.data
+      error = refreshed.error
+    }
+    if (error || !data?.session?.access_token) throw new Error('Sua sessão do CRM expirou. Entre novamente no CRM e tente outra vez.')
+    const hash = `crm_sso=${encodeURIComponent(data.session.access_token)}&crm_org=${encodeURIComponent(organization.id)}`
+    const url = `${LEADS_BRASIL_URL}/#${hash}`
+    if (popup) { try { popup.opener = null } catch {} ; popup.location.href = url }
+    else window.location.assign(url)
+  } catch (error) {
+    try { popup?.close() } catch {}
+    window.alert(error?.message || 'Não foi possível abrir o Leads Brasil com segurança.')
+  }
 }
 import CrmFullExport from './crm-full-export'
 import { mergeLeadsWithLocalDrafts } from './kanban-draft-merge.js'
@@ -2055,7 +2065,7 @@ function Capture({ organization, settings, userEmail }) {
           <h2>Leads Brasil</h2>
           <p className="muted">Busque empresas de todo o Brasil por atividade (CNAE) e cidade, baixe a planilha e importe em Campanhas → Lista de clientes.</p>
         </div>
-        <a className="primary inline-btn capture-leads-brasil-link" href={LEADS_BRASIL_URL} onClick={openLeadsBrasil}>Abrir Leads Brasil ↗</a>
+        <a className="primary inline-btn capture-leads-brasil-link" href={LEADS_BRASIL_URL} onClick={event => openLeadsBrasil(event, organization)}>Abrir Leads Brasil ↗</a>
       </section>
 
       <section className="panel capture-panel">
@@ -6542,7 +6552,7 @@ function CampaignWorkspace({ organization, settings, userEmail, userId, isSystem
             {label}
           </button>
         ))}
-        <a className="workspace-tab-link" href={LEADS_BRASIL_URL} onClick={openLeadsBrasil}>Leads Brasil ↗</a>
+        <a className="workspace-tab-link" href={LEADS_BRASIL_URL} onClick={event => openLeadsBrasil(event, organization)}>Leads Brasil ↗</a>
       </div>
       {section === 'lists' && <ImportLists organization={organization} userId={userId} isSystemAdmin={isSystemAdmin} onOpenSection={setSection} />}
       {section === 'targets' && <TargetSegments organization={organization} userEmail={userEmail} />}
@@ -10472,6 +10482,11 @@ export default function App() {
         } catch (err) {
           setPendingTrialError(err?.message || 'Não foi possível ativar o período de teste.')
         }
+      }
+
+      if (effectiveMembership?.organization_id) {
+        syncCurrentLeadsBrasilOrganization(effectiveMembership.organization_id)
+          .catch(syncError => console.error('Leads Brasil company sync:', syncError))
       }
 
       setUserPlan(effectivePlan)

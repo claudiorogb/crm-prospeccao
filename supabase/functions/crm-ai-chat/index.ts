@@ -372,6 +372,7 @@ function buildInstructions(options: { support?: boolean; salesCoach?: boolean } 
     "Considere retorno atrasado somente lead em etapa aberta com next_contact_date anterior à data atual de Brasília e sem contato registrado depois da data prevista. Contato realizado na própria data prevista não elimina o atraso; contato posterior elimina. Não liste etapas encerradas como won, lost, not_interested ou discarded.",
     "Se today_agenda existir e as listas estiverem vazias, informe explicitamente que não há retornos atrasados nem contatos programados para hoje. Se a consulta falhar ou o contexto não existir, explique a falha de consulta; nunca afirme que não há tarefas sem ter consultado os dados.",
     "Quando o usuário pedir prioridades do dia, seja objetivo: apresente primeiro os retornos atrasados e depois os contatos programados para hoje; cite os nomes dos registros quando disponíveis e evite introduções longas.",
+    "Ao analisar oportunidades comerciais, apresente no máximo 5 prioridades, escolhidas pelos dados concretos disponíveis, explicando brevemente o motivo de cada uma. Se houver menos de 5 oportunidades relevantes, apresente somente as existentes; não complete a lista com itens inventados.",
   ];
   if (options.salesCoach) {
     base.push("", AXIVA_SALES_COACH_KNOWLEDGE);
